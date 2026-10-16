@@ -135,8 +135,35 @@ Faalt Graph (ontbrekende variabelen, token, site, lijst of geen actief record) e
 | WijTeunesen-nieuws | `GET /api/news`, site `https://teunesen.sharepoint.com/sites/wt-nieuws` | nieuwspagina's met `PromotedState` 2 en `Nieuws taal` NL, de laatste vijftien van de hele site, inclusief Lief en leed. De categorie staat klein bij de titel. Het vlak wisselt elke 20 seconden. Een foto gaat via `GET /api/news/:id/image`. Zonder Graph-gegevens toont het scherm voorbeeldtekst |
 | WijTeunesen-agenda | `GET /api/agenda`, site `https://teunesen.sharepoint.com/sites/HR-NL`, lijst Gebeurtenissen | komende Nederlandse afspraken, dezelfde bron als het webpart “Belangrijke data” op de WijTeunesen-startpagina. De lege kalender op wt-nieuws en de Duitse lijst Events DE worden niet gelezen. De onderbalk toont ze naast elkaar |
 
+## ICT-scherm en PRTG
+
+`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg`.
+
+```json
+{
+  "connected": false,
+  "configured": false,
+  "filterReady": false,
+  "source": "PRTG",
+  "fetchedAt": null,
+  "error": "PRTG niet gekoppeld",
+  "alarms": [],
+  "servers": []
+}
+```
+
+| Veld | Betekenis |
+| --- | --- |
+| `alarms` | Actuele Warning, Down, Unusual, Down (partial) en bevestigde storingen (`downAcknowledged`) |
+| `servers` | Per apparaat cpu, geheugen en opslag met percentage en PRTG-status |
+| `configured` | `true` als `PRTG_BASE_URL` en `PRTG_PASSHASH` gezet zijn |
+| `filterReady` | `true` als `config.json` → `prtg.groupId` of `prtg.tag` gezet is |
+| `error` | Lege of fouttekst; bij een latere fout blijft de laatste geslaagde payload staan |
+
+De provider leest PRTG `table.json` ongeveer eens per minuut. Sensortypes voor cpu, geheugen en schijf worden uit type, naam of tag herkend. Credentials komen uit `.env` en worden niet gelogd of naar de browser gestuurd. Zonder filter blijft de response leeg: er worden geen sensoren van het hele netwerk getoond.
+
 ## Permanent scherm
 
-`createPollingFeed` in `src/services/tvFeed.ts` haalt waterstanden, dieseltoeslag, nieuws en agenda op. Het interval komt uit de schermconfiguratie en is standaard 300 seconden. Een mislukte oproep bewaart de laatste geslaagde response in `localStorage` en plant een nieuwe poging na 5, 15, 30 en daarna 60 seconden. `online` start meteen opnieuw. De balk toont “Vernieuwen” zolang een feed loopt, en “Laatste update” of “Laatste bekende gegevens” met het tijdstip van de laatste geslaagde leesactie.
+`createPollingFeed` in `src/services/tvFeed.ts` haalt waterstanden, dieseltoeslag, nieuws, agenda en op `/ict` ook PRTG op. Het interval komt uit de schermconfiguratie en is standaard 300 seconden. Een mislukte oproep bewaart de laatste geslaagde response in `localStorage` en plant een nieuwe poging na 5, 15, 30 en daarna 60 seconden. `online` start meteen opnieuw. De balk toont “Vernieuwen” zolang een feed loopt, en “Laatste update” of “Laatste bekende gegevens” met het tijdstip van de laatste geslaagde leesactie.
 
 Elke tegel zit in `WidgetBoundary`. Een renderfout blijft op die tegel. `ScreenGuard` houdt de achtergrond donker als de pagina zelf stopt. Logregels gebruiken het voorvoegsel `[teunesen-tv]`.

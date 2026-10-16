@@ -19,6 +19,7 @@ const emptyConfig: DashboardConfig = {
   },
   weer: { plaatsnaam: "Gennep" },
   dashboard: { refreshInterval: 300, aantalNieuwsitems: 3 },
+  prtg: { groupId: "", tag: "" },
 };
 
 const fieldClass =
@@ -223,6 +224,44 @@ export function AdminPage() {
                   }
                 />
               </label>
+            </section>
+
+            <section className="tv-card px-5 py-4 md:col-span-2">
+              <h2 className="font-display text-[26px] leading-none font-semibold tracking-[-0.015em]">
+                PRTG (ICT-scherm)
+              </h2>
+              <p className="mt-2 text-[15px] text-mist">
+                Filter voor `/ict`. Leeg laten tot de groep of tag bekend is. Het PRTG-adres en de passhash staan in
+                `.env`.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="block text-[14px] tracking-wide text-mist uppercase">
+                  Groep-ID
+                  <input
+                    className={fieldClass}
+                    value={config.prtg.groupId}
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        prtg: { ...current.prtg, groupId: event.target.value },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="block text-[14px] tracking-wide text-mist uppercase">
+                  Tag
+                  <input
+                    className={fieldClass}
+                    value={config.prtg.tag}
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        prtg: { ...current.prtg, tag: event.target.value },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
             </section>
 
             <div className="flex flex-col gap-3 sm:flex-row md:col-span-2">

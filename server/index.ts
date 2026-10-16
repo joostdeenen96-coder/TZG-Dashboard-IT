@@ -7,6 +7,7 @@ import { agendaRouter } from "./routes/agenda.js";
 import { configRouter } from "./routes/config.js";
 import { dieselSurchargeRouter } from "./routes/dieselSurcharge.js";
 import { newsRouter } from "./routes/news.js";
+import { prtgRouter } from "./routes/prtg.js";
 import { waterLevelsRouter } from "./routes/waterLevels.js";
 
 const port = 43124;
@@ -21,7 +22,8 @@ app.use((req, res, next) => {
       path.startsWith("/api/dieselsurcharge") ||
       path.startsWith("/api/news") ||
       path.startsWith("/api/agenda") ||
-      path.startsWith("/api/wij-agenda");
+      path.startsWith("/api/wij-agenda") ||
+      path.startsWith("/api/prtg");
     if (!watched) return;
     const line = `${new Date().toISOString()} info api ${req.method} ${path} ${res.statusCode} ${Date.now() - started}ms`;
     if (res.statusCode >= 500) console.error(`[teunesen-tv] ${line}`);
@@ -38,6 +40,7 @@ app.use("/api/news", newsRouter);
 app.use("/api/agenda", agendaRouter);
 app.use("/api/wij-agenda", agendaRouter);
 app.use("/api/dieselsurcharge", dieselSurchargeRouter);
+app.use("/api/prtg", prtgRouter);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const message = error instanceof Error ? error.message : "Onbekende serverfout.";

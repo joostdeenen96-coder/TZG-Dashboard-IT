@@ -114,6 +114,10 @@ export type DashboardConfig = {
     refreshInterval: number;
     aantalNieuwsitems: number;
   };
+  prtg: {
+    groupId: string;
+    tag: string;
+  };
 };
 
 function isDashboardConfig(value: unknown): value is DashboardConfig {
@@ -123,12 +127,15 @@ function isDashboardConfig(value: unknown): value is DashboardConfig {
   const nieuws = row.sharepointNieuws;
   const weer = row.weer;
   const dashboard = row.dashboard;
+  const prtg = row.prtg;
   if (!diesel || typeof diesel !== "object" || !nieuws || typeof nieuws !== "object") return false;
   if (!weer || typeof weer !== "object" || !dashboard || typeof dashboard !== "object") return false;
+  if (!prtg || typeof prtg !== "object") return false;
   const dieselRow = diesel as Record<string, unknown>;
   const nieuwsRow = nieuws as Record<string, unknown>;
   const weerRow = weer as Record<string, unknown>;
   const dashboardRow = dashboard as Record<string, unknown>;
+  const prtgRow = prtg as Record<string, unknown>;
   return (
     typeof dieselRow.siteUrl === "string" &&
     typeof dieselRow.lijstnaam === "string" &&
@@ -136,7 +143,9 @@ function isDashboardConfig(value: unknown): value is DashboardConfig {
     typeof nieuwsRow.bibliotheek === "string" &&
     typeof weerRow.plaatsnaam === "string" &&
     typeof dashboardRow.refreshInterval === "number" &&
-    typeof dashboardRow.aantalNieuwsitems === "number"
+    typeof dashboardRow.aantalNieuwsitems === "number" &&
+    typeof prtgRow.groupId === "string" &&
+    typeof prtgRow.tag === "string"
   );
 }
 

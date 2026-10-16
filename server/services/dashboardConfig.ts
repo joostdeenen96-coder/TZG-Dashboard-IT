@@ -23,6 +23,10 @@ export type DashboardConfig = {
     refreshInterval: number;
     aantalNieuwsitems: number;
   };
+  prtg: {
+    groupId: string;
+    tag: string;
+  };
 };
 
 export type ScreenConfig = Pick<DashboardConfig, "weer" | "dashboard">;
@@ -42,6 +46,10 @@ const DEFAULTS: DashboardConfig = {
   dashboard: {
     refreshInterval: 300,
     aantalNieuwsitems: 5,
+  },
+  prtg: {
+    groupId: "",
+    tag: "",
   },
 };
 
@@ -83,12 +91,22 @@ function wholeNumber(value: unknown, label: string, min: number, max: number) {
   return number;
 }
 
+function optionalToken(value: unknown, label: string, max: number) {
+  if (value === undefined || value === null) return "";
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return "";
+  if (text.length > max) throw new Error(`${label} is te lang.`);
+  if (!/^[\p{L}\p{N} ._'@:+#-]+$/u.test(text)) throw new Error(`${label} bevat een teken dat niet mag.`);
+  return text;
+}
+
 export function parseDashboardConfig(value: unknown): DashboardConfig {
   const body = asObject(value);
   const diesel = asObject(body.sharepointDiesel);
   const nieuws = asObject(body.sharepointNieuws);
   const weer = asObject(body.weer);
   const dashboard = asObject(body.dashboard);
+  const prtg = asObject(body.prtg);
   return {
     sharepointDiesel: {
       siteUrl: sharePointUrl(diesel.siteUrl, "Site URL van de dieseltoeslag"),
@@ -105,6 +123,10 @@ export function parseDashboardConfig(value: unknown): DashboardConfig {
       refreshInterval: wholeNumber(dashboard.refreshInterval, "Refresh interval", 15, 3600),
       aantalNieuwsitems: wholeNumber(dashboard.aantalNieuwsitems, "Aantal nieuwsitems", 1, 5),
     },
+    prtg: {
+      groupId: optionalToken(prtg.groupId, "PRTG-groep", 40),
+      tag: optionalToken(prtg.tag, "PRTG-tag", 80),
+    },
   };
 }
 
@@ -120,6 +142,7 @@ export function getDashboardConfig(): DashboardConfig {
       sharepointNieuws: { ...DEFAULTS.sharepointNieuws },
       weer: { ...DEFAULTS.weer },
       dashboard: { ...DEFAULTS.dashboard },
+      prtg: { ...DEFAULTS.prtg },
     };
   }
 }

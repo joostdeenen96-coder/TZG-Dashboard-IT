@@ -25,11 +25,16 @@ Graph-gegevens staan in `.env` in de projectmap, niet in `release`. `install-das
 GRAPH_TENANT_ID=
 GRAPH_CLIENT_ID=
 GRAPH_CLIENT_SECRET=
+PRTG_BASE_URL=
+PRTG_USERNAME=
+PRTG_PASSHASH=
 ```
 
-Vul de drie waarden in en sla het bestand op. Het client secret blijft op deze pc. Zet `.env` niet in git.
+Vul de Graph-waarden in en sla het bestand op. Het client secret blijft op deze pc. Zet `.env` niet in git.
 
-Zonder deze waarden start het scherm wel. De dieseltoeslag valt dan terug op de lokale cijfers en het nieuws toont voorbeeldkaarten.
+Voor het ICT-scherm op `/ict` vul je ook `PRTG_BASE_URL`, `PRTG_USERNAME` en `PRTG_PASSHASH` in. De passhash mag niet in git of in logregels. Zonder die waarden start `/ict` wel, met de lege staat “PRTG niet gekoppeld”.
+
+Zonder Graph-waarden start het planningscherm wel. De dieseltoeslag valt dan terug op de lokale cijfers en het nieuws toont voorbeeldkaarten.
 
 Plaatsnaam, verversinterval, aantal nieuwsitems en de SharePoint-locaties staan in `config.json`. Die maak je via het verborgen beheer:
 
@@ -37,7 +42,9 @@ Plaatsnaam, verversinterval, aantal nieuwsitems en de SharePoint-locaties staan 
 2. Meld aan met `admin` / `teunesen`.
 3. Sla de instellingen op.
 
-Ontbreekt `config.json`, dan gebruikt het scherm de standaardwaarden: dieseltoeslag op de lijst Dieseltoeslagen Asvervoer, nieuws van wt-nieuws, plaats Gennep, verversing elke 300 seconden, drie nieuwsitems.
+Ontbreekt `config.json`, dan gebruikt het scherm de standaardwaarden: dieseltoeslag op de lijst Dieseltoeslagen Asvervoer, nieuws van wt-nieuws, plaats Gennep, verversing elke 300 seconden, drie nieuwsitems, PRTG-groep en -tag leeg.
+
+De PRTG-filter (groep-ID en/of tag) zet je in `/admin` of rechtstreeks in `config.json` onder `prtg`. Zolang die leeg is, toont `/ict` geen netwerksensoren.
 
 ## Starten
 
@@ -48,6 +55,8 @@ Het script doet drie dingen:
 1. Het opent het venster **Teunesen API** en start de backend met `npm run server`.
 2. Het wacht tot poort 43124 luistert en opent daarna het venster **Teunesen web**. Dat is Vite op `http://localhost:3000`.
 3. Het opent Microsoft Edge in kioskmodus op `http://localhost:3000/`. Tabbladen en adresbalk blijven verborgen. Zie `kioskmodus.md`.
+
+Voor de ICT-TV: `release\start-dashboard-ict.bat` start dezelfde API en website, maar opent Edge op `http://localhost:3000/ict`. Alleen het ICT-beeld opnieuw openen: `release\edge-kiosk-ict.bat`. Het planningsscherm blijft op `http://localhost:3000/`.
 
 Laat beide opdrachtvensters open. Sluiten stopt dat deel van het dashboard.
 

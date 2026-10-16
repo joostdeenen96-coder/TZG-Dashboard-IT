@@ -2,6 +2,8 @@
 
 Volledig scherm voor de werkvloer en de kantine: waterstanden met bron-grafiek en verwachting, dieseltoeslag, een klein weerbericht in de balk en Nederlandse WijTeunesen-berichten met foto. Donker industrieel thema, Nederlandse teksten. De indeling is getekend op 2560×1440 en schaalt mee met het venster, ook op 3840×2160.
 
+Het planningsscherm blijft op `/`. Het ICT-scherm opent op `/ict` in hetzelfde programma: dezelfde API, tweede adres. Daar vervangt PRTG-monitoring de rij met waterstanden en dieseltoeslag; nieuws en agenda blijven.
+
 ## Starten
 
 ```bash
@@ -9,7 +11,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` start de waterstanden-API op poort `43124` en Vite op `0.0.0.0:43123`. Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Alleen de API: `npm run server`.
+`npm run dev` start de waterstanden-API op poort `43124` en Vite op `0.0.0.0:43123`. Open [http://127.0.0.1:43123](http://127.0.0.1:43123) voor planning, of [http://127.0.0.1:43123/ict](http://127.0.0.1:43123/ict) voor ICT. Alleen de API: `npm run server`.
 
 Productiebuild (frontend en backend):
 
@@ -27,7 +29,7 @@ npm run preview
 
 Het scherm is bedoeld om aan te blijven staan. Waterstanden, dieseltoeslag, nieuws en agenda verversen standaard elke 5 minuten (het interval uit `/admin`, anders 300 seconden). Valt het netwerk weg, dan blijft de laatste bekende tegel staan, komt er een nieuwe poging en toont de balk “Laatste bekende gegevens”. Een tegel die vastloopt blijft op die kaart; de rest van het scherm gaat door. Laden, een fout en een lege bron hebben elk een eigen staat. Logregels beginnen met `[teunesen-tv]` in de browserconsole en op de API.
 
-De browser praat alleen met deze API. Waterstanden: `GET /api/waterlevels`. Kaub, Ruhrort en Maxau tekenen dezelfde donkere grafiek uit de meetreeks. Dieseltoeslag: `GET /api/dieselsurcharge` leest de SharePoint-lijst uit `config.json` (standaard `Dieseltoeslagen Asvervoer` op `sites/Facturatie`) één keer per ochtend, vanaf 07:00 Amsterdam-tijd, en toont de laatste vier bekende weken in `weken`. Het verborgen beheer staat op `/admin` en schrijft die instellingen, de nieuwssite, de bibliotheek, de plaatsnaam, het verversinterval en het aantal nieuwsitems naar `config.json`. WijTeunesen-nieuws: `GET /api/news`, gefilterd op SharePoint-veld `Nieuws taal` = NL. Een foto komt binnen via `GET /api/news/:id/image`. Rechtsboven staat **Inloggen**. Daarmee kan een beheerder de Graph client-id en secret zetten. De diesel-lijst zelf staat in de code. Het nieuws komt alleen van `https://teunesen.sharepoint.com/sites/wt-nieuws`. De agenda is `GET /api/agenda` en leest de lijst Gebeurtenissen op `https://teunesen.sharepoint.com/sites/HR-NL`, dezelfde bron als “Belangrijke data” op de WijTeunesen-startpagina. Alleen die Nederlandse lijst, niet de Duitse kalender. Eerste aanmelding: `admin` / `teunesen`. Het wachtwoord en de sleutels blijven lokaal in `data/settings.json` en gaan niet de repository in. Zonder geldige Graph-gegevens valt de dieseltoeslag terug op de lokale cijfers en blijft het nieuws leeg, met voorbeeldkaarten. Details staan in `docs/architectuur.md`.
+De browser praat alleen met deze API. Waterstanden: `GET /api/waterlevels`. Kaub, Ruhrort en Maxau tekenen dezelfde donkere grafiek uit de meetreeks. Dieseltoeslag: `GET /api/dieselsurcharge` leest de SharePoint-lijst uit `config.json` (standaard `Dieseltoeslagen Asvervoer` op `sites/Facturatie`) één keer per ochtend, vanaf 07:00 Amsterdam-tijd, en toont de laatste vier bekende weken in `weken`. ICT/PRTG: `GET /api/prtg` leest alarmen en servertegels via de PRTG HTTP API (`table.json`). Adres, gebruikersnaam en passhash staan in `.env` (`PRTG_BASE_URL`, `PRTG_USERNAME`, `PRTG_PASSHASH`) en gaan nooit naar de browser. De PRTG-groep of tag staat in `config.json` onder `prtg` (standaard leeg). Zonder adres/passhash of zonder filter toont `/ict` een duidelijke lege staat, bijvoorbeeld “PRTG niet gekoppeld”. Het verborgen beheer staat op `/admin` en schrijft die instellingen, de nieuwssite, de bibliotheek, de plaatsnaam, het verversinterval, het aantal nieuwsitems en de PRTG-filter naar `config.json`. WijTeunesen-nieuws: `GET /api/news`, gefilterd op SharePoint-veld `Nieuws taal` = NL. Een foto komt binnen via `GET /api/news/:id/image`. Rechtsboven staat **Inloggen**. Daarmee kan een beheerder de Graph client-id en secret zetten. De diesel-lijst zelf staat in de code. Het nieuws komt alleen van `https://teunesen.sharepoint.com/sites/wt-nieuws`. De agenda is `GET /api/agenda` en leest de lijst Gebeurtenissen op `https://teunesen.sharepoint.com/sites/HR-NL`, dezelfde bron als “Belangrijke data” op de WijTeunesen-startpagina. Alleen die Nederlandse lijst, niet de Duitse kalender. Eerste aanmelding: `admin` / `teunesen`. Het wachtwoord en de sleutels blijven lokaal in `data/settings.json` en gaan niet de repository in. Zonder geldige Graph-gegevens valt de dieseltoeslag terug op de lokale cijfers en blijft het nieuws leeg, met voorbeeldkaarten. Details staan in `docs/architectuur.md`.
 
 ## Foto’s
 

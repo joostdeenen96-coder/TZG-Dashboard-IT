@@ -91,7 +91,12 @@ adminRouter.put("/config", (req, res) => {
     return;
   }
   try {
-    const config = saveDashboardConfig(req.body);
+    const body = req.body ?? {};
+    const current = getDashboardConfig();
+    const config = saveDashboardConfig({
+      ...body,
+      prtg: body && typeof body === "object" && "prtg" in body ? body.prtg : current.prtg,
+    });
     resetGraphCache();
     resetWijNewsCache();
     res.json(config);
@@ -119,6 +124,7 @@ adminRouter.post("/test", async (req, res) => {
           sharepointNieuws: body.sharepointNieuws ?? current.sharepointNieuws,
           weer: body.weer ?? current.weer,
           dashboard: body.dashboard ?? current.dashboard,
+          prtg: body.prtg ?? current.prtg,
         })
       : current;
     const diesel = await testSharePointConnection(config.sharepointDiesel.siteUrl, config.sharepointDiesel.lijstnaam);
