@@ -101,8 +101,8 @@ export function IctDashboardPage() {
               adminLabel={authenticated ? "Instellingen" : "Inloggen"}
               onAdmin={() => setAdminOpen(true)}
             />
-            <section className="grid h-[640px] shrink-0 grid-cols-5 gap-4">
-              <WidgetBoundary title="Storingen" className="col-span-2">
+            <section className="grid h-[640px] shrink-0 grid-cols-[420px_minmax(0,1fr)] gap-4">
+              <WidgetBoundary title="Storingen">
                 <PrtgAlarmsPanel
                   alarms={alarms}
                   status={panel.status === "fallback" ? "ready" : panel.status}
@@ -110,7 +110,7 @@ export function IctDashboardPage() {
                   refreshing={prtg.refreshing}
                 />
               </WidgetBoundary>
-              <WidgetBoundary title="Servers" className="col-span-3">
+              <WidgetBoundary title="Servers">
                 <PrtgServersPanel
                   servers={servers}
                   status={panel.status === "fallback" ? "ready" : panel.status}
