@@ -1,3 +1,6 @@
+import http from "node:http";
+import https from "node:https";
+
 export type PrtgAlarmStatus = "warning" | "down" | "unusual" | "downPartial" | "downAcknowledged";
 
 export type PrtgMetricKind = "cpu" | "memory" | "storage";
@@ -180,33 +183,85 @@ function httpErrorMessage(status: number) {
   return `PRTG antwoordde met ${status}.`;
 }
 
+function allowInsecureTls(baseUrl: string) {
+  const flag = text(process.env.PRTG_TLS_INSECURE).toLowerCase();
+  if (flag === "0" || flag === "false" || flag === "no") return false;
+  if (flag === "1" || flag === "true" || flag === "yes") return true;
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === "localhost" || host.endsWith(".local") || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function requestPrtg(url: URL, insecure: boolean): Promise<{ status: number; body: string }> {
+  const transport = url.protocol === "http:" ? http : https;
+  return new Promise((resolve, reject) => {
+    const req = transport.request(
+      url,
+      {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          "user-agent": "TeunesenDashboard/0.1 (ict-scherm)",
+        },
+        timeout: 20_000,
+        ...(url.protocol === "https:" ? { rejectUnauthorized: !insecure } : {}),
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString("utf8"),
+          });
+        });
+      },
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 async function fetchPrtgJson(credentials: PrtgCredentials, params: Record<string, string>) {
   const url = new URL(`${credentials.baseUrl}/api/table.json`);
   for (const [key, value] of Object.entries({ ...params, ...authParams(credentials), output: "json" })) {
     url.searchParams.set(key, value);
   }
-  let response: Response;
+  const insecure = allowInsecureTls(credentials.baseUrl);
+  let result: { status: number; body: string };
   try {
-    response = await fetch(url, {
-      headers: {
-        accept: "application/json",
-        "user-agent": "TeunesenDashboard/0.1 (ict-scherm)",
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-  } catch {
+    result = await requestPrtg(url, insecure);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "";
+    if (/certificate|CERT|TLS|SSL|self.signed|unable to verify/i.test(detail)) {
+      throw new Error(
+        "PRTG TLS-certificaat geweigerd. Zet PRTG_TLS_INSECURE=true in .env of gebruik een vertrouwd certificaat.",
+      );
+    }
     throw new Error("PRTG niet bereikbaar. Controleer of deze pc https://prtg.teunesen.local kan openen.");
   }
-  if (!response.ok) {
-    throw new Error(httpErrorMessage(response.status));
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(httpErrorMessage(result.status));
   }
-  let payload: unknown;
   try {
-    payload = await response.json();
+    return JSON.parse(result.body) as unknown;
   } catch {
+    // PRTG geeft bij fouten soms XML terug i.p.v. JSON.
+    if (result.body.includes("<error>") || result.body.includes("<prtg>")) {
+      const match = result.body.match(/<error>([^<]+)<\/error>/i);
+      throw new Error(match?.[1]?.trim() || "PRTG gaf een fout terug.");
+    }
     throw new Error("PRTG gaf geen geldige data. Login of basisadres klopt waarschijnlijk niet.");
   }
-  return payload;
 }
 
 async function fetchTable(credentials: PrtgCredentials, params: Record<string, string>) {
