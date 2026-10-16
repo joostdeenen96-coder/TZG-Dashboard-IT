@@ -128,12 +128,15 @@ export function PrtgServersPanel({ servers, status, message, refreshing = false 
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.03, ease: "easeOut" }}
-            className="flex min-h-0 flex-col justify-between rounded-[20px] border border-veil/12 bg-veil/[0.04] px-4 py-3"
+            className="flex min-h-0 flex-col rounded-[20px] border border-veil/12 bg-veil/[0.04] px-4 py-3"
           >
-            <h3 className="truncate font-display text-[22px] leading-tight font-semibold tracking-[-0.015em]">
-              {shortName(server.name)}
+            <h3
+              className="shrink-0 truncate font-display text-[22px] leading-none font-semibold tracking-[-0.015em] text-paper"
+              title={server.name}
+            >
+              {shortName(server.name) || server.name || "Onbekende server"}
             </h3>
-            <div className="mt-3 grid gap-2.5">
+            <div className="mt-3 grid min-h-0 flex-1 content-end gap-2">
               <MetricCell label="CPU" metric={server.cpu} />
               <MetricCell label="RAM" metric={server.memory} />
               <MetricCell label="Disk" metric={primaryStorage(server)} />
