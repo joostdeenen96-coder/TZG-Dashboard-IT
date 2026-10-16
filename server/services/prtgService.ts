@@ -8,6 +8,7 @@ import {
   type PrtgSnapshot,
 } from "../providers/prtgProvider.js";
 import { getDashboardConfig } from "./dashboardConfig.js";
+import { getIntegrationSettings } from "./settingsService.js";
 
 const REFRESH_MS = 60_000;
 
@@ -36,12 +37,18 @@ function envText(name: string) {
 }
 
 function currentFilter(): PrtgFilter {
+  const stored = getIntegrationSettings().prtg;
   const prtg = getDashboardConfig().prtg;
-  // .env mag de filter overschrijven, handig op de TV-pc zonder admin.
+  // Volgorde: beheerpanel → .env → config.json
   return {
-    groupId: envText("PRTG_GROUP_ID") || prtg.groupId.trim(),
-    tag: envText("PRTG_TAG") || prtg.tag.trim(),
+    groupId: stored.groupId.trim() || envText("PRTG_GROUP_ID") || prtg.groupId.trim(),
+    tag: stored.tag.trim() || envText("PRTG_TAG") || prtg.tag.trim(),
   };
+}
+
+export function resetPrtgCache() {
+  cache = null;
+  inFlight = null;
 }
 
 function emptyResponse(partial: Partial<PrtgResponse> & { error: string | null }): PrtgResponse {
@@ -71,7 +78,12 @@ function fromSnapshot(snapshot: PrtgSnapshot, configured: boolean, filterReady: 
 }
 
 async function loadFresh(): Promise<PrtgResponse> {
-  const credentials = readPrtgCredentials();
+  const stored = getIntegrationSettings().prtg;
+  const credentials = readPrtgCredentials({
+    baseUrl: stored.baseUrl,
+    username: stored.username,
+    password: stored.password,
+  });
   const filter = currentFilter();
   const filterReady = filterIsSet(filter);
   if (!credentials) {

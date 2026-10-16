@@ -11,6 +11,7 @@ import {
   tokenFromHeader,
 } from "../services/adminSession.js";
 import { getDashboardConfig, parseDashboardConfig, saveDashboardConfig } from "../services/dashboardConfig.js";
+import { resetPrtgCache } from "../services/prtgService.js";
 import { checkAdminLogin, getPublicSettings, updateSettings } from "../services/settingsService.js";
 
 export const adminRouter = Router();
@@ -67,9 +68,15 @@ adminRouter.put("/settings", (req, res) => {
       siteUrl: typeof body.siteUrl === "string" ? body.siteUrl : "",
       listName: typeof body.listName === "string" ? body.listName : "",
       newPassword: typeof body.newPassword === "string" ? body.newPassword : "",
+      prtgBaseUrl: typeof body.prtgBaseUrl === "string" ? body.prtgBaseUrl : "",
+      prtgUsername: typeof body.prtgUsername === "string" ? body.prtgUsername : "",
+      prtgPassword: typeof body.prtgPassword === "string" ? body.prtgPassword : "",
+      prtgGroupId: typeof body.prtgGroupId === "string" ? body.prtgGroupId : "",
+      prtgTag: typeof body.prtgTag === "string" ? body.prtgTag : "",
     });
     resetGraphCache();
     resetWijNewsCache();
+    resetPrtgCache();
     res.json(settings);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Instellingen niet opgeslagen.";

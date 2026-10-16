@@ -12,6 +12,13 @@ export type PublicSettings = {
     siteUrl: string;
     listName: string;
   };
+  prtg: {
+    baseUrl: string;
+    username: string;
+    passwordSet: boolean;
+    groupId: string;
+    tag: string;
+  };
 };
 
 let authenticated = false;
@@ -88,6 +95,11 @@ export async function saveSettings(input: {
   siteUrl: string;
   listName: string;
   newPassword: string;
+  prtgBaseUrl: string;
+  prtgUsername: string;
+  prtgPassword: string;
+  prtgGroupId: string;
+  prtgTag: string;
 }) {
   const response = await fetch("/api/admin/settings", {
     method: "PUT",

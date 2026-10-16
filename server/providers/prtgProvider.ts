@@ -109,15 +109,19 @@ function normalizeBaseUrl(raw: string) {
   return url.origin;
 }
 
-export function readPrtgCredentials(): PrtgCredentials | null {
-  const baseUrl = text(process.env.PRTG_BASE_URL);
-  const username = text(process.env.PRTG_USERNAME);
+export function readPrtgCredentials(fromSettings?: {
+  baseUrl?: string;
+  username?: string;
+  password?: string;
+}): PrtgCredentials | null {
+  const baseUrl = text(fromSettings?.baseUrl) || text(process.env.PRTG_BASE_URL);
+  const username = text(fromSettings?.username) || text(process.env.PRTG_USERNAME);
   const passhash = text(process.env.PRTG_PASSHASH);
-  const password = text(process.env.PRTG_PASSWORD);
+  const password = text(fromSettings?.password) || text(process.env.PRTG_PASSWORD);
   if (!baseUrl || (!passhash && !password)) return null;
   return {
     baseUrl: normalizeBaseUrl(baseUrl),
-    username: username || "prtgadmin",
+    username: username || "Beheert",
     passhash,
     password,
   };
