@@ -45,6 +45,7 @@ export type PrtgCredentials = {
   baseUrl: string;
   username: string;
   passhash: string;
+  password: string;
 };
 
 export type PrtgFilter = {
@@ -97,25 +98,28 @@ function normalizeBaseUrl(raw: string) {
   if (!trimmed) return "";
   let url: URL;
   try {
-    url = new URL(trimmed);
+    url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
   } catch {
     throw new Error("PRTG_BASE_URL is geen geldig adres.");
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw new Error("PRTG_BASE_URL moet http of https zijn.");
   }
-  return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+  // Alleen host: /index.htm of andere UI-paden horen niet in API-aanroepen.
+  return url.origin;
 }
 
 export function readPrtgCredentials(): PrtgCredentials | null {
   const baseUrl = text(process.env.PRTG_BASE_URL);
   const username = text(process.env.PRTG_USERNAME);
   const passhash = text(process.env.PRTG_PASSHASH);
-  if (!baseUrl || !passhash) return null;
+  const password = text(process.env.PRTG_PASSWORD);
+  if (!baseUrl || (!passhash && !password)) return null;
   return {
     baseUrl: normalizeBaseUrl(baseUrl),
     username: username || "prtgadmin",
     passhash,
+    password,
   };
 }
 
@@ -155,10 +159,11 @@ function classifyMetric(type: string, name: string, tags: string): PrtgMetricKin
 }
 
 function authParams(credentials: PrtgCredentials) {
-  return {
-    username: credentials.username,
-    passhash: credentials.passhash,
-  };
+  const params: Record<string, string> = { username: credentials.username };
+  // Passhash heeft voorrang; wachtwoord alleen als er geen hash is.
+  if (credentials.passhash) params.passhash = credentials.passhash;
+  else if (credentials.password) params.password = credentials.password;
+  return params;
 }
 
 async function fetchTable(credentials: PrtgCredentials, params: Record<string, string>) {
