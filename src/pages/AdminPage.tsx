@@ -231,8 +231,9 @@ export function AdminPage() {
                 PRTG (ICT-scherm)
               </h2>
               <p className="mt-2 text-[15px] text-mist">
-                Filter voor `/ict`. Leeg laten tot de groep of tag bekend is. Het PRTG-adres en de passhash staan in
-                `.env`.
+                Filter voor `/ict`. Open in PRTG de gewenste groep; in de adresbalk staat `id=1234` — dat nummer hoort
+                bij Groep-ID. Of vul een tag in. Adres en login staan in `.env` (`PRTG_BASE_URL=https://prtg.teunesen.local`,
+                zonder `/index.htm`).
               </p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <label className="block text-[14px] tracking-wide text-mist uppercase">
@@ -240,6 +241,7 @@ export function AdminPage() {
                   <input
                     className={fieldClass}
                     value={config.prtg.groupId}
+                    placeholder="bijv. 1234"
                     onChange={(event) =>
                       setConfig((current) => ({
                         ...current,
@@ -253,6 +255,7 @@ export function AdminPage() {
                   <input
                     className={fieldClass}
                     value={config.prtg.tag}
+                    placeholder="optioneel"
                     onChange={(event) =>
                       setConfig((current) => ({
                         ...current,

@@ -166,7 +166,17 @@ function authParams(credentials: PrtgCredentials) {
   return params;
 }
 
-async function fetchTable(credentials: PrtgCredentials, params: Record<string, string>) {
+function httpErrorMessage(status: number) {
+  if (status === 401 || status === 403) {
+    return "PRTG-login geweigerd. Controleer gebruiker en wachtwoord of passhash.";
+  }
+  if (status === 404) {
+    return "PRTG API niet gevonden (404). Zet PRTG_BASE_URL op https://prtg.teunesen.local (zonder /index.htm) en gebruik als groep-ID alleen het nummer uit de PRTG-URL.";
+  }
+  return `PRTG antwoordde met ${status}.`;
+}
+
+async function fetchPrtgJson(credentials: PrtgCredentials, params: Record<string, string>) {
   const url = new URL(`${credentials.baseUrl}/api/table.json`);
   for (const [key, value] of Object.entries({ ...params, ...authParams(credentials), output: "json" })) {
     url.searchParams.set(key, value);
@@ -181,23 +191,29 @@ async function fetchTable(credentials: PrtgCredentials, params: Record<string, s
       signal: AbortSignal.timeout(20_000),
     });
   } catch {
-    throw new Error("PRTG niet bereikbaar.");
+    throw new Error("PRTG niet bereikbaar. Controleer of deze pc https://prtg.teunesen.local kan openen.");
   }
   if (!response.ok) {
-    throw new Error(`PRTG antwoordde met ${response.status}.`);
+    throw new Error(httpErrorMessage(response.status));
   }
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
-    throw new Error("PRTG gaf geen geldige data.");
+    throw new Error("PRTG gaf geen geldige data. Login of basisadres klopt waarschijnlijk niet.");
   }
+  return payload;
+}
+
+async function fetchTable(credentials: PrtgCredentials, params: Record<string, string>) {
+  const payload = await fetchPrtgJson(credentials, params);
   const row = asRecord(payload);
-  const sensors = row?.sensors;
-  if (!Array.isArray(sensors)) {
+  const key = text(params.content) || "sensors";
+  const list = row?.[key];
+  if (!Array.isArray(list)) {
     throw new Error("PRTG-tabel mist sensorgegevens.");
   }
-  return sensors;
+  return list;
 }
 
 function buildQuery(filter: PrtgFilter) {
@@ -206,7 +222,11 @@ function buildQuery(filter: PrtgFilter) {
     columns: "objid,device,sensor,status,message,lastvalue,type,tags,group",
     count: "5000",
   };
-  if (filter.groupId) params.id = filter.groupId;
+  // Numeriek = object-id in de PRTG-URL. Tekst = groepsnaam via filter.
+  if (filter.groupId) {
+    if (/^\d+$/.test(filter.groupId)) params.id = filter.groupId;
+    else params.filter_group = filter.groupId;
+  }
   if (filter.tag) params.filter_tags = `@tag(${filter.tag})`;
   return params;
 }

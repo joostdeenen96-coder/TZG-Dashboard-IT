@@ -31,11 +31,16 @@ let cache: Cache | null = null;
 let inFlight: Promise<PrtgResponse> | null = null;
 let lastGood: Cache | null = null;
 
+function envText(name: string) {
+  return process.env[name]?.trim() ?? "";
+}
+
 function currentFilter(): PrtgFilter {
   const prtg = getDashboardConfig().prtg;
+  // .env mag de filter overschrijven, handig op de TV-pc zonder admin.
   return {
-    groupId: prtg.groupId.trim(),
-    tag: prtg.tag.trim(),
+    groupId: envText("PRTG_GROUP_ID") || prtg.groupId.trim(),
+    tag: envText("PRTG_TAG") || prtg.tag.trim(),
   };
 }
 
