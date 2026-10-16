@@ -82,10 +82,36 @@ export async function logoutAdmin() {
   publish(false);
 }
 
+function normalizePublicSettings(value: unknown): PublicSettings {
+  const row = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const graph = row.graph && typeof row.graph === "object" ? (row.graph as Record<string, unknown>) : {};
+  const sharepoint =
+    row.sharepoint && typeof row.sharepoint === "object" ? (row.sharepoint as Record<string, unknown>) : {};
+  const prtg = row.prtg && typeof row.prtg === "object" ? (row.prtg as Record<string, unknown>) : {};
+  return {
+    graph: {
+      tenantId: typeof graph.tenantId === "string" ? graph.tenantId : "",
+      clientId: typeof graph.clientId === "string" ? graph.clientId : "",
+      clientSecretSet: graph.clientSecretSet === true,
+    },
+    sharepoint: {
+      siteUrl: typeof sharepoint.siteUrl === "string" ? sharepoint.siteUrl : "",
+      listName: typeof sharepoint.listName === "string" ? sharepoint.listName : "",
+    },
+    prtg: {
+      baseUrl: typeof prtg.baseUrl === "string" ? prtg.baseUrl : "",
+      username: typeof prtg.username === "string" ? prtg.username : "Beheert",
+      passwordSet: prtg.passwordSet === true,
+      groupId: typeof prtg.groupId === "string" ? prtg.groupId : "",
+      tag: typeof prtg.tag === "string" ? prtg.tag : "",
+    },
+  };
+}
+
 export async function fetchSettings(): Promise<PublicSettings> {
   const response = await fetch("/api/admin/settings", { headers: authHeaders() });
   if (!response.ok) throw new Error(await readError(response));
-  return (await response.json()) as PublicSettings;
+  return normalizePublicSettings(await response.json());
 }
 
 export async function saveSettings(input: {
@@ -107,7 +133,12 @@ export async function saveSettings(input: {
     body: JSON.stringify(input),
   });
   if (!response.ok) throw new Error(await readError(response));
-  return (await response.json()) as PublicSettings;
+  const settings = normalizePublicSettings(await response.json());
+  // Oude API zonder prtg-velden: opslaan is dan niet echt gelukt voor PRTG.
+  if (!settings.prtg.baseUrl && !settings.prtg.groupId && !settings.prtg.passwordSet && input.prtgGroupId) {
+    throw new Error("De API is verouderd. Stop Teunesen API, doe git pull, en start start-dashboard opnieuw.");
+  }
+  return settings;
 }
 
 export type DashboardConfig = {
