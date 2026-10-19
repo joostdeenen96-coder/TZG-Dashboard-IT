@@ -19,6 +19,7 @@ export type ScreenRecord = {
   dashboardSlug: string | null;
   lastSeenAt: string | null;
   status: ScreenPresence;
+  appVersion: string | null;
   hasActiveToken: boolean;
   createdAt: string;
   updatedAt: string;
@@ -34,6 +35,7 @@ type ScreenRow = {
   dashboard_name: string | null;
   dashboard_slug: string | null;
   last_seen_at: Date | null;
+  app_version: string | null;
   has_active_token: boolean;
   created_at: Date;
   updated_at: Date;
@@ -45,7 +47,13 @@ const SELECT_SCREEN = `
          EXISTS (
            SELECT 1 FROM screen_tokens t
            WHERE t.screen_id = s.id AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at > now())
-         ) AS has_active_token
+         ) AS has_active_token,
+         (
+           SELECT h.app_version FROM screen_heartbeats h
+           WHERE h.screen_id = s.id
+           ORDER BY h.reported_at DESC
+           LIMIT 1
+         ) AS app_version
   FROM screens s
   LEFT JOIN dashboards d ON d.id = s.dashboard_id
 `;
@@ -83,6 +91,7 @@ function mapScreen(row: ScreenRow): ScreenRecord {
     dashboardSlug: row.dashboard_slug,
     lastSeenAt,
     status: screenPresence({ enabled: row.enabled, lastSeenAt }),
+    appVersion: row.app_version || null,
     hasActiveToken: row.has_active_token,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
@@ -347,10 +356,12 @@ export class PostgresScreenRepository {
     const screens = await this.list();
     const active = screens.filter((item) => item.enabled);
     return {
+      total: screens.length,
       active: active.length,
       online: active.filter((item) => item.status === "Online").length,
       offline: active.filter((item) => item.status === "Offline").length,
       neverConnected: active.filter((item) => item.status === "Nooit verbonden").length,
+      disabled: screens.filter((item) => item.status === "Uitgeschakeld").length,
     };
   }
 

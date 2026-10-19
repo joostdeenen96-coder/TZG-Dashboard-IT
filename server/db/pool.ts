@@ -20,7 +20,10 @@ export function getPool() {
       idleTimeoutMillis: 30_000,
     });
     pool.on("error", () => {
-      logError("database pool fout");
+      logError("database pool fout", { event: "database.pool" });
+      const current = pool;
+      pool = null;
+      void current?.end().catch(() => undefined);
     });
   }
   return pool;

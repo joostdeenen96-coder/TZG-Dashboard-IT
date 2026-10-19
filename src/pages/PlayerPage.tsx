@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DashboardDefinition } from "../types/dashboard";
+import { nextBackoff, readPlayerCache, writePlayerCache } from "../player/offlineCache";
 import { DashboardCanvas } from "./DisplayPage";
 
 type PlayerPayload = {
@@ -7,37 +8,19 @@ type PlayerPayload = {
   dashboard: DashboardDefinition | null;
   message?: string;
   heartbeatIntervalSeconds: number;
+  appVersion?: string;
 };
 
 type Phase =
   | { kind: "loading" }
-  | { kind: "ready"; payload: PlayerPayload; offline: boolean }
+  | { kind: "ready"; payload: PlayerPayload; offline: boolean; savedAt: string }
   | { kind: "denied"; message: string }
-  | { kind: "unassigned"; message: string };
+  | { kind: "unassigned"; message: string }
+  | { kind: "unreachable"; message: string };
 
 const denied = "Dit scherm is niet geautoriseerd.";
 const unassigned = "Dit scherm is nog niet gekoppeld aan een dashboard.";
-
-function cacheKey(token: string) {
-  return `tzg-player-config:${token}`;
-}
-
-function readCache(token: string): PlayerPayload | null {
-  try {
-    const raw = localStorage.getItem(cacheKey(token));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PlayerPayload;
-    if (!parsed?.dashboard) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(token: string, payload: PlayerPayload) {
-  if (!payload.dashboard) return;
-  localStorage.setItem(cacheKey(token), JSON.stringify(payload));
-}
+const unreachable = "De narrowcastingserver is tijdelijk niet bereikbaar.";
 
 async function readError(response: Response) {
   const payload: unknown = await response.json().catch(() => null);
@@ -47,6 +30,12 @@ async function readError(response: Response) {
   return denied;
 }
 
+function formatSaved(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" });
+}
+
 export function PlayerPage({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
 
@@ -54,21 +43,23 @@ export function PlayerPage({ token }: { token: string }) {
     let active = true;
     let timer = 0;
     let delay = 2_000;
+    let appVersion = "";
 
     async function heartbeat(payload: PlayerPayload) {
-      await fetch("/api/player/heartbeat", {
+      const response = await fetch("/api/player/heartbeat", {
         method: "POST",
         headers: {
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          appVersion: "web",
+          appVersion: payload.appVersion || appVersion || "web",
           dashboardId: payload.dashboard?.id ?? "",
           status: "ok",
           metadata: { player: "web" },
         }),
       });
+      if (!response.ok) throw new Error("heartbeat");
     }
 
     function schedule(ms: number) {
@@ -84,30 +75,52 @@ export function PlayerPage({ token }: { token: string }) {
         if (response.status === 401 || response.status === 403) {
           if (!active) return;
           setPhase({ kind: "denied", message: await readError(response) });
-          schedule(Math.min(delay * 2, 60_000));
-          delay = Math.min(delay * 2, 60_000);
+          delay = nextBackoff(delay);
+          schedule(delay);
           return;
         }
         if (!response.ok) throw new Error("offline");
         const payload = (await response.json()) as PlayerPayload;
         if (!active) return;
         delay = 2_000;
+        appVersion = payload.appVersion || appVersion;
         const interval = Math.max(5, payload.heartbeatIntervalSeconds || 60) * 1000;
         if (!payload.dashboard) {
           setPhase({ kind: "unassigned", message: payload.message || unassigned });
           schedule(interval);
           return;
         }
-        writeCache(token, payload);
-        setPhase({ kind: "ready", payload, offline: false });
+        const savedAt = new Date().toISOString();
+        writePlayerCache(token, {
+          version: 1,
+          savedAt,
+          appVersion: payload.appVersion || appVersion || "",
+          heartbeatIntervalSeconds: payload.heartbeatIntervalSeconds,
+          screen: payload.screen,
+          dashboard: payload.dashboard,
+        });
+        setPhase({ kind: "ready", payload, offline: false, savedAt });
         void heartbeat(payload).catch(() => undefined);
         schedule(interval);
       } catch {
         if (!active) return;
-        const cached = readCache(token);
-        if (cached) setPhase({ kind: "ready", payload: cached, offline: true });
-        else setPhase({ kind: "denied", message: "Verbinding met het scherm mislukt." });
-        delay = Math.min(delay * 2, 60_000);
+        const cached = readPlayerCache(token);
+        if (cached) {
+          setPhase({
+            kind: "ready",
+            payload: {
+              screen: cached.screen,
+              dashboard: cached.dashboard,
+              heartbeatIntervalSeconds: cached.heartbeatIntervalSeconds,
+              appVersion: cached.appVersion,
+            },
+            offline: true,
+            savedAt: cached.savedAt,
+          });
+        } else {
+          setPhase({ kind: "unreachable", message: unreachable });
+        }
+        delay = nextBackoff(delay);
         schedule(delay);
       }
     }
@@ -127,7 +140,7 @@ export function PlayerPage({ token }: { token: string }) {
     );
   }
 
-  if (phase.kind === "denied" || phase.kind === "unassigned") {
+  if (phase.kind === "denied" || phase.kind === "unassigned" || phase.kind === "unreachable") {
     return (
       <div className="fixed inset-0 grid place-items-center bg-ink text-paper">
         <div className="px-8 text-center">
@@ -143,7 +156,7 @@ export function PlayerPage({ token }: { token: string }) {
       <DashboardCanvas dashboard={phase.payload.dashboard!} />
       {phase.offline ? (
         <div className="fixed right-6 bottom-6 z-50 rounded-full border border-gold/40 bg-ink/90 px-4 py-2 text-[16px] text-gold">
-          Offline — laatste configuratie
+          Offline — laatste update {formatSaved(phase.savedAt)}
         </div>
       ) : null}
     </>

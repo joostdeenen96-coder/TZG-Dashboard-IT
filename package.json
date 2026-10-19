@@ -1,7 +1,7 @@
 {
   "name": "teunesen-dashboard",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx server/index.ts\" vite",
@@ -9,7 +9,13 @@
     "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.server.json --noEmit --pretty false",
-    "test": "tsx --test server/appPaths.test.ts server/services/healthService.test.ts server/dashboards/model.test.ts server/dashboards/repository.test.ts server/routes/dashboards.test.ts server/screens/token.test.ts server/screens/status.test.ts server/legacyPaths.test.ts server/db/repositoryMode.test.ts server/db/platform003.test.ts",
+    "test": "tsx --test server/appPaths.test.ts server/services/healthService.test.ts server/dashboards/model.test.ts server/dashboards/repository.test.ts server/routes/dashboards.test.ts server/screens/token.test.ts server/screens/status.test.ts server/legacyPaths.test.ts server/db/repositoryMode.test.ts server/db/platform003.test.ts server/config.test.ts server/log.test.ts server/player/backoff.test.ts server/platform004.test.ts",
+    "config:validate": "tsx server/scripts/config-validate.ts",
+    "backup:create": "tsx server/scripts/backup-create.ts",
+    "backup:list": "tsx server/scripts/backup-list.ts",
+    "backup:verify": "tsx server/scripts/backup-verify.ts",
+    "backup:cleanup": "tsx server/scripts/backup-cleanup.ts",
+    "backup:restore-test": "tsx server/scripts/backup-restore-test.ts",
     "db:migrate": "tsx server/scripts/db-migrate.ts",
     "db:migrate:status": "tsx server/scripts/db-migrate-status.ts",
     "db:seed": "tsx server/scripts/db-seed.ts",

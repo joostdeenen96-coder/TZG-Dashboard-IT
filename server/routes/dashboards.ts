@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { DashboardValidationError } from "../dashboards/model.js";
 import { getDashboardRepository } from "../dashboards/repository.js";
+import { isDatabaseUnavailable, unavailableMessage } from "../httpErrors.js";
 import { logError, logWarn } from "../log.js";
 import { readSession, tokenFromHeader } from "../services/adminSession.js";
 
@@ -14,13 +15,22 @@ function publicError(status: number, message: string, res: import("express").Res
   res.status(status).json({ error: message });
 }
 
+function failDb(error: unknown, fallback: string, res: import("express").Response) {
+  if (isDatabaseUnavailable(error)) {
+    publicError(503, unavailableMessage(), res);
+    return true;
+  }
+  logError(fallback);
+  return false;
+}
+
 dashboardsRouter.get("/", async (_req, res) => {
   try {
     const items = await getDashboardRepository().getAll();
     res.setHeader("Cache-Control", "no-store");
     res.json({ dashboards: items });
   } catch (error) {
-    logError(`dashboards list ${error instanceof Error ? error.message : "mislukt"}`);
+    if (failDb(error, "dashboards list mislukt", res)) return;
     publicError(500, "Dashboards niet geladen.", res);
   }
 });
@@ -36,7 +46,7 @@ dashboardsRouter.get("/by-slug/:slug", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json(item);
   } catch (error) {
-    logError(`dashboards by-slug ${error instanceof Error ? error.message : "mislukt"}`);
+    if (failDb(error, "dashboards by-slug mislukt", res)) return;
     publicError(500, "Dashboard niet geladen.", res);
   }
 });
@@ -52,7 +62,7 @@ dashboardsRouter.get("/:id", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json(item);
   } catch (error) {
-    logError(`dashboards get ${error instanceof Error ? error.message : "mislukt"}`);
+    if (failDb(error, "dashboards get mislukt", res)) return;
     publicError(500, "Dashboard niet geladen.", res);
   }
 });
@@ -70,7 +80,7 @@ dashboardsRouter.post("/", async (req, res) => {
       publicError(400, error.message, res);
       return;
     }
-    logError(`dashboards create ${error instanceof Error ? error.message : "mislukt"}`);
+    if (failDb(error, "dashboards create mislukt", res)) return;
     publicError(500, "Dashboard niet aangemaakt.", res);
   }
 });
@@ -94,7 +104,7 @@ dashboardsRouter.put("/:id", async (req, res) => {
       publicError(400, error.message, res);
       return;
     }
-    logError(`dashboards update ${error instanceof Error ? error.message : "mislukt"}`);
+    if (failDb(error, "dashboards update mislukt", res)) return;
     publicError(500, "Dashboard niet bijgewerkt.", res);
   }
 });
@@ -113,7 +123,11 @@ dashboardsRouter.delete("/:id", async (req, res) => {
     }
     res.status(204).send();
   } catch (error) {
-    logWarn(`dashboards delete ${error instanceof Error ? error.message : "mislukt"}`);
+    if (isDatabaseUnavailable(error)) {
+      publicError(503, unavailableMessage(), res);
+      return;
+    }
+    logWarn("dashboards delete mislukt");
     publicError(500, "Dashboard niet verwijderd.", res);
   }
 });

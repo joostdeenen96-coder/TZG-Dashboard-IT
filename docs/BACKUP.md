@@ -20,7 +20,24 @@ chmod +x scripts/backup-postgres.sh scripts/restore-postgres.sh scripts/export-d
 ./scripts/backup-postgres.sh
 ```
 
-Dat schrijft `backups/tzg-postgres-<tijdstip>.sql` via `pg_dump` in de container. Het volume heet `tzg-postgres`.
+Handmatige dump (custom format via de applicatie):
+
+```bash
+npm run backup:create
+npm run backup:list
+npm run backup:verify
+npm run backup:cleanup
+```
+
+Dat schrijft naar volume `tzg-backups` (in de container `/backups`) of lokaal `./backups` als `/backups` ontbreekt. Compose-service `backup` draait het schema `BACKUP_SCHEDULE` (voorbeeld `0 2 * * *`) en retentie `BACKUP_RETENTION_DAYS`.
+
+Oude SQL-script blijft werken:
+
+```bash
+./scripts/backup-postgres.sh
+```
+
+Dat schrijft `backups/tzg-postgres-<tijdstip>.sql` via `pg_dump` in de postgres-container. Het datavolume heet `tzg-postgres`. Het backupvolume heet `tzg-backups`.
 
 JSON-export van dashboarddefinities (naast de SQL-dump):
 
@@ -32,9 +49,17 @@ Resultaat op de host: `data/dashboards.export.json`. Bewaar ook `data/dashboards
 
 ## PostgreSQL-restore
 
+Restore-test (raakt productie niet):
+
+```bash
+npm run backup:restore-test
+```
+
+Productierestore (destructief, expliciet):
+
 ```bash
 docker compose up -d postgres
-RESTORE_CONFIRM=yes ./scripts/restore-postgres.sh backups/tzg-postgres-YYYYMMDD.sql
+RESTORE_CONFIRM=yes RESTORE_DB=tzg ./scripts/restore-postgres.sh backups/tzg-YYYYMMDDTHHMMSSZ.dump
 ```
 
 Daarna de applicatie starten: `docker compose up -d`. Migraties zijn idempotent. Dashboardconfiguratie die alleen in JSON stond en nog niet in de dump zit, opnieuw importeren met `npm run db:import-json` (zonder `--force` worden bestaande slugs overgeslagen).
