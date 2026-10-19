@@ -1,9 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const configFile = path.join(root, "config.json");
+import { configFilePath } from "../appPaths.js";
+import { logError } from "../log.js";
 
 export const GRAPH_TENANT_ID = "ca0e0118-1eb1-4661-bd22-8ca64479f1d3";
 
@@ -132,10 +130,10 @@ export function parseDashboardConfig(value: unknown): DashboardConfig {
 
 export function getDashboardConfig(): DashboardConfig {
   try {
-    return parseDashboardConfig(JSON.parse(readFileSync(configFile, "utf8")));
+    return parseDashboardConfig(JSON.parse(readFileSync(configFilePath(), "utf8")));
   } catch (error) {
     if (error instanceof Error && error.message && !String(error).includes("ENOENT")) {
-      console.error(`config.json is ongeldig (${error.message}). Standaardinstellingen worden gebruikt.`);
+      logError(`config.json is ongeldig (${error.message}). Standaardinstellingen worden gebruikt.`);
     }
     return {
       sharepointDiesel: { ...DEFAULTS.sharepointDiesel },
@@ -154,7 +152,8 @@ export function getScreenConfig(): ScreenConfig {
 
 export function saveDashboardConfig(value: unknown): DashboardConfig {
   const config = parseDashboardConfig(value);
-  mkdirSync(path.dirname(configFile), { recursive: true });
-  writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  const file = configFilePath();
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
   return config;
 }

@@ -1,10 +1,11 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { dataDir } from "../appPaths.js";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const settingsFile = path.join(root, "data", "settings.json");
+function settingsFilePath() {
+  return path.join(dataDir(), "settings.json");
+}
 
 const DEFAULT_SITE = "https://teunesen.sharepoint.com/sites/Facturatie";
 const DEFAULT_LIST = "Dieseltoeslagen Asvervoer";
@@ -63,7 +64,7 @@ export type IntegrationSettings = PublicSettings & {
 
 function readStored(): StoredSettings {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(settingsFile, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(settingsFilePath(), "utf8"));
     if (!parsed || typeof parsed !== "object") return {};
     return parsed as StoredSettings;
   } catch {
@@ -72,8 +73,9 @@ function readStored(): StoredSettings {
 }
 
 function writeStored(settings: StoredSettings) {
-  mkdirSync(path.dirname(settingsFile), { recursive: true });
-  writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+  const file = settingsFilePath();
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
 }
 
 function text(value: unknown, fallback = "") {

@@ -4,21 +4,34 @@ Volledig scherm voor de werkvloer en de kantine: waterstanden met bron-grafiek e
 
 Het planningsscherm blijft op `/`. Het ICT-scherm opent op `/ict` in hetzelfde programma: dezelfde API, tweede adres. Daar vervangt PRTG-monitoring de rij met waterstanden en dieseltoeslag; nieuws en agenda blijven.
 
-## Starten
+## Starten (ontwikkeling)
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` start de waterstanden-API op poort `43124` en Vite op `0.0.0.0:43123`. Open [http://127.0.0.1:43123](http://127.0.0.1:43123) voor planning, of [http://127.0.0.1:43123/ict](http://127.0.0.1:43123/ict) voor ICT. Alleen de API: `npm run server`.
+`npm run dev` start de API op poort `43124` en Vite op `0.0.0.0:43123`. Open [http://127.0.0.1:43123](http://127.0.0.1:43123) voor planning, of `/ict` voor ICT. Alleen de API: `npm run server`.
 
-Productiebuild (frontend en backend):
+## Productie / centrale server
+
+Eén proces op poort **8080** (API + gebouwde frontend):
 
 ```bash
+npm install
 npm run build
-npm run preview
+npm run start
 ```
+
+Of met Docker Compose:
+
+```bash
+cp .env.production.example .env
+mkdir -p data
+docker compose up -d --build
+```
+
+Daarna op het LAN: `http://<server-ip>:8080/` of `/ict`. Zie `docs/INSTALL-LINUX.md`, `docs/INSTALL-WINDOWS.md` en `docs/server-migration.md`.
 
 ## Opbouw
 
