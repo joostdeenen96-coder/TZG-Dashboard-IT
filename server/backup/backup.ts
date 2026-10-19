@@ -201,6 +201,65 @@ export function cleanupBackups(now = Date.now()) {
   return { removed, retentionDays: retention };
 }
 
+export type DatabaseSnapshot = {
+  database: string;
+  tablesOk: boolean;
+  dashboards: number;
+  widgets: number;
+  screens: number;
+  audit: number;
+  tokens: number;
+  tokensPlain: number;
+  fkBad: number;
+  planning: string;
+  ict: string;
+};
+
+async function inspectDatabase(database: string, env: NodeJS.ProcessEnv): Promise<DatabaseSnapshot> {
+  const q = async (sql: string) => {
+    const result = await run("psql", ["-d", database, "-v", "ON_ERROR_STOP=1", "-tAc", sql], {
+      env: { ...env, PGDATABASE: database },
+    });
+    if (result.code !== 0) {
+      const detail = (result.stderr || result.stdout).replace(/\s+/g, " ").slice(0, 240);
+      throw new Error(`Inspectie mislukt: ${detail || `psql exit ${result.code}`}`);
+    }
+    return result.stdout.trim();
+  };
+  const missing = [];
+  for (const table of REQUIRED_TABLES) {
+    const found = await q(`SELECT to_regclass('public.${table}') IS NOT NULL`);
+    if (found !== "t") missing.push(table);
+  }
+  return {
+    database,
+    tablesOk: missing.length === 0,
+    dashboards: Number(await q("SELECT count(*) FROM dashboards")) || 0,
+    widgets: Number(await q("SELECT count(*) FROM dashboard_widgets")) || 0,
+    screens: Number(await q("SELECT count(*) FROM screens")) || 0,
+    audit: Number(await q("SELECT count(*) FROM audit_logs")) || 0,
+    tokens: Number(await q("SELECT count(*) FROM screen_tokens")) || 0,
+    tokensPlain:
+      Number(
+        await q(
+          "SELECT count(*) FROM screen_tokens WHERE token_hash LIKE 'tzg_%' OR token_hash !~ '^[a-f0-9]{64}$'",
+        ),
+      ) || 0,
+    fkBad:
+      Number(
+        await q(
+          "SELECT count(*) FROM screens s WHERE s.dashboard_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dashboards d WHERE d.id = s.dashboard_id)",
+        ),
+      ) || 0,
+    planning: await q(
+      "SELECT COALESCE(name,'') || '|' || (SELECT count(*) FROM dashboard_widgets w WHERE w.dashboard_id = d.id) FROM dashboards d WHERE slug='planning'",
+    ),
+    ict: await q(
+      "SELECT COALESCE(name,'') || '|' || (SELECT count(*) FROM dashboard_widgets w WHERE w.dashboard_id = d.id) FROM dashboards d WHERE slug='ict'",
+    ),
+  };
+}
+
 export async function restoreToDatabase(file: string, database: string) {
   const productionDb = process.env.POSTGRES_DB?.trim() || "tzg";
   if (!database || database === productionDb) {
@@ -210,24 +269,56 @@ export async function restoreToDatabase(file: string, database: string) {
     throw new Error("Restore-doel is ongeldig.");
   }
   const { conn, env } = pgEnv();
-  const created = await run("psql", ["-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS ${database}; CREATE DATABASE ${database};`], { env });
+  const dropped = await run("psql", ["-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS ${database}`], {
+    env,
+  });
+  if (dropped.code !== 0) throw new Error("Testdatabase niet verwijderd.");
+  const created = await run("psql", ["-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE ${database}`], {
+    env,
+  });
   if (created.code !== 0) throw new Error("Testdatabase niet aangemaakt.");
-  const restored = await run("pg_restore", ["--no-owner", "--no-acl", "-d", database, file], { env: { ...env, PGDATABASE: database } });
-  if (restored.code !== 0 && !restored.stderr.includes("errors ignored")) {
-    await run("psql", ["-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${database};`], { env }).catch(() => undefined);
-    throw new Error("Restore mislukt.");
+  const restored = await run("pg_restore", ["--no-owner", "--no-acl", "-d", database, file], {
+    env: { ...env, PGDATABASE: database },
+  });
+  let snapshot: DatabaseSnapshot;
+  try {
+    snapshot = await inspectDatabase(database, env);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Restore-inspectie mislukt.";
+    await run("psql", ["-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${database}`], { env }).catch(() => undefined);
+    throw new Error(restored.code !== 0 ? `Restore mislukt: ${detail}` : detail);
   }
-  const counts = await run(
-    "psql",
-    [
-      "-d",
-      database,
-      "-tAc",
-      "SELECT 'dashboards='||count(*) FROM dashboards; SELECT 'widgets='||count(*) FROM dashboard_widgets; SELECT 'screens='||count(*) FROM screens; SELECT 'tokens_plain='||count(*) FROM screen_tokens WHERE token_hash LIKE 'tzg_%'; SELECT 'planning='||count(*) FROM dashboards WHERE slug='planning'; SELECT 'ict='||count(*) FROM dashboards WHERE slug='ict';",
-    ],
-    { env: { ...env, PGDATABASE: database } },
-  );
-  return { database, output: counts.stdout, host: conn.host };
+  if (!snapshot.tablesOk) {
+    await run("psql", ["-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${database}`], { env }).catch(() => undefined);
+    throw new Error("Restore mist verplichte tabellen.");
+  }
+  if (snapshot.tokensPlain > 0) {
+    await run("psql", ["-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${database}`], { env }).catch(() => undefined);
+    throw new Error("Restore bevat leesbare tokens.");
+  }
+  if (snapshot.fkBad > 0) {
+    await run("psql", ["-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${database}`], { env }).catch(() => undefined);
+    throw new Error("Restore heeft kapotte scherm-dashboardkoppelingen.");
+  }
+  const production = await inspectDatabase(conn.database, env);
+  if (
+    production.dashboards !== snapshot.dashboards ||
+    production.widgets !== snapshot.widgets ||
+    production.screens !== snapshot.screens ||
+    production.planning !== snapshot.planning ||
+    production.ict !== snapshot.ict
+  ) {
+    await run("psql", ["-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${database}`], { env }).catch(() => undefined);
+    throw new Error("Restore wijkt inhoudelijk af van productie.");
+  }
+  return {
+    database,
+    host: conn.host,
+    productionDb: conn.database,
+    restored: snapshot,
+    production,
+    matchesProduction: true,
+  };
 }
 
 export async function dropRestoreDatabase(database: string) {

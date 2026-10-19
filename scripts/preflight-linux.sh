@@ -74,4 +74,48 @@ else
   say "FAIL docker daemon"
   fail=1
 fi
+if $DOCKER compose config >/dev/null 2>/tmp/tzg-compose-config.log; then
+  say "OK docker compose config"
+else
+  say "FAIL docker compose config"
+  fail=1
+fi
+if grep -q 'tzg-postgres:' docker-compose.yml && grep -q 'tzg-backups:' docker-compose.yml; then
+  say "OK PostgreSQL- en backupvolumes"
+else
+  say "FAIL volumes ontbreken in compose"
+  fail=1
+fi
+if grep -q '127.0.0.1:5432:5432' docker-compose.yml; then
+  say "OK PostgreSQL alleen localhost"
+else
+  say "FAIL PostgreSQL niet beperkt tot 127.0.0.1"
+  fail=1
+fi
+if grep -qE '127\.0\.0\.1:\$\{PORT:-8080\}:8080|127\.0\.0\.1:8080:8080' docker-compose.yml; then
+  say "FAIL applicatiepoort 8080 alleen localhost — LAN-clients kunnen niet verbinden"
+  fail=1
+else
+  say "OK applicatiepoort 8080 voor LAN"
+fi
+if getent ahosts deb.debian.org >/dev/null 2>&1 || getent hosts deb.debian.org >/dev/null 2>&1; then
+  say "OK DNS-resolutie"
+else
+  say "WARN DNS-resolutie niet aangetoond"
+fi
+if $DOCKER compose ps --status running --services 2>/dev/null | grep -q dashboard; then
+  if $DOCKER compose exec -T dashboard node -e "require('net').connect({host:'postgres',port:5432},()=>{console.log('open');process.exit(0)}).on('error',()=>process.exit(1))" >/dev/null 2>&1; then
+    say "OK dashboard bereikt PostgreSQL"
+  else
+    say "FAIL dashboard bereikt PostgreSQL niet"
+    fail=1
+  fi
+  if curl -fsS --max-time 3 http://127.0.0.1:8080/api/health/live >/dev/null; then
+    say "OK localhost:8080 live"
+  else
+    say "WARN localhost:8080 nog niet live"
+  fi
+else
+  say "WARN stack niet gestart — container-netwerk later controleren"
+fi
 exit "$fail"

@@ -5,6 +5,7 @@ type OpsHealth = {
   status: string;
   version: string;
   services: Record<string, string>;
+  pendingMigrations?: number;
 };
 
 type BackupHealth = {
@@ -18,6 +19,11 @@ type BackupHealth = {
 
 type Source = { id: string; name: string; status: string; detail: string };
 type VersionInfo = { version: string; commit: string; buildDate: string; environment: string };
+type Diagnostics = {
+  runtime?: { node?: string; environment?: string };
+  ready?: { pendingMigrations?: number; services?: Record<string, string> };
+  events?: Array<{ timestamp: string; level: string; message: string; event?: string }>;
+};
 
 const TOKEN_KEY = "teunesen-admin-token";
 
@@ -52,6 +58,8 @@ export function AdminOperationsSection({ authenticated }: { authenticated: boole
   const [filter, setFilter] = useState<"alle" | ScreenRecord["status"]>("alle");
   const [error, setError] = useState("");
   const [events, setEvents] = useState<Array<{ timestamp: string; level: string; message: string; event?: string }>>([]);
+  const [runtime, setRuntime] = useState<{ node?: string; environment?: string } | null>(null);
+  const [pendingMigrations, setPendingMigrations] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     const [nextHealth, nextReady, nextBackups, nextSources, nextVersion, nextScreens, diagnostics] = await Promise.all([
@@ -61,7 +69,7 @@ export function AdminOperationsSection({ authenticated }: { authenticated: boole
       getJson<{ sources: Source[] }>("/api/health/sources").catch(() => ({ sources: [] })),
       getJson<VersionInfo>("/api/version"),
       fetchScreens().catch(() => [] as ScreenRecord[]),
-      getJson<{ events?: Array<{ timestamp: string; level: string; message: string; event?: string }> }>("/api/diagnostics").catch(() => ({ events: [] })),
+      getJson<Diagnostics>("/api/diagnostics").catch((): Diagnostics => ({ events: [] })),
     ]);
     setHealth(nextHealth);
     setReady(nextReady);
@@ -70,6 +78,8 @@ export function AdminOperationsSection({ authenticated }: { authenticated: boole
     setVersion(nextVersion);
     setScreens(nextScreens);
     setEvents(diagnostics.events || []);
+    setRuntime(diagnostics.runtime || null);
+    setPendingMigrations(diagnostics.ready?.pendingMigrations ?? nextReady.pendingMigrations ?? null);
     if (nextReady.status !== "healthy") setError("Service tijdelijk niet beschikbaar.");
   }, []);
 
@@ -103,6 +113,8 @@ export function AdminOperationsSection({ authenticated }: { authenticated: boole
       <p className="mt-2 text-[15px] text-mist">
         Server {version?.version || health?.version || "—"} · commit {(version?.commit || "unknown").slice(0, 12)} ·{" "}
         {version?.environment}
+        {runtime?.node ? ` · Node ${runtime.node}` : ""}
+        {pendingMigrations !== null ? ` · migraties pending ${pendingMigrations}` : ""}
       </p>
 
       {dbBad ? <p className="mt-3 text-[16px] text-gold">Database is niet beschikbaar of niet ready.</p> : null}

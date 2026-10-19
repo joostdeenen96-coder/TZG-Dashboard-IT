@@ -17,10 +17,12 @@ try {
   await verifyBackup(file);
   const restored = await restoreToDatabase(file, target);
   logInfo("restore-test klaar", { event: "backup.restore-test" });
-  process.stdout.write(`${JSON.stringify({ ok: true, ...restored, productionDb }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ ok: true, productionUntouched: productionDb, ...restored }, null, 2)}\n`);
   await dropRestoreDatabase(target);
-} catch {
-  logError("restore-test mislukt", { event: "backup.restore-test" });
+} catch (error) {
+  const message = error instanceof Error ? error.message : "restore-test mislukt";
+  logError(message, { event: "backup.restore-test" });
+  process.stdout.write(`${JSON.stringify({ ok: false, error: message, productionDb }, null, 2)}\n`);
   await dropRestoreDatabase(target).catch(() => undefined);
   process.exitCode = 1;
 }

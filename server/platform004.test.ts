@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import express from "express";
-import { cleanupBackups } from "./backup/backup.js";
-import { getLiveHealth } from "./services/healthService.js";
+import { backupHealth, cleanupBackups, restoreToDatabase } from "./backup/backup.js";
+import { isDatabaseUnavailable } from "./httpErrors.js";
+import { getLiveHealth, getReadyHealth } from "./services/healthService.js";
+import { cacheContainsSecrets, nextBackoff } from "./player/backoff.js";
 import { rateLimit, resetRateLimit } from "./rateLimit.js";
 import { requestIdMiddleware, getRequestId } from "./requestId.js";
 import { sanitize } from "./log.js";
-import { restoreToDatabase } from "./backup/backup.js";
 import { versionInfo } from "./version.js";
 
 test("health live vereist geen database", async () => {
@@ -105,4 +106,49 @@ test("sanitize houdt secrets uit logs", () => {
   const clean = sanitize("cookie=abc Authorization: Bearer tok DATABASE_URL=postgresql://a:b@h/db");
   assert.equal(clean.includes("tok"), false);
   assert.equal(clean.includes("postgresql://a:b"), false);
+});
+
+test("ready is unhealthy zonder database", async () => {
+  const previous = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    const ready = await getReadyHealth();
+    assert.equal(ready.status, "unhealthy");
+    assert.equal(ready.services.database, "unhealthy");
+  } finally {
+    if (previous === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previous;
+  }
+});
+
+test("database-unavailable herkent connectiefouten", () => {
+  assert.equal(isDatabaseUnavailable({ code: "ECONNREFUSED", message: "connect" }), true);
+  assert.equal(isDatabaseUnavailable({ code: "57P01", message: "terminating connection" }), true);
+  assert.equal(isDatabaseUnavailable({ message: "Connection terminated unexpectedly" }), true);
+  assert.equal(isDatabaseUnavailable({ code: "23505", message: "duplicate" }), false);
+});
+
+test("backup max age maakt backupstatus degraded", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "tzg-bak-age-"));
+  const file = path.join(dir, "tzg-old.dump");
+  writeFileSync(file, "dump");
+  const oldTime = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+  writeFileSync(`${file}.meta.json`, JSON.stringify({ file, createdAt: oldTime, size: 4, format: "custom", status: "ok" }));
+  process.env.BACKUP_DIRECTORY = dir;
+  process.env.BACKUP_MAX_AGE_HOURS = "36";
+  const health = backupHealth();
+  assert.equal(health.status, "degraded");
+  assert.equal(health.lastSuccessAt, oldTime);
+  rmSync(dir, { recursive: true, force: true });
+  delete process.env.BACKUP_DIRECTORY;
+  delete process.env.BACKUP_MAX_AGE_HOURS;
+});
+
+test("offlinecache weigert tokens en secrets", () => {
+  assert.equal(cacheContainsSecrets("tzg_abcdefghijklmnopqrstuvwxyz012345"), true);
+  assert.equal(cacheContainsSecrets("Bearer secret-token-value"), true);
+  assert.equal(cacheContainsSecrets("postgresql://tzg:wachtwoord@postgres/tzg"), true);
+  assert.equal(cacheContainsSecrets('{"screen":{"name":"hal"},"dashboard":{"slug":"planning"}}'), false);
+  assert.equal(nextBackoff(2_000), 4_000);
+  assert.equal(nextBackoff(40_000), 60_000);
 });

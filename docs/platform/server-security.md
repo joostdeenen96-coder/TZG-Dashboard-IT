@@ -4,6 +4,7 @@
 
 - Multi-stage build, runtime `npm ci --omit=dev`.
 - Runtimegebruiker `appuser` (uid 10001) na entrypoint.
+- Uitzondering: Compose `init: true` start `docker-init` als PID 1 (root). Dat is alleen process-reaping. Het Node-proces draait als uid 10001 (`/proc/$(pgrep -n node)/status`). `docker compose exec dashboard id` toont daardoor root van de exec/init-laag, niet van de applicatie.
 - `security_opt: no-new-privileges:true`.
 - Geen `privileged`.
 - Geen brede hostmounts (`/` of Docker-socket). Alleen `./data` en named volumes.

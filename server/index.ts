@@ -110,8 +110,18 @@ if (existsSync(path.join(clientDir, "index.html"))) {
 }
 
 app.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
-  const message = error instanceof Error ? error.message : "Onbekende serverfout.";
   const requestId = getRequestId(req);
+  const status =
+    error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 0;
+  const type = error && typeof error === "object" && "type" in error ? String(error.type) : "";
+  if (status === 413 || type === "entity.too.large") {
+    logWarn("api aanvraag te groot", { event: "http.error", requestId });
+    if (!res.headersSent) {
+      res.status(413).json({ error: "Aanvraag is te groot.", requestId });
+    }
+    return;
+  }
+  const message = error instanceof Error ? error.message : "Onbekende serverfout.";
   logError(`api ${message}`, { event: "http.error", requestId });
   if (!res.headersSent) {
     res.status(500).json({ error: "Verzoek mislukt.", requestId });
