@@ -1,4 +1,5 @@
 import { fetchBytes, fetchJson } from "../providers/http.js";
+import { databaseUrl, getPool } from "../db/pool.js";
 import { getDashboardRepository } from "../dashboards/repository.js";
 import { getDashboardConfig } from "./dashboardConfig.js";
 import { getGraphAccessToken, graphUrl, graphGet } from "./graphClient.js";
@@ -82,20 +83,42 @@ async function checkSharePointDiesel() {
   });
 }
 
+async function checkDatabase(): Promise<HealthStatus> {
+  if (!databaseUrl()) return "unhealthy";
+  try {
+    await getPool().query("SELECT 1");
+    return "healthy";
+  } catch {
+    logWarn("health database niet bereikbaar");
+    return "unhealthy";
+  }
+}
+
 export async function getHealth() {
   const version = readAppVersion();
-  const dashboardRepo = await getDashboardRepository().health();
+  const [database, dashboardRepo] = await Promise.all([
+    checkDatabase(),
+    getDashboardRepository().health(),
+  ]);
   const dashboardStatus: HealthStatus = dashboardRepo.ok ? "healthy" : "unhealthy";
-  const status: HealthStatus = dashboardStatus === "healthy" ? "healthy" : "degraded";
+  let status: HealthStatus = "healthy";
+  if (database !== "healthy" || dashboardStatus !== "healthy") status = "degraded";
+  if (process.env.NODE_ENV === "production" && database !== "healthy") status = "unhealthy";
   return {
     status,
     version,
     services: {
       api: "healthy" as const,
       configuration: "healthy" as const,
+      database,
       dashboardRepository: dashboardStatus,
     },
   };
+}
+
+export async function getHealthScreens() {
+  const { PostgresScreenRepository } = await import("../screens/repository.js");
+  return new PostgresScreenRepository().counts();
 }
 
 export async function getHealthSources() {

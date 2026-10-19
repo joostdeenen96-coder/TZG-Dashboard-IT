@@ -10,7 +10,10 @@ function sanitize(message: string) {
     .replace(/password["'\s:=]+[^\s"',}]+/gi, "password=[redacted]")
     .replace(/GRAPH_CLIENT_SECRET=\S+/gi, "GRAPH_CLIENT_SECRET=[redacted]")
     .replace(/PRTG_PASSWORD=\S+/gi, "PRTG_PASSWORD=[redacted]")
-    .replace(/PRTG_PASSHASH=\S+/gi, "PRTG_PASSHASH=[redacted]");
+    .replace(/PRTG_PASSHASH=\S+/gi, "PRTG_PASSHASH=[redacted]")
+    .replace(/postgres(?:ql)?:\/\/\S+/gi, "postgresql://[redacted]")
+    .replace(/DATABASE_URL=\S+/gi, "DATABASE_URL=[redacted]")
+    .replace(/tzg_[A-Za-z0-9_-]{8,}/g, "tzg_[redacted]");
 }
 
 export function logInfo(message: string) {

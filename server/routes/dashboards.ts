@@ -63,7 +63,7 @@ dashboardsRouter.post("/", async (req, res) => {
     return;
   }
   try {
-    const created = await getDashboardRepository().create(req.body);
+    const created = await getDashboardRepository().create(req.body, { actor: "admin" });
     res.status(201).json(created);
   } catch (error) {
     if (error instanceof DashboardValidationError) {
@@ -87,7 +87,7 @@ dashboardsRouter.put("/:id", async (req, res) => {
       publicError(404, "Dashboard niet gevonden.", res);
       return;
     }
-    const updated = await getDashboardRepository().update(id, req.body);
+    const updated = await getDashboardRepository().update(id, req.body, { actor: "admin" });
     res.json(updated);
   } catch (error) {
     if (error instanceof DashboardValidationError) {
@@ -106,7 +106,7 @@ dashboardsRouter.delete("/:id", async (req, res) => {
   }
   try {
     const id = typeof req.params.id === "string" ? req.params.id : "";
-    const removed = await getDashboardRepository().delete(id);
+    const removed = await getDashboardRepository().delete(id, { actor: "admin" });
     if (!removed) {
       publicError(404, "Dashboard niet gevonden.", res);
       return;

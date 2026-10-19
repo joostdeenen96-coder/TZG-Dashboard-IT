@@ -255,6 +255,10 @@ export function DisplayPage({ slug }: DisplayPageProps) {
     return <NotConfigured />;
   }
 
+  return <DashboardCanvas dashboard={dashboard} />;
+}
+
+export function DashboardCanvas({ dashboard }: { dashboard: DashboardDefinition }) {
   if (dashboard.layout.preset === "planning") return <PlanningLayout dashboard={dashboard} />;
   if (dashboard.layout.preset === "ict") return <IctLayout dashboard={dashboard} />;
   return <StackLayout dashboard={dashboard} />;
