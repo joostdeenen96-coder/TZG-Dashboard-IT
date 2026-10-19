@@ -47,7 +47,7 @@ Anders stopt het script. Geen automatische schemadowngrade.
 
 ### Windows Docker-host
 
-Zelfde Compose-stack. PowerShell-varianten: `scripts/preflight-windows.ps1`, `scripts/update-production.ps1`, `scripts/rollback-production.ps1`. **Alleen gedocumenteerd** tot een Windows-host is meegenomen in de runtime-test.
+Zelfde Compose-stack. PowerShell-varianten: `scripts/preflight-windows.ps1`, `scripts/update-production.ps1`, `scripts/rollback-production.ps1`. `preflight-windows.ps1` is op een Windows-host **syntactisch gevalideerd** (`$errors.Count = 0`). Een volledige Windows Docker-runtime blijft **alleen gedocumenteerd** tot die stappen daar zijn meegenomen.
 
 ### Nieuwe server
 

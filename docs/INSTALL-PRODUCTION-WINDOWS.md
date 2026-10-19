@@ -13,4 +13,4 @@ Doel: Docker Desktop of Docker Engine op Windows Server, dezelfde Compose-stack.
 
 PowerShell-backup staat in `docs/BACKUP.md`. Update: `.\scripts\update-production.ps1`. Rollback: `.\scripts\rollback-production.ps1`.
 
-**Classificatie:** de Windows-scripts zijn syntactisch aanwezig. Of ze op een echte Windows-host slagen is **niet getest** tot een Windows-runtime is meegenomen.
+**Classificatie:** `scripts/preflight-windows.ps1` is op een echte Windows-host **syntactisch gevalideerd** (PowerShell-parser, `$errors.Count = 0`). Dat dekt acceptatiecriterium 26. Een volledige preflight-runtime (Docker, `.env`, poort 8080) is in die controle niet meegeleverd.

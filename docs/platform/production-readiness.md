@@ -12,6 +12,7 @@
 | PostgreSQL niet op het LAN | bind `127.0.0.1:5432` | PLATFORM-003; LAN-bereikbaarheid PLATFORM-004 |
 | Configuratievalidatie bij start | `npm run config:validate` | PLATFORM-004 |
 | Live / ready | `/api/health/live`, `/api/health/ready` | PLATFORM-004 |
+| Windows-preflight syntaxis | PowerShell-parser `$errors.Count = 0` op echte Windows-host | technisch getest (criterium 26) |
 
 ## Uitzonderingen (bewust)
 

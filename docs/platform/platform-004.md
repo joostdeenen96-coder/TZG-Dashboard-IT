@@ -112,3 +112,15 @@ Secrets staan in `.env` en eventueel `data/settings.json`, niet in Git, niet in 
 - Deze documentatie belooft geen 99,x % beschikbaarheid.
 
 Classificatie in overige docs: **technisch getest** / **alleen gedocumenteerd** / **niet getest**.
+
+## 17. Acceptatiecriterium 26 (Windows-preflight syntaxis)
+
+Criterium: *preflight Windows syntactisch gevalideerd*.
+
+Extern gecontroleerd op een Windows-pc in `C:\TZG-Dashboard`. Parserresultaat:
+
+```
+Aantal syntaxfouten: 0
+```
+
+`$errors | Format-List` produceerde geen regels. Daarmee is criterium 26 **PASS**. PSScriptAnalyzer-uitvoer en de volledige runtime van `preflight-windows.ps1` zijn in die controle niet aangeleverd; die vallen buiten dit criterium.
