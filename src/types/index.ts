@@ -135,6 +135,11 @@ export type PrtgAlarm = {
   status: PrtgAlarmStatus;
   message: string;
   acknowledged: boolean;
+  group: string;
+  lastvalue: string;
+  sinceLabel: string | null;
+  sinceAt: string | null;
+  suggestion: string | null;
 };
 
 export type PrtgMetric = {

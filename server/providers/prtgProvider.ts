@@ -21,6 +21,11 @@ export type PrtgAlarm = {
   status: PrtgAlarmStatus;
   message: string;
   acknowledged: boolean;
+  group: string;
+  lastvalue: string;
+  sinceLabel: string | null;
+  sinceAt: string | null;
+  suggestion: string | null;
 };
 
 export type PrtgMetric = {
@@ -275,10 +280,82 @@ async function fetchTable(credentials: PrtgCredentials, params: Record<string, s
   return list;
 }
 
+function cleanMessage(value: string) {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function parsePrtgStamp(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^(-|n\/a|none)$/i.test(trimmed)) return null;
+  // PRTG levert vaak "16-10-2026 12:03:01" of ISO.
+  const euro = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (euro) {
+    const day = Number(euro[1]);
+    const month = Number(euro[2]);
+    const year = Number(euro[3]);
+    const hour = Number(euro[4] ?? 0);
+    const minute = Number(euro[5] ?? 0);
+    const second = Number(euro[6] ?? 0);
+    const date = new Date(year, month - 1, day, hour, minute, second);
+    if (Number.isFinite(date.getTime())) return date.toISOString();
+  }
+  const parsed = Date.parse(trimmed);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function formatDurationSince(iso: string | null) {
+  if (!iso) return null;
+  const start = Date.parse(iso);
+  if (!Number.isFinite(start)) return null;
+  const minutes = Math.max(0, Math.floor((Date.now() - start) / 60_000));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours < 48) return rest ? `${hours} u ${rest} min` : `${hours} u`;
+  const days = Math.floor(hours / 24);
+  const hourRest = hours % 24;
+  return hourRest ? `${days} d ${hourRest} u` : `${days} d`;
+}
+
+function suggestForAlarm(input: {
+  status: PrtgAlarmStatus;
+  sensor: string;
+  message: string;
+  type: string;
+  lastvalue: string;
+}) {
+  const hay = `${input.sensor} ${input.message} ${input.type} ${input.lastvalue}`.toLowerCase();
+  if (/ssl|certificaat|certificate|tls/.test(hay)) {
+    return "Controleer of het SSL-certificaat bijna verloopt of ongeldig is en plan vernieuwing.";
+  }
+  if (/\bcpu\b|processor|load/.test(hay)) {
+    return "Bekijk welke processen de CPU belasten en herstart zware diensten indien nodig.";
+  }
+  if (/\bmem(?:ory)?\b|\bram\b|geheugen/.test(hay)) {
+    return "Controleer geheugengebruik en geheugenlekken; herstart de dienst bij aanhoudend hoge druk.";
+  }
+  if (/\bdisk\b|drive|opslag|schijf|free space|vrije ruimte/.test(hay)) {
+    return "Maak schijfruimte vrij of breid de volume uit; controleer log- en temp-mappen.";
+  }
+  if (/ping|icmp|timeout|niet bereikbaar|unreachable|no response/.test(hay)) {
+    return "Controleer netwerk, firewall en of de host nog online is.";
+  }
+  if (/snmp|wmi|credentials|authentication|login|access denied/.test(hay)) {
+    return "Controleer monitoringsrechten, SNMP/WMI-instellingen en of de service draait.";
+  }
+  if (input.status === "down" || input.status === "downPartial") {
+    return "Open de sensor in PRTG, bekijk de historie en herstel de onderliggende dienst of verbinding.";
+  }
+  if (input.status === "warning" || input.status === "unusual") {
+    return "Bekijk drempels en recente metingen in PRTG; grijp in als de waarde verder oploopt.";
+  }
+  return null;
+}
+
 function buildQuery(filter: PrtgFilter) {
   const params: Record<string, string> = {
     content: "sensors",
-    columns: "objid,device,sensor,status,message,lastvalue,type,tags,group",
+    columns: "objid,device,sensor,status,message,lastvalue,type,tags,group,downtimesince,lastdown,lastup,lastcheck",
     count: "5000",
   };
   // Numeriek = object-id in de PRTG-URL. Tekst = groepsnaam via filter.
@@ -309,6 +386,11 @@ function sensorRows(raw: unknown[]) {
         lastvalue: text(row.lastvalue),
         type: text(row.type) || text(row.type_raw),
         tags: text(row.tags),
+        group: text(row.group),
+        downtimesince: text(row.downtimesince) || text(row.downtimesince_raw),
+        lastdown: text(row.lastdown) || text(row.lastdown_raw),
+        lastup: text(row.lastup) || text(row.lastup_raw),
+        lastcheck: text(row.lastcheck) || text(row.lastcheck_raw),
       },
     ];
   });
@@ -318,13 +400,28 @@ function toAlarm(row: ReturnType<typeof sensorRows>[number]): PrtgAlarm | null {
   if (row.statusCode === null || !ALARM_STATUS_CODES.has(row.statusCode)) return null;
   const status = alarmStatusByCode[row.statusCode];
   if (!status) return null;
+  const message = cleanMessage(row.message);
+  const sinceAt = parsePrtgStamp(row.lastdown) || parsePrtgStamp(row.lastcheck);
+  const sinceFromPrtg = row.downtimesince && !/^(-|0+|none|n\/a)$/i.test(row.downtimesince) ? row.downtimesince : null;
+  const sinceLabel = sinceFromPrtg || formatDurationSince(sinceAt);
   return {
     id: row.id,
     device: row.device,
     sensor: row.sensor,
     status,
-    message: row.message.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+    message,
     acknowledged: status === "downAcknowledged",
+    group: row.group,
+    lastvalue: row.lastvalue,
+    sinceLabel,
+    sinceAt,
+    suggestion: suggestForAlarm({
+      status,
+      sensor: row.sensor,
+      message,
+      type: row.type,
+      lastvalue: row.lastvalue,
+    }),
   };
 }
 

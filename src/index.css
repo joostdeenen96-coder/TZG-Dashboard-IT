@@ -199,3 +199,22 @@ body {
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
+
+/* Alleen de storingenlijst mag scrollen op de ICT-TV; dunne balk. */
+.prtg-alarms-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(246, 212, 77, 0.45) transparent;
+}
+
+.prtg-alarms-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.prtg-alarms-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(246, 212, 77, 0.45);
+}
+
+.prtg-alarms-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -81,6 +81,11 @@ function normalizeAlarm(value: unknown): PrtgAlarm | null {
     status,
     message: text(row.message),
     acknowledged: row.acknowledged === true || status === "downAcknowledged",
+    group: text(row.group),
+    lastvalue: text(row.lastvalue),
+    sinceLabel: text(row.sinceLabel) || null,
+    sinceAt: text(row.sinceAt) || null,
+    suggestion: text(row.suggestion) || null,
   };
 }
 
