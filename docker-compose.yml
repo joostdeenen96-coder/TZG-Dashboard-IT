@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-bookworm
+    container_name: tzg-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tzg}
+      POSTGRES_USER: ${POSTGRES_USER:-tzg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD ontbreekt}
+    volumes:
+      - tzg-postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tzg} -d ${POSTGRES_DB:-tzg}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   dashboard:
     build:
       context: .
@@ -12,6 +30,11 @@ services:
       PORT: "8080"
       APP_ROOT: /app
       DATA_DIR: /app/data
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tzg}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tzg}
+      DASHBOARD_REPOSITORY: postgres
+      SCREEN_HEARTBEAT_SECONDS: ${SCREEN_HEARTBEAT_SECONDS:-60}
+      SCREEN_OFFLINE_AFTER_SECONDS: ${SCREEN_OFFLINE_AFTER_SECONDS:-180}
+      SCREEN_HEARTBEAT_RETENTION_DAYS: ${SCREEN_HEARTBEAT_RETENTION_DAYS:-14}
       GRAPH_TENANT_ID: ${GRAPH_TENANT_ID:-}
       GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID:-}
       GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET:-}
@@ -24,4 +47,10 @@ services:
       PRTG_TLS_INSECURE: ${PRTG_TLS_INSECURE:-}
     volumes:
       - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  tzg-postgres:

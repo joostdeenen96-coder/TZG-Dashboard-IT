@@ -3,26 +3,20 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { dataDir } from "../appPaths.js";
 import { logError, logInfo, logWarn } from "../log.js";
+import { resolveRepositoryMode } from "../db/repositoryMode.js";
 import {
   DashboardValidationError,
   parseDashboardCreateInput,
   parseDashboardDefinition,
   parseDashboardStore,
   parseDashboardUpdateInput,
-  type DashboardDefinition,
   type DashboardStoreFile,
 } from "./model.js";
+import { PostgresDashboardRepository } from "./postgresRepository.js";
 import { createDefaultDashboards } from "./seed.js";
+import type { DashboardRepository, RepositoryContext } from "./contract.js";
 
-export interface DashboardRepository {
-  getAll(): Promise<DashboardDefinition[]>;
-  getById(id: string): Promise<DashboardDefinition | null>;
-  getBySlug(slug: string): Promise<DashboardDefinition | null>;
-  create(input: unknown): Promise<DashboardDefinition>;
-  update(id: string, input: unknown): Promise<DashboardDefinition>;
-  delete(id: string): Promise<boolean>;
-  health(): Promise<{ ok: boolean; detail: string }>;
-}
+export type { DashboardRepository, RepositoryContext } from "./contract.js";
 
 function dashboardsFilePath() {
   return path.join(dataDir(), "dashboards.json");
@@ -84,7 +78,7 @@ export class JsonDashboardRepository implements DashboardRepository {
     return this.load().dashboards.find((item) => item.slug === normalized) ?? null;
   }
 
-  async create(input: unknown) {
+  async create(input: unknown, _context?: RepositoryContext) {
     const body = parseDashboardCreateInput(input);
     const store = this.load();
     if (store.dashboards.some((item) => item.slug === body.slug)) {
@@ -109,7 +103,7 @@ export class JsonDashboardRepository implements DashboardRepository {
     return dashboard;
   }
 
-  async update(id: string, input: unknown) {
+  async update(id: string, input: unknown, _context?: RepositoryContext) {
     const body = parseDashboardUpdateInput(input);
     const store = this.load();
     const index = store.dashboards.findIndex((item) => item.id === id);
@@ -132,7 +126,7 @@ export class JsonDashboardRepository implements DashboardRepository {
     return next;
   }
 
-  async delete(id: string) {
+  async delete(id: string, _context?: RepositoryContext) {
     const store = this.load();
     const next = store.dashboards.filter((item) => item.id !== id);
     if (next.length === store.dashboards.length) return false;
@@ -155,7 +149,10 @@ export class JsonDashboardRepository implements DashboardRepository {
 let repository: DashboardRepository | null = null;
 
 export function getDashboardRepository() {
-  if (!repository) repository = new JsonDashboardRepository();
+  if (!repository) {
+    repository =
+      resolveRepositoryMode() === "postgres" ? new PostgresDashboardRepository() : new JsonDashboardRepository();
+  }
   return repository;
 }
 

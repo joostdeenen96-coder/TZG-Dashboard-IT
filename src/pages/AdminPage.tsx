@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { AdminDashboardsSection } from "../components/AdminDashboardsSection";
+import { AdminScreensSection } from "../components/AdminScreensSection";
 import {
   fetchDashboardConfig,
   loginAdmin,
@@ -315,6 +316,7 @@ export function AdminPage() {
         )}
 
         {authenticated ? <AdminDashboardsSection authenticated={authenticated} /> : null}
+        {authenticated ? <AdminScreensSection authenticated={authenticated} /> : null}
 
         {status === "loading" ? <p className="mt-4 text-[16px] text-mist">Bezig.</p> : null}
         {message ? (

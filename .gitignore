@@ -16,6 +16,7 @@ dist-ssr
 .env
 .env.production
 !.env.production.example
+backups
 
 # Editor directories and files
 .vscode/*

@@ -9,6 +9,7 @@ test("getHealth geeft status en version zonder secrets", async () => {
   assert.ok(health.version.length > 0);
   assert.equal(health.services.api, "healthy");
   assert.equal(health.services.configuration, "healthy");
+  assert.ok(health.services.database === "healthy" || health.services.database === "unhealthy");
   assert.ok(
     health.services.dashboardRepository === "healthy" || health.services.dashboardRepository === "unhealthy",
   );

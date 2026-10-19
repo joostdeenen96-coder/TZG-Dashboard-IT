@@ -17,6 +17,9 @@ import { newsRouter } from "./routes/news.js";
 import { prtgRouter } from "./routes/prtg.js";
 import { waterLevelsRouter } from "./routes/waterLevels.js";
 import { getDashboardRepository } from "./dashboards/repository.js";
+import { resolveRepositoryMode } from "./db/repositoryMode.js";
+import { playerRouter } from "./routes/player.js";
+import { auditRouter, screensRouter } from "./routes/screens.js";
 
 const port = resolveListenPort();
 const app = express();
@@ -34,6 +37,9 @@ app.use((req, res, next) => {
       requestPath.startsWith("/api/wij-agenda") ||
       requestPath.startsWith("/api/prtg") ||
       requestPath.startsWith("/api/dashboards") ||
+      requestPath.startsWith("/api/screens") ||
+      requestPath.startsWith("/api/player") ||
+      requestPath.startsWith("/api/audit") ||
       requestPath.startsWith("/api/health");
     if (!watched) return;
     const line = `api ${req.method} ${requestPath.split("?")[0]} ${res.statusCode} ${Date.now() - started}ms`;
@@ -48,6 +54,9 @@ app.use("/api/health", healthRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/config", configRouter);
 app.use("/api/dashboards", dashboardsRouter);
+app.use("/api/screens", screensRouter);
+app.use("/api/player", playerRouter);
+app.use("/api/audit", auditRouter);
 app.use("/api/waterlevels", waterLevelsRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/agenda", agendaRouter);
@@ -55,12 +64,15 @@ app.use("/api/wij-agenda", agendaRouter);
 app.use("/api/dieselsurcharge", dieselSurchargeRouter);
 app.use("/api/prtg", prtgRouter);
 
-// Seed standaarddashboards bij start (niet-blokkerend; fouten worden gelogd in de repository).
-void getDashboardRepository()
-  .getAll()
-  .catch((error: unknown) => {
-    logWarn(`dashboard seed ${error instanceof Error ? error.message : "mislukt"}`);
-  });
+const repositoryMode = resolveRepositoryMode();
+logInfo(`dashboardopslag ${repositoryMode}`);
+if (repositoryMode === "json") {
+  void getDashboardRepository()
+    .getAll()
+    .catch(() => {
+      logWarn("dashboard json niet geladen");
+    });
+}
 
 if (existsSync(path.join(clientDir, "index.html"))) {
   app.use(express.static(clientDir, { index: false, fallthrough: true }));
