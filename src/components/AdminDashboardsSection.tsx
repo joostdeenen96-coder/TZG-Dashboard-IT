@@ -6,10 +6,41 @@ import {
   fetchDashboards,
   updateDashboard,
 } from "../services/dashboardApi";
-import type { DashboardDefinition, DashboardWidget } from "../types/dashboard";
+import type { DashboardDefinition, DashboardWidget, DashboardWidgetType } from "../types/dashboard";
 
 const fieldClass =
   "mt-1 w-full rounded-lg border border-veil/12 bg-ink px-3 py-2 text-[16px] text-paper outline-none focus:border-gold";
+
+const ADDABLE_WIDGET_TYPES: Array<{ type: DashboardWidgetType; label: string }> = [
+  { type: "text", label: "Tekst" },
+  { type: "clock", label: "Klok" },
+  { type: "weather", label: "Weer" },
+  { type: "news", label: "Nieuws" },
+  { type: "waterlevels", label: "Waterstanden" },
+  { type: "diesel", label: "Diesel" },
+  { type: "slideshow", label: "Slideshow" },
+  { type: "agenda", label: "Agenda" },
+  { type: "prtg", label: "PRTG" },
+];
+
+function defaultWidget(type: DashboardWidgetType, order: number): DashboardWidget {
+  const title = ADDABLE_WIDGET_TYPES.find((item) => item.type === type)?.label ?? type;
+  const dataSource =
+    type === "clock" || type === "text" || type === "slideshow"
+      ? ({ kind: "none" } as const)
+      : ({ kind: "builtin", name: type === "prtg" ? "prtg" : type === "agenda" ? "agenda" : type === "news" ? "news" : type === "diesel" ? "diesel" : type === "waterlevels" ? "waterlevels" : type === "weather" ? "weather" : "none" } as const);
+  return {
+    id: `${type}-${Date.now()}`,
+    type,
+    title,
+    enabled: true,
+    position: { order },
+    layout: { area: type === "agenda" ? "footer" : type === "clock" || type === "weather" ? "header" : "main", width: "full" },
+    dataSource,
+    settings: type === "text" ? { body: "Welkom op dit scherm." } : {},
+    refreshIntervalSeconds: 300,
+  };
+}
 
 function goToPath(path: string, event?: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) {
   event?.preventDefault();
@@ -37,6 +68,7 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
   const [message, setMessage] = useState("");
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
+  const [addWidgetType, setAddWidgetType] = useState<DashboardWidgetType>("text");
 
   const reload = useCallback(async () => {
     const list = await fetchDashboards();
@@ -69,7 +101,7 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
     try {
       const name = newName.trim() || "Nieuw dashboard";
       const slug = newSlug.trim() || slugify(name);
-      await createDashboard({
+      const created = await createDashboard({
         name,
         slug,
         description: "",
@@ -80,12 +112,20 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
       setNewName("");
       setNewSlug("");
       await reload();
+      setEditing(structuredClone(created));
       setStatus("saved");
-      setMessage("Dashboard aangemaakt.");
+      setMessage("Dashboard aangemaakt. Voeg hieronder een widget toe en sla op.");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Aanmaken mislukt.");
     }
+  }
+
+  function addWidgetToEditing() {
+    if (!editing) return;
+    const maxOrder = editing.widgets.reduce((max, widget) => Math.max(max, widget.position.order), 0);
+    const widget = defaultWidget(addWidgetType, maxOrder + 10);
+    setEditing({ ...editing, widgets: [...editing.widgets, widget] });
   }
 
   async function onDuplicate(item: DashboardDefinition) {
@@ -320,7 +360,30 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
           </div>
 
           <h4 className="mt-5 text-[14px] tracking-wide text-mist uppercase">Widgets</h4>
-          <ul className="mt-2 space-y-2">
+          <div className="mt-2 flex flex-wrap items-end gap-3">
+            <label className="block min-w-[180px] flex-1 text-[14px] tracking-wide text-mist uppercase">
+              Widgettype toevoegen
+              <select
+                className={fieldClass}
+                value={addWidgetType}
+                onChange={(event) => setAddWidgetType(event.target.value as DashboardWidgetType)}
+              >
+                {ADDABLE_WIDGET_TYPES.map((item) => (
+                  <option key={item.type} value={item.type}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="rounded-full border border-veil/20 px-4 py-2 text-[14px] uppercase"
+              onClick={addWidgetToEditing}
+            >
+              Widget toevoegen
+            </button>
+          </div>
+          <ul className="mt-3 space-y-2">
             {[...editing.widgets]
               .sort((a, b) => a.position.order - b.position.order)
               .map((widget: DashboardWidget) => (
@@ -360,6 +423,9 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
                 </li>
               ))}
           </ul>
+          {editing.widgets.length === 0 ? (
+            <p className="mt-2 text-[15px] text-mist">Nog geen widgets. Voeg er hierboven minstens één toe.</p>
+          ) : null}
 
           <div className="mt-4 flex gap-3">
             <button
