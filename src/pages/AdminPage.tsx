@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { AdminDashboardsSection } from "../components/AdminDashboardsSection";
 import {
   fetchDashboardConfig,
   loginAdmin,
@@ -284,6 +285,7 @@ export function AdminPage() {
                 Opslaan
               </button>
             </div>
+
           </form>
         ) : (
           <form className="tv-card mt-6 max-w-md px-5 py-4" onSubmit={(event) => void onLogin(event)}>
@@ -311,6 +313,8 @@ export function AdminPage() {
             </button>
           </form>
         )}
+
+        {authenticated ? <AdminDashboardsSection authenticated={authenticated} /> : null}
 
         {status === "loading" ? <p className="mt-4 text-[16px] text-mist">Bezig.</p> : null}
         {message ? (

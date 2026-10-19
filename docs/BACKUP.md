@@ -8,6 +8,7 @@ Op de host, in de projectmap:
 | --- | --- |
 | `data/settings.json` | Beheerinstellingen, o.a. Graph/PRTG-velden (kan geheimen bevatten) |
 | `data/config.json` | Dashboardconfig (SharePoint-paden, PRTG-filter, refresh) |
+| `data/dashboards.json` | Dashboarddefinities (planning, ict, extra schermen) — **verplicht in backup** |
 | `data/diesel-week.json` | Cache dieseltoeslag |
 | `.env` | Omgevingsgeheimen (Graph/PRTG); staat buiten git |
 

@@ -1,4 +1,5 @@
 import { fetchBytes, fetchJson } from "../providers/http.js";
+import { getDashboardRepository } from "../dashboards/repository.js";
 import { getDashboardConfig } from "./dashboardConfig.js";
 import { getGraphAccessToken, graphUrl, graphGet } from "./graphClient.js";
 import { readAppVersion } from "../appPaths.js";
@@ -81,14 +82,18 @@ async function checkSharePointDiesel() {
   });
 }
 
-export function getHealth() {
+export async function getHealth() {
   const version = readAppVersion();
+  const dashboardRepo = await getDashboardRepository().health();
+  const dashboardStatus: HealthStatus = dashboardRepo.ok ? "healthy" : "unhealthy";
+  const status: HealthStatus = dashboardStatus === "healthy" ? "healthy" : "degraded";
   return {
-    status: "healthy" as const,
+    status,
     version,
     services: {
       api: "healthy" as const,
       configuration: "healthy" as const,
+      dashboardRepository: dashboardStatus,
     },
   };
 }
