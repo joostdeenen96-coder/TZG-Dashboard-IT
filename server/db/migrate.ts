@@ -88,6 +88,22 @@ export async function migrationStatus() {
   };
 }
 
+export async function migrationStatusNow() {
+  const files = listMigrationFiles();
+  try {
+    const result = await getPool().query<{ id: string }>("SELECT id FROM schema_migrations ORDER BY id");
+    const applied = result.rows.map((row) => row.id);
+    const appliedSet = new Set(applied);
+    return {
+      applied,
+      pending: files.filter((file) => !appliedSet.has(file)),
+      reachable: true,
+    };
+  } catch {
+    return { applied: [] as string[], pending: files, reachable: false };
+  }
+}
+
 export async function runMigrateCli() {
   try {
     const result = await migrateDatabase();

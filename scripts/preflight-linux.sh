@@ -1,0 +1,121 @@
+#!/bin/sh
+# Controleert of deze Linux-host klaar is voor productie. Toont geen secrets.
+set -eu
+cd "$(dirname "$0")/.."
+fail=0
+say() { printf '%s\n' "$1"; }
+need() {
+  if command -v "$1" >/dev/null 2>&1; then
+    say "OK $1"
+  else
+    say "FAIL $1 ontbreekt"
+    fail=1
+  fi
+}
+DOCKER="docker"
+if ! command -v docker >/dev/null 2>&1; then
+  say "FAIL docker ontbreekt"
+  fail=1
+elif docker info >/dev/null 2>&1; then
+  say "OK docker"
+elif sudo docker info >/dev/null 2>&1; then
+  DOCKER="sudo docker"
+  say "OK docker (sudo)"
+else
+  say "FAIL docker daemon"
+  fail=1
+fi
+if $DOCKER compose version >/dev/null 2>&1; then
+  say "OK docker compose"
+else
+  say "FAIL docker compose ontbreekt"
+  fail=1
+fi
+if [ -f .env ]; then
+  say "OK .env aanwezig"
+else
+  say "FAIL .env ontbreekt"
+  fail=1
+fi
+space=$(df -Pm . | awk 'NR==2 {print $4}')
+if [ "${space:-0}" -ge 2048 ]; then
+  say "OK vrije schijfruimte ${space}MB"
+else
+  say "FAIL onvoldoende vrije schijfruimte"
+  fail=1
+fi
+if command -v ss >/dev/null 2>&1; then
+  if ss -ltn | grep -q ':8080 '; then
+    say "WARN poort 8080 is in gebruik"
+  else
+    say "OK poort 8080 vrij"
+  fi
+fi
+mkdir -p backups
+if touch backups/.preflight 2>/dev/null; then
+  rm -f backups/.preflight
+  say "OK backupdirectory schrijfbaar"
+else
+  say "FAIL backupdirectory niet schrijfbaar"
+  fail=1
+fi
+if NODE_ENV=production npm run config:validate >/tmp/tzg-config-validate.json 2>/tmp/tzg-config-validate.log; then
+  say "OK productieconfiguratie"
+else
+  say "FAIL productieconfiguratie"
+  fail=1
+fi
+if timedatectl status >/dev/null 2>&1 || date -u >/dev/null; then
+  say "OK tijd beschikbaar: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+fi
+if $DOCKER info >/dev/null 2>&1; then
+  say "OK docker daemon"
+else
+  say "FAIL docker daemon"
+  fail=1
+fi
+if $DOCKER compose config >/dev/null 2>/tmp/tzg-compose-config.log; then
+  say "OK docker compose config"
+else
+  say "FAIL docker compose config"
+  fail=1
+fi
+if grep -q 'tzg-postgres:' docker-compose.yml && grep -q 'tzg-backups:' docker-compose.yml; then
+  say "OK PostgreSQL- en backupvolumes"
+else
+  say "FAIL volumes ontbreken in compose"
+  fail=1
+fi
+if grep -q '127.0.0.1:5432:5432' docker-compose.yml; then
+  say "OK PostgreSQL alleen localhost"
+else
+  say "FAIL PostgreSQL niet beperkt tot 127.0.0.1"
+  fail=1
+fi
+if grep -qE '127\.0\.0\.1:\$\{PORT:-8080\}:8080|127\.0\.0\.1:8080:8080' docker-compose.yml; then
+  say "FAIL applicatiepoort 8080 alleen localhost — LAN-clients kunnen niet verbinden"
+  fail=1
+else
+  say "OK applicatiepoort 8080 voor LAN"
+fi
+if getent ahosts deb.debian.org >/dev/null 2>&1 || getent hosts deb.debian.org >/dev/null 2>&1; then
+  say "OK DNS-resolutie"
+else
+  say "WARN DNS-resolutie niet aangetoond"
+fi
+if $DOCKER compose ps --status running --services 2>/dev/null | grep -q dashboard; then
+  if $DOCKER compose exec -T dashboard node -e "require('net').connect({host:'postgres',port:5432},()=>{console.log('open');process.exit(0)}).on('error',()=>process.exit(1))" >/dev/null 2>&1; then
+    say "OK dashboard bereikt PostgreSQL"
+  else
+    say "FAIL dashboard bereikt PostgreSQL niet"
+    fail=1
+  fi
+  if curl -fsS --max-time 3 http://127.0.0.1:8080/api/health/live >/dev/null; then
+    say "OK localhost:8080 live"
+  else
+    say "WARN localhost:8080 nog niet live"
+  fi
+else
+  say "WARN stack niet gestart — container-netwerk later controleren"
+fi
+exit "$fail"

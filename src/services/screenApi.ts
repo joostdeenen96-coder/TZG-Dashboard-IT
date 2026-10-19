@@ -13,6 +13,7 @@ export type ScreenRecord = {
   dashboardSlug: string | null;
   lastSeenAt: string | null;
   status: "Online" | "Offline" | "Uitgeschakeld" | "Nooit verbonden";
+  appVersion: string | null;
   hasActiveToken: boolean;
   createdAt: string;
   updatedAt: string;

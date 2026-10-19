@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { AdminDashboardsSection } from "../components/AdminDashboardsSection";
+import { AdminOperationsSection } from "../components/AdminOperationsSection";
 import { AdminScreensSection } from "../components/AdminScreensSection";
 import {
   fetchDashboardConfig,
@@ -315,6 +316,7 @@ export function AdminPage() {
           </form>
         )}
 
+        {authenticated ? <AdminOperationsSection authenticated={authenticated} /> : null}
         {authenticated ? <AdminDashboardsSection authenticated={authenticated} /> : null}
         {authenticated ? <AdminScreensSection authenticated={authenticated} /> : null}
 

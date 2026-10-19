@@ -1,0 +1,23 @@
+# Productiechecklist
+
+- [ ] `.env` bestaat, niet in Git, geen placeholders
+- [ ] `npm run config:validate` (NODE_ENV=production) slaagt
+- [ ] Preflight Linux of Windows slaagt
+- [ ] Firewall 8080 open, 5432 niet naar LAN
+- [ ] `docker compose up -d` — postgres, dashboard, backup
+- [ ] Containers niet als root na entrypoint (`docker compose exec dashboard id`)
+- [ ] `/api/health/live` 200
+- [ ] `/api/health/ready` 200
+- [ ] `/api/health` 200, database healthy
+- [ ] `/api/version` toont versie/commit
+- [ ] `/display/planning` en `/display/ict` werken
+- [ ] `/player/:token` werkt voor een testscherm
+- [ ] Backupservice of `npm run backup:create` maakt een dump
+- [ ] `npm run backup:verify` slaagt
+- [ ] `npm run backup:restore-test` raakt productie niet
+- [ ] Volume `tzg-postgres` en `tzg-backups` bestaan
+- [ ] Logrotatie op de Docker-host geconfigureerd
+- [ ] NTP/tijd OK
+- [ ] Na reboot containers terug
+- [ ] Updateprocedure bekend (`docs/UPDATE-PRODUCTION.md`)
+- [ ] Rollback bekend (`docs/ROLLBACK.md`)

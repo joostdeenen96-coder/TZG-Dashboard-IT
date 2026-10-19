@@ -15,12 +15,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    shm_size: 128mb
 
   dashboard:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-0.4.0}
+        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-}
     image: tzg-dashboard:local
     container_name: tzg-dashboard
     ports:
@@ -32,9 +45,22 @@ services:
       DATA_DIR: /app/data
       DATABASE_URL: postgresql://${POSTGRES_USER:-tzg}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tzg}
       DASHBOARD_REPOSITORY: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-tzg}
+      POSTGRES_USER: ${POSTGRES_USER:-tzg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD ontbreekt}
       SCREEN_HEARTBEAT_SECONDS: ${SCREEN_HEARTBEAT_SECONDS:-60}
       SCREEN_OFFLINE_AFTER_SECONDS: ${SCREEN_OFFLINE_AFTER_SECONDS:-180}
       SCREEN_HEARTBEAT_RETENTION_DAYS: ${SCREEN_HEARTBEAT_RETENTION_DAYS:-14}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_DIRECTORY: /backups
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-36}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${APP_VERSION:-0.4.0}
+      BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+      BUILD_DATE: ${BUILD_DATE:-}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       GRAPH_TENANT_ID: ${GRAPH_TENANT_ID:-}
       GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID:-}
       GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET:-}
@@ -47,10 +73,52 @@ services:
       PRTG_TLS_INSECURE: ${PRTG_TLS_INSECURE:-}
     volumes:
       - ./data:/app/data
+      - tzg-backups:/backups
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  backup:
+    image: postgres:16-bookworm
+    container_name: tzg-backup
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-tzg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD ontbreekt}
+      PGDATABASE: ${POSTGRES_DB:-tzg}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_DIRECTORY: /backups
+    volumes:
+      - tzg-backups:/backups
+      - ./scripts/backup-loop.sh:/backup-loop.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: ["bash", "/backup-loop.sh"]
 
 volumes:
   tzg-postgres:
+  tzg-backups:
