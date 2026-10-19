@@ -7,6 +7,7 @@ import type {
   PrtgSensorStatus,
   PrtgServer,
 } from "../types";
+import { cleanPrtgText } from "../lib/format";
 import { createPollingFeed } from "./tvFeed";
 
 const PRTG_PATH = "/api/prtg";
@@ -79,10 +80,10 @@ function normalizeAlarm(value: unknown): PrtgAlarm | null {
     device,
     sensor,
     status,
-    message: text(row.message),
+    message: cleanPrtgText(text(row.message)),
     acknowledged: row.acknowledged === true || status === "downAcknowledged",
     group: text(row.group),
-    lastvalue: text(row.lastvalue),
+    lastvalue: cleanPrtgText(text(row.lastvalue)),
     sinceLabel: text(row.sinceLabel) || null,
     sinceAt: text(row.sinceAt) || null,
     suggestion: text(row.suggestion) || null,
