@@ -1,13 +1,16 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { ClientSecretCredential } from "@azure/identity";
+import { appRoot } from "../appPaths.js";
+import { logError, logInfo } from "../log.js";
 import { getIntegrationSettings } from "./settingsService.js";
 
 const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const envFile = path.join(root, ".env");
+
+function envFilePath() {
+  return path.join(appRoot(), ".env");
+}
 
 type CachedToken = {
   token: string;
@@ -29,7 +32,7 @@ export function loadLocalEnv() {
   envLoaded = true;
   let raw = "";
   try {
-    raw = readFileSync(envFile, "utf8");
+    raw = readFileSync(envFilePath(), "utf8");
   } catch {
     return;
   }
@@ -84,15 +87,15 @@ export async function getGraphAccessToken() {
     access = await credential.getToken(GRAPH_SCOPE);
   } catch (error) {
     const message = error instanceof Error ? error.message : "onbekende fout";
-    console.error(`Graph-token via client credentials mislukt (${message.slice(0, 180)}).`);
+    logError(`Graph-authenticatie mislukt (${message.slice(0, 180)}).`);
     throw new Error("Microsoft Graph-token is niet bereikbaar.");
   }
   if (!access?.token || !Number.isFinite(access.expiresOnTimestamp)) {
-    console.error("Graph-token via client credentials is leeg.");
+    logError("Graph-token via client credentials is leeg.");
     throw new Error("Graph-token is ongeldig.");
   }
   cachedToken = { token: access.token, expiresOn: access.expiresOnTimestamp, key };
-  console.info(`Graph-token hergebruikt tot ${new Date(access.expiresOnTimestamp).toISOString()}.`);
+  logInfo(`Graph-token geldig tot ${new Date(access.expiresOnTimestamp).toISOString()}.`);
   return access.token;
 }
 

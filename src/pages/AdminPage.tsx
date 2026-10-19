@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { AdminDashboardsSection } from "../components/AdminDashboardsSection";
 import {
   fetchDashboardConfig,
   loginAdmin,
@@ -19,6 +20,7 @@ const emptyConfig: DashboardConfig = {
   },
   weer: { plaatsnaam: "Gennep" },
   dashboard: { refreshInterval: 300, aantalNieuwsitems: 3 },
+  prtg: { groupId: "", tag: "" },
 };
 
 const fieldClass =
@@ -225,6 +227,47 @@ export function AdminPage() {
               </label>
             </section>
 
+            <section className="tv-card px-5 py-4 md:col-span-2">
+              <h2 className="font-display text-[26px] leading-none font-semibold tracking-[-0.015em]">
+                PRTG (ICT-scherm)
+              </h2>
+              <p className="mt-2 text-[15px] text-mist">
+                Filter voor `/ict`. Open in PRTG de gewenste groep; in de adresbalk staat `id=1234` — dat nummer hoort
+                bij Groep-ID. Of vul een tag in. Adres en login staan in `.env` (`PRTG_BASE_URL=https://prtg.teunesen.local`,
+                zonder `/index.htm`).
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="block text-[14px] tracking-wide text-mist uppercase">
+                  Groep-ID
+                  <input
+                    className={fieldClass}
+                    value={config.prtg.groupId}
+                    placeholder="bijv. 1234"
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        prtg: { ...current.prtg, groupId: event.target.value },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="block text-[14px] tracking-wide text-mist uppercase">
+                  Tag
+                  <input
+                    className={fieldClass}
+                    value={config.prtg.tag}
+                    placeholder="optioneel"
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        prtg: { ...current.prtg, tag: event.target.value },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </section>
+
             <div className="flex flex-col gap-3 sm:flex-row md:col-span-2">
               <button
                 type="button"
@@ -242,6 +285,7 @@ export function AdminPage() {
                 Opslaan
               </button>
             </div>
+
           </form>
         ) : (
           <form className="tv-card mt-6 max-w-md px-5 py-4" onSubmit={(event) => void onLogin(event)}>
@@ -269,6 +313,8 @@ export function AdminPage() {
             </button>
           </form>
         )}
+
+        {authenticated ? <AdminDashboardsSection authenticated={authenticated} /> : null}
 
         {status === "loading" ? <p className="mt-4 text-[16px] text-mist">Bezig.</p> : null}
         {message ? (

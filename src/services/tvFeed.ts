@@ -12,9 +12,13 @@ type FeedOptions<T> = {
   unavailable: string;
   load: (signal: AbortSignal) => Promise<T | "empty">;
   accept: (value: unknown) => T | null;
+  refreshMs?: number;
 };
 
-function refreshDelay() {
+function refreshDelay(overrideMs?: number) {
+  if (typeof overrideMs === "number" && Number.isFinite(overrideMs) && overrideMs >= 15_000 && overrideMs <= 3_600_000) {
+    return overrideMs;
+  }
   const configured = getRefreshMs();
   if (!Number.isFinite(configured) || configured < 15_000 || configured > 3_600_000) return TV_REFRESH_MS;
   return configured;
@@ -156,7 +160,7 @@ export function createPollingFeed<T>(options: FeedOptions<T>) {
         publish({ status: "ready", data: result, refreshing: false, fetchedAt });
         tvLog("info", options.name, `bijgewerkt in ${Date.now() - started} ms`);
       }
-      const delay = refreshDelay();
+      const delay = refreshDelay(options.refreshMs);
       schedule(delay);
       tvLog("info", options.name, `volgende verversing over ${Math.round(delay / 1000)} s`);
     } catch (error) {
@@ -186,7 +190,7 @@ export function createPollingFeed<T>(options: FeedOptions<T>) {
   }
 
   restore();
-  tvLog("info", options.name, `verversing elke ${Math.round(refreshDelay() / 1000)} seconden`);
+  tvLog("info", options.name, `verversing elke ${Math.round(refreshDelay(options.refreshMs) / 1000)} seconden`);
   void run();
 
   window.addEventListener("online", () => kick("Netwerk terug. Opnieuw ophalen."));
@@ -196,7 +200,7 @@ export function createPollingFeed<T>(options: FeedOptions<T>) {
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    if (Date.now() - lastSuccessAt >= refreshDelay()) kick("Scherm weer zichtbaar. Opnieuw ophalen.");
+    if (Date.now() - lastSuccessAt >= refreshDelay(options.refreshMs)) kick("Scherm weer zichtbaar. Opnieuw ophalen.");
   });
   window.setInterval(() => {
     if (inFlight || nextAt === 0) return;

@@ -116,3 +116,55 @@ export type ProjectSlide = {
   gradient: string;
   objectPosition: string;
 };
+
+export type PrtgAlarmStatus = "warning" | "down" | "unusual" | "downPartial" | "downAcknowledged";
+
+export type PrtgSensorStatus =
+  | "up"
+  | "warning"
+  | "down"
+  | "unusual"
+  | "downPartial"
+  | "downAcknowledged"
+  | "unknown";
+
+export type PrtgAlarm = {
+  id: string;
+  device: string;
+  sensor: string;
+  status: PrtgAlarmStatus;
+  message: string;
+  acknowledged: boolean;
+  group: string;
+  lastvalue: string;
+  sinceLabel: string | null;
+  sinceAt: string | null;
+  suggestion: string | null;
+};
+
+export type PrtgMetric = {
+  sensorId: string;
+  name: string;
+  percent: number | null;
+  status: PrtgSensorStatus;
+  high: boolean;
+};
+
+export type PrtgServer = {
+  id: string;
+  name: string;
+  cpu: PrtgMetric | null;
+  memory: PrtgMetric | null;
+  storage: PrtgMetric[];
+};
+
+export type PrtgResponse = {
+  connected: boolean;
+  configured: boolean;
+  filterReady: boolean;
+  source: "PRTG";
+  fetchedAt: string | null;
+  error: string | null;
+  alarms: PrtgAlarm[];
+  servers: PrtgServer[];
+};

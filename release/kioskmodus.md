@@ -16,6 +16,8 @@ msedge.exe --kiosk http://localhost:3000 --edge-kiosk-type=fullscreen --no-first
 
 Edge gebruikt een eigen profiel in `C:\Teunesen\edge-kiosk`. Een gewoon Edge-venster op dezelfde pc blijft daarmee apart staan.
 
+Voor de ICT-TV doet `release\edge-kiosk-ict.bat` hetzelfde naar `http://localhost:3000/ict`, met een apart Edge-profiel in `C:\Teunesen\edge-kiosk-ict`. Zo kunnen planning-TV en ICT-TV naast elkaar draaien.
+
 ## Eerst het dashboard
 
 De kiosk wacht tot `http://localhost:3000/` antwoordt, hoogstens 60 seconden. Antwoordt de site niet, dan blijft het venster open met de melding dat je eerst `start-dashboard.bat` moet starten.

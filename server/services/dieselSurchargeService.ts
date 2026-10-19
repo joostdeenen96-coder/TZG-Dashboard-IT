@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { dataDir } from "../appPaths.js";
 import type { DieselSurcharge, DieselSurchargeProvider, DieselWeek } from "../providers/dieselSurchargeProvider.js";
 import { MockDieselProvider } from "../providers/mockDieselProvider.js";
 import { SharePointDieselProvider } from "../providers/sharePointDieselProvider.js";
@@ -14,7 +14,9 @@ type DieselSource = keyof typeof dieselProviders;
 
 const activeDieselSource: DieselSource = "sharepoint";
 
-const cacheFile = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), "data", "diesel-week.json");
+function cacheFilePath() {
+  return path.join(dataDir(), "diesel-week.json");
+}
 const MORNING_HOUR = 7;
 
 type DieselCache = {
@@ -68,7 +70,7 @@ function isSurcharge(value: unknown): value is DieselSurcharge {
 function readCache() {
   if (memory !== undefined) return memory;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(cacheFile, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(cacheFilePath(), "utf8"));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       memory = null;
       return memory;
@@ -83,8 +85,9 @@ function readCache() {
 
 function writeCache(cache: DieselCache) {
   memory = cache;
-  mkdirSync(path.dirname(cacheFile), { recursive: true });
-  writeFileSync(cacheFile, JSON.stringify(cache));
+  const file = cacheFilePath();
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(cache));
 }
 
 export async function getDieselSurcharge(): Promise<DieselSurcharge> {
