@@ -48,12 +48,23 @@ function goToPath(path: string, event?: MouseEvent<HTMLAnchorElement | HTMLButto
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+/** Normaliseer slug voor opslaan (geen leading/trailing koppeltekens). */
 function slugify(value: string) {
   return value
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+/** Tijdens typen trailing '-' behouden zodat "test-dashboard" invoerbaar blijft. */
+function slugifyTyping(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+/, "")
     .slice(0, 64);
 }
 
@@ -299,7 +310,12 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
         </label>
         <label className="block text-[14px] tracking-wide text-mist uppercase">
           Slug
-          <input className={fieldClass} value={newSlug} onChange={(event) => setNewSlug(slugify(event.target.value))} />
+          <input
+            className={fieldClass}
+            value={newSlug}
+            onChange={(event) => setNewSlug(slugifyTyping(event.target.value))}
+            onBlur={() => setNewSlug(slugify(newSlug))}
+          />
         </label>
         <div className="flex items-end">
           <button
@@ -329,7 +345,8 @@ export function AdminDashboardsSection({ authenticated }: AdminDashboardsSection
               <input
                 className={fieldClass}
                 value={editing.slug}
-                onChange={(event) => setEditing({ ...editing, slug: slugify(event.target.value) })}
+                onChange={(event) => setEditing({ ...editing, slug: slugifyTyping(event.target.value) })}
+                onBlur={() => setEditing({ ...editing, slug: slugify(editing.slug) })}
               />
             </label>
             <label className="block text-[14px] tracking-wide text-mist uppercase md:col-span-2">
