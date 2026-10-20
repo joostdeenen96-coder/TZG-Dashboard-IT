@@ -1,7 +1,7 @@
 {
   "name": "teunesen-dashboard",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx server/index.ts\" vite",
@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.server.json --noEmit --pretty false",
-    "test": "tsx --test server/appPaths.test.ts server/services/healthService.test.ts server/dashboards/model.test.ts server/dashboards/repository.test.ts server/routes/dashboards.test.ts server/screens/token.test.ts server/screens/status.test.ts server/legacyPaths.test.ts server/db/repositoryMode.test.ts server/db/platform003.test.ts server/config.test.ts server/log.test.ts server/player/backoff.test.ts server/platform004.test.ts server/httpErrors.test.ts",
+    "test": "tsx --test --test-concurrency=1 server/appPaths.test.ts server/services/healthService.test.ts server/dashboards/model.test.ts server/dashboards/repository.test.ts server/routes/dashboards.test.ts server/screens/token.test.ts server/screens/status.test.ts server/legacyPaths.test.ts server/db/repositoryMode.test.ts server/db/platform003.test.ts server/config.test.ts server/log.test.ts server/player/backoff.test.ts server/platform004.test.ts server/httpErrors.test.ts server/db/bootstrap.test.ts",
     "config:validate": "tsx server/scripts/config-validate.ts",
     "backup:create": "tsx server/scripts/backup-create.ts",
     "backup:list": "tsx server/scripts/backup-list.ts",
@@ -21,6 +21,10 @@
     "db:seed": "tsx server/scripts/db-seed.ts",
     "db:export": "tsx server/scripts/db-export.ts",
     "db:import-json": "tsx server/scripts/db-import-json.ts",
+    "db:migrate:prod": "node dist/server/scripts/db-migrate.js",
+    "db:migrate:status:prod": "node dist/server/scripts/db-migrate-status.js",
+    "db:seed:prod": "node dist/server/scripts/db-seed.js",
+    "db:import-json:prod": "node dist/server/scripts/db-import-json.js",
     "lint": "oxlint",
     "preview": "vite preview"
   },

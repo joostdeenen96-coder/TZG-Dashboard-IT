@@ -31,7 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        APP_VERSION: ${APP_VERSION:-0.4.0}
+        APP_VERSION: ${APP_VERSION:-0.4.1}
         BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
         BUILD_DATE: ${BUILD_DATE:-}
     image: tzg-dashboard:local
@@ -57,7 +57,7 @@ services:
       BACKUP_DIRECTORY: /backups
       BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-36}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      APP_VERSION: ${APP_VERSION:-0.4.0}
+      APP_VERSION: ${APP_VERSION:-0.4.1}
       BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
       BUILD_DATE: ${BUILD_DATE:-}
       TRUST_PROXY: ${TRUST_PROXY:-0}

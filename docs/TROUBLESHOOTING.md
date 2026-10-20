@@ -15,6 +15,10 @@ sudo iptables-legacy -S FORWARD | head
 
 Herstel (host, geen applicatiecode): FORWARD ACCEPT op de Docker-bridge, daarna `docker compose restart dashboard`. Na **hostreboot** dezelfde controle.
 
+## Lege `/api/dashboards` na verse installatie
+
+Oorzaak tot v0.4.0: seed maakte alleen de organisatie aan, niet planning/ict. Vanaf v0.4.1 seedt het entrypoint ontbrekende standaarddashboards. Bestaande installaties: `docker compose exec dashboard node dist/server/scripts/db-seed.js` (geen `tsx`). Seed overschrijft geen beheerderwijzigingen.
+
 ## Ready 503, live 200
 
 PostgreSQL of migraties of configuratie. Live mag groen blijven. Geen JSON-fallback in productie.
