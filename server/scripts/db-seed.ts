@@ -1,21 +1,21 @@
-import { closePool, getPool } from "../db/pool.js";
-import { DEFAULT_ORG_ID, DEFAULT_ORG_SLUG, clearOrganizationCache } from "../db/organization.js";
+import { closePool } from "../db/pool.js";
+import { bootstrapPostgresRepository } from "../db/bootstrap.js";
 import { logError, logInfo } from "../log.js";
 import { loadLocalEnv } from "../services/graphClient.js";
 
 loadLocalEnv();
 
 try {
-  await getPool().query(
-    `INSERT INTO organizations (id, name, slug)
-     VALUES ($1, 'Teunesen', $2)
-     ON CONFLICT (slug) DO NOTHING`,
-    [DEFAULT_ORG_ID, DEFAULT_ORG_SLUG],
+  const report = await bootstrapPostgresRepository();
+  logInfo(
+    `seed klaar org=${report.organization} aangemaakt=${report.created.join(",") || "geen"} overgeslagen=${report.skipped.join(",") || "geen"}`,
+    { event: "seed.done" },
   );
-  clearOrganizationCache();
-  logInfo("seed organisatie teunesen");
-} catch {
-  logError("seed mislukt");
+  process.stdout.write(`${JSON.stringify({ ok: true, ...report }, null, 2)}\n`);
+} catch (error) {
+  const message = error instanceof Error ? error.message : "seed mislukt";
+  logError(message, { event: "seed.failed" });
+  process.stdout.write(`${JSON.stringify({ ok: false, error: "seed mislukt" }, null, 2)}\n`);
   process.exitCode = 1;
 } finally {
   await closePool();

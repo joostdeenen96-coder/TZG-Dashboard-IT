@@ -187,7 +187,7 @@ export function loadConfig(env: NodeJS.Dict<string> = process.env): AppConfig {
     logLevel,
     graphEnabled: enabledGraph,
     trustProxy,
-    appVersion: read(env, "APP_VERSION") || "0.4.0",
+    appVersion: read(env, "APP_VERSION") || "0.4.1",
     buildCommit: read(env, "BUILD_COMMIT") || "unknown",
     buildDate: read(env, "BUILD_DATE") || "",
   };

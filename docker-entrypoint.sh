@@ -14,7 +14,10 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 if [ -n "$DATABASE_URL" ]; then
+  # Wacht op PostgreSQL en pas migraties toe (migrate.ts retried connectie).
   node /app/dist/server/scripts/db-migrate.js
+  # Idempotente seed: organisatie + ontbrekende planning/ict. Bestaande dashboards blijven.
+  node /app/dist/server/scripts/db-seed.js
 fi
 
 exec "$@"

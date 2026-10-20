@@ -2,6 +2,8 @@
 
 Migraties staan in `server/db/migrations` en worden bijgehouden in `schema_migrations`. Ze draaien via `npm run db:migrate` of het container-entrypoint, niet vanuit gewone API-requests.
 
+Op een lege productiedatabase seeden het entrypoint en `node dist/server/scripts/db-seed.js` daarna de organisatie Teunesen en de ontbrekende standaarddashboards planning/ict uit `server/dashboards/seed.ts`. Bestaande rijen worden niet overschreven. `tsx` is in de productie-image niet aanwezig.
+
 ## Tabellen
 
 ### organizations

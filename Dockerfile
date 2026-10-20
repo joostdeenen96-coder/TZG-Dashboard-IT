@@ -10,7 +10,7 @@ COPY public ./public
 COPY src ./src
 COPY server ./server
 
-ARG APP_VERSION=0.4.0
+ARG APP_VERSION=0.4.1
 ARG BUILD_COMMIT=unknown
 ARG BUILD_DATE
 ENV APP_VERSION=$APP_VERSION \
@@ -22,7 +22,7 @@ RUN npm run build
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 
-ARG APP_VERSION=0.4.0
+ARG APP_VERSION=0.4.1
 ARG BUILD_COMMIT=unknown
 ARG BUILD_DATE
 ENV NODE_ENV=production \
