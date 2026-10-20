@@ -77,6 +77,18 @@ function parseIntEnv(env: NodeJS.Dict<string>, name: string, fallback: number | 
   return value;
 }
 
+function parseTrustProxy(env: NodeJS.Dict<string>) {
+  const raw = read(env, "TRUST_PROXY").toLowerCase();
+  if (!raw) return 0;
+  if (raw === "true" || raw === "yes" || raw === "on") return 1;
+  if (raw === "false" || raw === "no" || raw === "off") return 0;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0 || value > 10) {
+    throw new ConfigError("Ongeldige waarde voor TRUST_PROXY.");
+  }
+  return value;
+}
+
 function parseLogLevel(raw: string, required: boolean): LogLevel {
   if (!raw) {
     if (required) throw new ConfigError("Verplichte configuratie ontbreekt: LOG_LEVEL.");
@@ -165,8 +177,7 @@ export function loadConfig(env: NodeJS.Dict<string> = process.env): AppConfig {
     requireValue(env, "GRAPH_CLIENT_SECRET", production);
   }
 
-  const trustProxyRaw = read(env, "TRUST_PROXY");
-  const trustProxy = trustProxyRaw ? parseIntEnv(env, "TRUST_PROXY", 0, 0, 10, false) : 0;
+  const trustProxy = parseTrustProxy(env);
 
   return {
     nodeEnv,

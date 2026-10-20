@@ -1,0 +1,11 @@
+# Zet EXPOSE_INTERNAL_PORT=false door deze file mee te nemen:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.expose-internal.off.yml
+#   docker compose up -d
+# of:
+#   docker compose -f docker-compose.yml -f docker-compose.expose-internal.off.yml up -d
+#
+# Dashboard blijft bereikbaar als tzg-dashboard:8080 op het Docker-netwerk (nginx).
+# Host-poort 8080 wordt niet meer gepubliceerd.
+services:
+  dashboard:
+    ports: !reset []

@@ -6,26 +6,28 @@
 Browser / TV-kiosk
         │
         │  http://nc.teunesen.nl  (poort 80)
-        │  → 301 redirect naar HTTPS
+        │  → /.well-known/acme-challenge/ (Let's Encrypt)
+        │  → overig: 301 redirect naar HTTPS
         │
         │  https://nc.teunesen.nl (poort 443)
         ▼
    tzg-nginx (container)
-        │  TLS (self-signed of later Let's Encrypt)
+        │  TLS 1.2/1.3, HSTS, security headers
+        │  limit_req (publiek + admin-login)
         │  X-Forwarded-Proto / X-Forwarded-For / X-Real-IP
-        │  WebSocket Upgrade-headers
-        │  gzip, keep-alive
+        │  WebSocket Upgrade-headers, gzip, keep-alive
         ▼
-   tzg-dashboard:8080  (Express, HTTP intern)
+   tzg-dashboard:8080  (Express, HTTP intern, TRUST_PROXY=1)
         │
         ▼
    tzg-postgres
 ```
 
 - Extern: **80** en **443** via `tzg-nginx`.
-- Intern: dashboard blijft op **8080** (HTTP). Compose publiceert 8080 nog steeds voor lokaal debug (`http://127.0.0.1:8080`).
+- Intern: dashboard op **8080** (HTTP) op het Docker-netwerk (`expose`).
+- Host-poort **8080**: standaard gepubliceerd (`EXPOSE_INTERNAL_PORT=true`). Optioneel uit te zetten.
 - PostgreSQL blijft alleen op `127.0.0.1:5432`.
-- Dashboard `TRUST_PROXY` staat standaard op `1` zodat rate limits het echte client-IP zien.
+- Express: `app.set("trust proxy", 1)` zodat `req.ip`, `req.secure` en rate limits het echte client-IP gebruiken.
 
 Gewenste URLs:
 
@@ -41,8 +43,9 @@ Gewenste URLs:
 | --- | --- | --- |
 | `/etc/nginx/certs/fullchain.pem` | `tzg-certs` | Certificaat (+ chain) |
 | `/etc/nginx/certs/privkey.pem` | `tzg-certs` | Private key |
+| `/var/www/certbot/` | `tzg-acme-www` | ACME HTTP-01 webroot |
 
-Het volume `tzg-certs` blijft bestaan bij `docker compose down` **zonder** `-v`. Alleen `docker compose down -v` of `docker volume rm` wist certificaten.
+Het volume `tzg-certs` blijft bestaan bij `docker compose down` **zonder** `-v`.
 
 ## Automatische self-signed
 
@@ -53,26 +56,56 @@ Bij start van `tzg-nginx`: als `fullchain.pem` of `privkey.pem` ontbreekt, maakt
 - geldigheid `CERT_DAYS` (standaard 3650 dagen)
 - SAN DNS = dezelfde CN
 
-Handmatig op de host (zelfde parameters):
-
 ```bash
 chmod +x scripts/generate-selfsigned-cert.sh
 ./scripts/generate-selfsigned-cert.sh ./certs
-# daarna naar het volume kopiëren, of laten genereren door de nginx-container
-```
-
-Inspecteren in de container:
-
-```bash
 docker compose exec nginx openssl x509 -in /etc/nginx/certs/fullchain.pem -noout -subject -dates
 ```
 
-Browsers en Edge-kiosks tonen een waarschuwing bij self-signed. Voor interne TV’s: certificaat importeren in de trust store, of later vervangen door een CA-certificaat.
+## TLS en security headers
+
+HTTPS-server:
+
+- `ssl_protocols TLSv1.2 TLSv1.3`
+- `ssl_session_timeout 1d` / `ssl_session_cache shared:SSL:10m` / `ssl_session_tickets off`
+- Mozilla Intermediate cipher-suite voor TLS 1.2
+- Headers: `Strict-Transport-Security`, `X-Frame-Options SAMEORIGIN`, `X-Content-Type-Options nosniff`, `Referrer-Policy strict-origin-when-cross-origin`
+
+`X-Frame-Options SAMEORIGIN` blokkeert inbedding op andere origins; admin, display en player op dezelfde host blijven werken.
+
+## Rate limiting (nginx)
+
+| Zone | Rate | Toepassing |
+| --- | --- | --- |
+| `tzg_public` | 30 r/s, burst 80 | Alle HTTPS-verkeer behalve login |
+| `tzg_login` | 10 r/m, burst 5 | `POST/GET /api/admin/login` |
+
+Limieten zijn ruim genoeg voor TV-polling; ze dempen simpele scans en brute-force op login.
+
+## Host-poort 8080 (`EXPOSE_INTERNAL_PORT`)
+
+| Waarde | Gedrag |
+| --- | --- |
+| `true` (standaard) | Host publiceert `${PORT:-8080}:8080` (huidige gedrag) |
+| `false` | Alleen nginx 80/443; dashboard niet via `host:8080` |
+
+Uitschakelen (nog niet de standaard):
+
+```bash
+# In .env:
+EXPOSE_INTERNAL_PORT=false
+COMPOSE_FILE=docker-compose.yml:docker-compose.expose-internal.off.yml
+
+docker compose up -d
+```
+
+Of eenmalig:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.expose-internal.off.yml up -d
+```
 
 ## Certificaat verversen (self-signed)
-
-1. Backup van het volume of de PEM-bestanden.
-2. Bestanden verwijderen uit het volume (of volume opnieuw laten vullen):
 
 ```bash
 docker compose stop nginx
@@ -81,41 +114,37 @@ docker compose run --rm -v tzg-certs:/etc/nginx/certs nginx \
 docker compose up -d nginx
 ```
 
-3. Controleer subject/datums opnieuw met `openssl x509` zoals hierboven.
+## Let's Encrypt (HTTP-01 ready)
 
-Of genereer op de host met `scripts/generate-selfsigned-cert.sh` en kopieer naar het volume.
+NGINX serveert al `/.well-known/acme-challenge/` vanaf `/var/www/certbot` (volume `tzg-acme-www`) **vóór** de HTTPS-redirect. Geen nginx-configwijziging nodig voor certbot webroot.
 
-## Vervangen door Let's Encrypt (toekomst)
+Voorbeeld (host of sidecare):
 
-Self-signed is voldoende voor een gesloten LAN. Voor een publiek of AD-vertrouwd certificaat:
+```bash
+certbot certonly --webroot -w /pad/naar/acme-www -d nc.teunesen.nl
+# Kopieer fullchain.pem + privkey.pem naar volume tzg-certs
+docker compose exec nginx nginx -s reload
+```
 
-1. Zorg dat `nc.teunesen.nl` naar de server wijst en poort 80 vanaf internet of de ACME-validator bereikbaar is (of gebruik DNS-01).
-2. Voeg een ACME-client toe (bijv. Certbot, of Caddy/Traefik). Voor de huidige NGINX-opzet: Certbot in een sidecare of op de host.
-3. Plaats Let's Encrypt-bestanden als:
-
-   - `/etc/nginx/certs/fullchain.pem`
-   - `/etc/nginx/certs/privkey.pem`
-
-4. Herlaad nginx: `docker compose exec nginx nginx -s reload` (of herstart de service).
-5. Houd HSTS en TLS1.2+ zoals in `nginx/conf.d/tzg.conf`.
-
-HTTP→HTTPS redirect op poort 80 blijft; ACME HTTP-01 vereist dan een aparte `location /.well-known/acme-challenge/` vóór de redirect (nog niet actief in deze release).
+Of mount het certbot-webroot op het volume `tzg-acme-www` en schrijf LE-certs naar `tzg-certs`.
 
 ## Healthchecks
 
 - Dashboard: `GET /api/health/ready` in de container.
-- NGINX: `GET http://127.0.0.1/nginx-health` (geen backend nodig).
+- NGINX: `GET http://127.0.0.1/nginx-health`.
 - Via proxy: `curl -k https://127.0.0.1/api/health/ready`
+- ACME-pad smoke: `curl -fsS http://127.0.0.1/.well-known/acme-challenge/` (404 zonder token is OK; geen redirect naar HTTPS).
 
 ## Firewall
 
-Open naar het LAN: **80** en **443**. Poort **8080** mag intern blijven voor beheer; PostgreSQL **5432** niet publiceren op `0.0.0.0`.
+Open naar het LAN: **80** en **443**. Poort **8080** optioneel (debug). PostgreSQL **5432** niet op `0.0.0.0`.
 
 ## Troubleshooting
 
 | Symptoom | Actie |
 | --- | --- |
-| Browser: certificaat onbetrouwbaar | Verwacht bij self-signed; importeer CA of negeer op kiosk |
-| `502 Bad Gateway` | `docker compose ps` — dashboard healthy? Logs: `docker compose logs dashboard nginx` |
-| Redirect-loop | Controleer `TRUST_PROXY=1` en dat nginx `X-Forwarded-Proto` zet |
-| Oud certificaat na vernieuwen | Volume niet gewist; zie “Certificaat verversen” |
+| Browser: certificaat onbetrouwbaar | Self-signed; importeer CA of negeer op kiosk |
+| `502 Bad Gateway` | `docker compose ps` / `docker compose logs dashboard nginx` |
+| Redirect-loop | `TRUST_PROXY=1` en `X-Forwarded-Proto` |
+| `429` op dashboards | Burst verhogen in `nginx/nginx.conf` (zone `tzg_public`) |
+| ACME redirect naar HTTPS | Challenge-location moet vóór `location /` staan (al zo) |

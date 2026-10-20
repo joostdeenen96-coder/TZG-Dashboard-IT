@@ -36,8 +36,11 @@ services:
         BUILD_DATE: ${BUILD_DATE:-}
     image: tzg-dashboard:local
     container_name: tzg-dashboard
-    # Directe HTTP op 8080 blijft beschikbaar voor lokaal/debug.
-    # Preferentie: https://nc.teunesen.nl via de nginx-service.
+    # Altijd bereikbaar voor nginx op het Docker-netwerk.
+    expose:
+      - "8080"
+    # Host-publicatie 8080 (EXPOSE_INTERNAL_PORT=true, standaard).
+    # Uitschakelen: zie docker-compose.expose-internal.off.yml en docs/HTTPS-SETUP.md.
     ports:
       - "${PORT:-8080}:8080"
     environment:
@@ -109,6 +112,7 @@ services:
       CERT_DIR: /etc/nginx/certs
     volumes:
       - tzg-certs:/etc/nginx/certs
+      - tzg-acme-www:/var/www/certbot
     depends_on:
       dashboard:
         condition: service_healthy
@@ -161,3 +165,4 @@ volumes:
   tzg-postgres:
   tzg-backups:
   tzg-certs:
+  tzg-acme-www:

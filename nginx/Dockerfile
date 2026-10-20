@@ -8,12 +8,12 @@ COPY conf.d/tzg.conf /etc/nginx/conf.d/tzg.conf
 COPY docker-entrypoint.sh /docker-entrypoint-tzg.sh
 
 RUN chmod +x /docker-entrypoint-tzg.sh \
-  && mkdir -p /etc/nginx/certs \
+  && mkdir -p /etc/nginx/certs /var/www/certbot/.well-known/acme-challenge \
   && chown -R nginx:nginx /etc/nginx/certs \
-  && chmod 755 /etc/nginx/certs
+  && chmod 755 /etc/nginx/certs /var/www/certbot
 
-# Named volume voor certificaten; logs/cache op tmpfs via compose waar mogelijk.
-VOLUME ["/etc/nginx/certs"]
+# Named volumes: TLS-certs + ACME webroot (Let's Encrypt HTTP-01).
+VOLUME ["/etc/nginx/certs", "/var/www/certbot"]
 
 EXPOSE 80 443
 
