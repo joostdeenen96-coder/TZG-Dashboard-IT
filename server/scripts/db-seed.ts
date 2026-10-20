@@ -12,8 +12,9 @@ try {
     { event: "seed.done" },
   );
   process.stdout.write(`${JSON.stringify({ ok: true, ...report }, null, 2)}\n`);
-} catch {
-  logError("seed mislukt", { event: "seed.failed" });
+} catch (error) {
+  const message = error instanceof Error ? error.message : "seed mislukt";
+  logError(message, { event: "seed.failed" });
   process.stdout.write(`${JSON.stringify({ ok: false, error: "seed mislukt" }, null, 2)}\n`);
   process.exitCode = 1;
 } finally {
