@@ -36,6 +36,8 @@ services:
         BUILD_DATE: ${BUILD_DATE:-}
     image: tzg-dashboard:local
     container_name: tzg-dashboard
+    # Directe HTTP op 8080 blijft beschikbaar voor lokaal/debug.
+    # Preferentie: https://nc.teunesen.nl via de nginx-service.
     ports:
       - "${PORT:-8080}:8080"
     environment:
@@ -60,7 +62,8 @@ services:
       APP_VERSION: ${APP_VERSION:-0.4.1}
       BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
       BUILD_DATE: ${BUILD_DATE:-}
-      TRUST_PROXY: ${TRUST_PROXY:-0}
+      # Standaard 1 hop: nginx → dashboard. Zet TRUST_PROXY=0 alleen zonder proxy.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       GRAPH_TENANT_ID: ${GRAPH_TENANT_ID:-}
       GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID:-}
       GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET:-}
@@ -90,6 +93,41 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    image: tzg-nginx:local
+    container_name: tzg-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CERT_CN: ${CERT_CN:-nc.teunesen.nl}
+      CERT_DAYS: ${CERT_DAYS:-3650}
+      CERT_DIR: /etc/nginx/certs
+    volumes:
+      - tzg-certs:/etc/nginx/certs
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+      - /var/log/nginx
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   backup:
     image: postgres:16-bookworm
@@ -122,3 +160,4 @@ services:
 volumes:
   tzg-postgres:
   tzg-backups:
+  tzg-certs:

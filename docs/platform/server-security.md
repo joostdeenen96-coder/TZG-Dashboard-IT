@@ -26,13 +26,14 @@ Ongewijzigd t.o.v. PLATFORM-003: SHA-256, geen plaintext in de database, eenmali
 
 ## Reverse proxy
 
-Optioneel. Als een proxy TLS offloadt:
+Standaard in Compose: service `nginx` (`tzg-nginx`) op poort **80/443**, TLS naar `tzg-dashboard:8080`. Zie `docs/HTTPS-SETUP.md`.
 
-- `TRUST_PROXY=1` (of het aantal hops) zodat rate limits het echte client-IP zien.
+- `TRUST_PROXY=1` (standaard in Compose) zodat rate limits het echte client-IP zien.
 - Proxy mag geen `Authorization` loggen.
-- Alleen poort 8080 doorzetten; PostgreSQL niet.
+- Certificaten in named volume `tzg-certs` (`fullchain.pem` / `privkey.pem`).
+- PostgreSQL niet publiceren naar het LAN.
 
-Zonder proxy luistert de app zelf op 8080 in het LAN. Dat is de ondersteunde interne-serverinstallatie.
+Directe HTTP op poort 8080 blijft beschikbaar voor lokaal debug.
 
 ## Logging
 

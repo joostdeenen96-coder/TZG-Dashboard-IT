@@ -6,14 +6,21 @@
 4. `chmod +x scripts/*.sh`
 5. `./scripts/preflight-linux.sh`
 6. `NODE_ENV=production npm run config:validate` (of via preflight).
-7. Firewall: alleen TCP **8080** vanaf het LAN. PostgreSQL **niet** publiceren op `0.0.0.0`. Compose bindt 5432 op `127.0.0.1`.
+7. Firewall: TCP **80** en **443** vanaf het LAN (HTTPS via NGINX). Optioneel **8080** alleen lokaal/debug. PostgreSQL **niet** publiceren op `0.0.0.0`. Compose bindt 5432 op `127.0.0.1`.
 8. `docker compose up -d`
 9. Het entrypoint wacht op PostgreSQL, voert migraties uit en seedt ontbrekende standaarddata (organisatie Teunesen, dashboards planning/ict). Bestaande dashboards worden niet overschreven.
-10. `curl -fsS http://127.0.0.1:8080/api/health/ready`
-11. `curl -fsS http://127.0.0.1:8080/api/version`
-12. `curl -fsS http://127.0.0.1:8080/api/dashboards` moet planning en ict bevatten.
+10. NGINX (`tzg-nginx`) luistert op 80/443, redirect HTTP→HTTPS, en proxyt naar `tzg-dashboard:8080`. Ontbreekt een certificaat in volume `tzg-certs`, dan maakt het entrypoint automatisch een self-signed certificaat (`CN=nc.teunesen.nl`, RSA 4096, 3650 dagen). Zie `docs/HTTPS-SETUP.md`.
+11. Controles (lokaal, self-signed: `-k`):
 
-Handmatig in de **productiecontainer** (geen `tsx`; die zit niet in de image):
+```bash
+curl -fsS http://127.0.0.1:8080/api/health/ready
+curl -fsSI http://127.0.0.1/ | head -n 5          # 301 → https
+curl -kfsS https://127.0.0.1/api/health/ready
+curl -kfsS https://127.0.0.1/api/version
+curl -kfsS https://127.0.0.1/api/dashboards        # planning + ict
+```
+
+12. Handmatig in de **productiecontainer** (geen `tsx`; die zit niet in de image):
 
 ```bash
 docker compose exec dashboard node dist/server/scripts/db-migrate.js
@@ -24,8 +31,8 @@ docker compose exec dashboard node dist/server/scripts/db-import-json.js
 
 Of via npm in de image: `npm run db:seed:prod` (en `db:migrate:prod`, `db:migrate:status:prod`, `db:import-json:prod`). Op de ontwikkelhost blijven `npm run db:seed` / `db:migrate` met `tsx` beschikbaar.
 
-13. Controleer vanaf een andere host: `http://<server-ip>:8080` (planning/ICT/admin).
+13. Controleer vanaf een andere host: `https://nc.teunesen.nl` (of `https://<server-ip>`; browser waarschuwing bij self-signed is verwacht). Routes: `/admin`, `/ict`, `/display/planning`, `/player/<token>`.
 14. Controleer dat `http://<server-ip>:5432` **niet** bereikbaar is.
-15. Na hostreboot: `docker compose ps` — `restart: unless-stopped` moet beide services terugbrengen. Als de dashboardcontainer PostgreSQL niet bereikt: zie `docs/TROUBLESHOOTING.md` (Docker FORWARD-policy).
+15. Na hostreboot: `docker compose ps` — `restart: unless-stopped` moet postgres, dashboard, nginx en backup terugbrengen. Als de dashboardcontainer PostgreSQL niet bereikt: zie `docs/TROUBLESHOOTING.md` (Docker FORWARD-policy).
 
-Volumes: `tzg-postgres`, `tzg-backups`, bind `./data`. DNS-alias is optioneel (interne naam naar de server). Tijd: NTP/chrony of `timedatectl`.
+Volumes: `tzg-postgres`, `tzg-backups`, `tzg-certs`, bind `./data`. DNS: `nc.teunesen.nl` naar de server. Tijd: NTP/chrony of `timedatectl`.
