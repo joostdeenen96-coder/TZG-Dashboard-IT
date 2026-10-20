@@ -50,6 +50,16 @@ if command -v ss >/dev/null 2>&1; then
   else
     say "OK poort 8080 vrij"
   fi
+  if ss -ltn | grep -q ':80 '; then
+    say "WARN poort 80 is in gebruik"
+  else
+    say "OK poort 80 vrij"
+  fi
+  if ss -ltn | grep -q ':443 '; then
+    say "WARN poort 443 is in gebruik"
+  else
+    say "OK poort 443 vrij"
+  fi
 fi
 mkdir -p backups
 if touch backups/.preflight 2>/dev/null; then
@@ -80,8 +90,8 @@ else
   say "FAIL docker compose config"
   fail=1
 fi
-if grep -q 'tzg-postgres:' docker-compose.yml && grep -q 'tzg-backups:' docker-compose.yml; then
-  say "OK PostgreSQL- en backupvolumes"
+if grep -q 'tzg-postgres:' docker-compose.yml && grep -q 'tzg-backups:' docker-compose.yml && grep -q 'tzg-certs:' docker-compose.yml; then
+  say "OK PostgreSQL-, backup- en certificaatvolumes"
 else
   say "FAIL volumes ontbreken in compose"
   fail=1

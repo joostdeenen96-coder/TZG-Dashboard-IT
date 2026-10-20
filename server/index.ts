@@ -9,6 +9,7 @@ import { getRequestId, requestIdMiddleware } from "./requestId.js";
 import { rateLimit } from "./rateLimit.js";
 import { securityHeaders } from "./securityHeaders.js";
 import { loadLocalEnv } from "./services/graphClient.js";
+import { resolveTrustProxyHops } from "./trustProxy.js";
 
 loadLocalEnv();
 
@@ -37,8 +38,11 @@ import { auditRouter, screensRouter } from "./routes/screens.js";
 const port = resolveListenPort();
 const app = express();
 const clientDir = clientDistDir();
-const trust = Number(process.env.TRUST_PROXY || 0);
-if (Number.isInteger(trust) && trust > 0) app.set("trust proxy", trust);
+const trustProxy = resolveTrustProxyHops();
+if (trustProxy > 0) {
+  // Achter nginx: req.ip / req.secure / X-Forwarded-* werken correct.
+  app.set("trust proxy", trustProxy);
+}
 
 app.use(requestIdMiddleware);
 app.use(securityHeaders);
@@ -52,6 +56,7 @@ app.use((req, res, next) => {
       event: "http",
       requestId: getRequestId(req),
       durationMs: Date.now() - started,
+      clientIp: req.ip,
     });
   });
   next();

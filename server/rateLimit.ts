@@ -30,9 +30,6 @@ export function rateLimit(options: { windowMs: number; max: number; key?: (req: 
 }
 
 export function clientKey(req: Request) {
-  const forwarded = req.header("x-forwarded-for");
-  if (forwarded && typeof req.app.get("trust proxy") === "number" && req.app.get("trust proxy") > 0) {
-    return forwarded.split(",")[0]?.trim() || req.ip || "onbekend";
-  }
+  // Met app.set("trust proxy", N) vult Express req.ip uit X-Forwarded-For.
   return req.ip || req.socket.remoteAddress || "onbekend";
 }

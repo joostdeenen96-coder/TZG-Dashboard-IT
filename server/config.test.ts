@@ -61,6 +61,13 @@ test("Graph ingeschakeld zonder Graph-secret is ongeldig", () => {
   assert.throws(() => loadConfig(base({ GRAPH_TENANT_ID: "tid", GRAPH_CLIENT_ID: "cid" })), /GRAPH_CLIENT_SECRET/);
 });
 
+test("TRUST_PROXY true en 1 worden geaccepteerd", () => {
+  assert.equal(loadConfig(base({ TRUST_PROXY: "1" })).trustProxy, 1);
+  assert.equal(loadConfig(base({ TRUST_PROXY: "true" })).trustProxy, 1);
+  assert.equal(loadConfig(base({ TRUST_PROXY: "0" })).trustProxy, 0);
+  assert.throws(() => loadConfig(base({ TRUST_PROXY: "abc" })), /TRUST_PROXY/);
+});
+
 test("foutmeldingen bevatten geen secrets", () => {
   try {
     loadConfig(base({ POSTGRES_PASSWORD: "super-geheim-wachtwoord-xyz", DATABASE_URL: "postgresql://tzg:super-geheim-wachtwoord-xyz@postgres:5432/tzg", GRAPH_CLIENT_SECRET: "" }));

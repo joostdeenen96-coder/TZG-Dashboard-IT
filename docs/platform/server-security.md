@@ -26,13 +26,15 @@ Ongewijzigd t.o.v. PLATFORM-003: SHA-256, geen plaintext in de database, eenmali
 
 ## Reverse proxy
 
-Optioneel. Als een proxy TLS offloadt:
+Standaard in Compose: service `nginx` (`tzg-nginx`) op poort **80/443**, TLS naar `tzg-dashboard:8080`. Zie `docs/HTTPS-SETUP.md`.
 
-- `TRUST_PROXY=1` (of het aantal hops) zodat rate limits het echte client-IP zien.
+- Express: `app.set("trust proxy", N)` via `TRUST_PROXY` (standaard `1`) — `req.ip`, `req.secure`, admin rate limits en API-logs gebruiken het echte client-IP.
+- NGINX: TLS 1.2/1.3, HSTS, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`; `limit_req` op publiek verkeer en `/api/admin/login`.
+- ACME HTTP-01: `/.well-known/acme-challenge/` → volume `tzg-acme-www`.
+- Certificaten in named volume `tzg-certs` (`fullchain.pem` / `privkey.pem`).
 - Proxy mag geen `Authorization` loggen.
-- Alleen poort 8080 doorzetten; PostgreSQL niet.
-
-Zonder proxy luistert de app zelf op 8080 in het LAN. Dat is de ondersteunde interne-serverinstallatie.
+- PostgreSQL niet publiceren naar het LAN.
+- Host-poort 8080: `EXPOSE_INTERNAL_PORT=true` (standaard); uitzetten via `docker-compose.expose-internal.off.yml`.
 
 ## Logging
 
