@@ -26,7 +26,16 @@ const priceFormatter = new Intl.NumberFormat("nl-NL", {
   maximumFractionDigits: 4,
 });
 
+const percentFormatter = new Intl.NumberFormat("nl-NL", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function amsterdamDate(iso: string) {
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (ymd) {
+    return { year: Number(ymd[1]), month: Number(ymd[2]), day: Number(ymd[3]) };
+  }
   const parsed = Date.parse(iso);
   if (!Number.isFinite(parsed)) return null;
   const parts = dateFormatter.formatToParts(new Date(parsed));
@@ -38,6 +47,7 @@ function amsterdamDate(iso: string) {
   return { year, month, day };
 }
 
+/** ISO-week uitsluitend afgeleid uit peildatum (weergave). */
 function isoWeekNumber(year: number, month: number, day: number) {
   const date = new Date(Date.UTC(year, month - 1, day));
   const weekday = date.getUTCDay() || 7;
@@ -49,29 +59,35 @@ function isoWeekNumber(year: number, month: number, day: number) {
 function formatPeildatum(iso: string) {
   const date = amsterdamDate(iso);
   if (!date) return iso;
-  return `${date.day}-${date.month}-${date.year}`;
+  return `${String(date.day).padStart(2, "0")}-${String(date.month).padStart(2, "0")}-${date.year}`;
 }
 
-function formatWeekNumber(iso: string) {
-  const date = amsterdamDate(iso);
+function formatWeekNumber(week: DieselWeek) {
+  if (typeof week.isoWeek === "number" && Number.isFinite(week.isoWeek)) {
+    return `Week ${week.isoWeek}`;
+  }
+  const date = amsterdamDate(week.peildatum);
   if (!date) return "Week";
-  const next = new Date(Date.UTC(date.year, date.month - 1, date.day));
-  const weekday = next.getUTCDay() || 7;
-  next.setUTCDate(next.getUTCDate() + (weekday === 1 ? 7 : 8 - weekday));
-  return `Week ${isoWeekNumber(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate())}`;
+  return `Week ${isoWeekNumber(date.year, date.month, date.day)}`;
 }
 
-function formatWholePercent(value: number) {
-  return `${Math.floor(value + 1e-6)}%`;
+function formatExactPercent(value: number) {
+  return `${percentFormatter.format(value)}%`;
 }
 
-function formatPrice(value: number) {
+function formatPricePerLiter(value: number) {
   if (value <= 0) return "geen dieselprijs";
-  return priceFormatter.format(value);
+  return `${priceFormatter.format(value)} / liter`;
 }
 
-function newestWeeks(weeks: DieselWeek[], count: number) {
-  return [...weeks].sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum)).slice(0, count);
+function planningWeeks(weeks: DieselWeek[], count: number) {
+  return [...weeks]
+    .sort((left, right) => {
+      const byDate = Date.parse(right.peildatum) - Date.parse(left.peildatum);
+      if (byDate !== 0) return byDate;
+      return String(right.itemId ?? "").localeCompare(String(left.itemId ?? ""));
+    })
+    .slice(0, count);
 }
 
 function monthName(applicableMonth: string | null) {
@@ -84,29 +100,32 @@ function monthName(applicableMonth: string | null) {
 function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasize: boolean }) {
   if (!week) {
     return (
-      <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3">
+      <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3 py-1">
         <p className="font-display text-[18px] font-semibold text-gold">Dieseltoeslag</p>
-        <p className="mt-1 text-[22px] text-mist">Geen voorgaande week</p>
+        <p className="mt-1 text-[20px] text-mist">Geen voorgaande peildatum</p>
       </li>
     );
   }
   return (
     <li
-      data-week={formatWeekNumber(week.peildatum)}
-      className={`grid min-h-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-[20px] border px-3 ${
+      data-week={formatWeekNumber(week)}
+      data-item-id={week.itemId ?? undefined}
+      className={`grid min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] items-center gap-2 rounded-[20px] border px-3 py-1 ${
         emphasize ? "border-gold/45 bg-gold/8" : "border-veil/12 bg-veil/[0.06]"
       }`}
     >
       <div className="min-w-0">
-        <p className="font-display text-[20px] leading-none font-semibold text-gold">{formatWeekNumber(week.peildatum)}</p>
-        <p className="mt-1 font-display text-[42px] leading-none font-semibold tabular-nums">
-          {formatWholePercent(week.toeslagPercentage)}
+        <p className="font-display text-[18px] leading-none font-semibold text-gold">{formatWeekNumber(week)}</p>
+        <p className="mt-1 font-display text-[36px] leading-none font-semibold tabular-nums">
+          {formatExactPercent(week.toeslagPercentage)}
         </p>
-        <p className="mt-1 truncate text-[14px] text-mist">Dieseltoeslag</p>
+        <p className="mt-1 truncate text-[13px] text-mist">Dieseltoeslag</p>
       </div>
       <div className="min-w-0 text-right">
-        <p className="truncate text-[15px] leading-tight">Dieselprijs {formatPrice(week.dieselPrijs)}</p>
-        <p className="mt-1 truncate text-[14px] leading-tight text-mist">Peildatum {formatPeildatum(week.peildatum)}</p>
+        <p className="truncate text-[13px] leading-tight text-mist">Dieselprijs</p>
+        <p className="truncate text-[15px] leading-tight tabular-nums">{formatPricePerLiter(week.dieselPrijs)}</p>
+        <p className="mt-1 truncate text-[13px] leading-tight text-mist">Peildatum</p>
+        <p className="truncate text-[14px] leading-tight tabular-nums">{formatPeildatum(week.peildatum)}</p>
       </div>
     </li>
   );
@@ -174,7 +193,7 @@ export function DieselCard() {
     return <CardState status="loading" title="Dieseltoeslag" message="Toeslag laden." />;
   }
 
-  const dieselWeeks = newestWeeks(
+  const dieselWeeks = planningWeeks(
     dieselState.data.weken?.length ? dieselState.data.weken : [dieselState.data],
     2,
   );

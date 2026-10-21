@@ -17,7 +17,9 @@ function mapWeek(value: unknown): DieselWeek | null {
     return null;
   }
   return {
+    itemId: typeof row.itemId === "string" ? row.itemId : undefined,
     peildatum: row.peildatum,
+    isoWeek: typeof row.isoWeek === "number" ? row.isoWeek : undefined,
     dieselPrijs: row.dieselPrijs,
     toeslagPercentage: row.toeslagPercentage,
     actief: row.actief,

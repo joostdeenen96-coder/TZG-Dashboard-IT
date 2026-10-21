@@ -76,13 +76,17 @@ export type QueryState<T> =
   | { status: "fallback"; data: T; message: string; refreshing: boolean; fetchedAt: string | null };
 
 export type DieselWeek = {
+  itemId?: string;
   peildatum: string;
+  isoWeek?: number;
   dieselPrijs: number;
   toeslagPercentage: number;
+  /** Informatief; niet gebruikt voor Planning-selectie. */
   actief: boolean;
 };
 
 export type DieselSurcharge = DieselWeek & {
+  /** Nieuwste peildatum eerst, daarna een-na-nieuwste. */
   weken: DieselWeek[];
 };
 

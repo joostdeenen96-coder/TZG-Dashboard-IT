@@ -1,39 +1,76 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  buildDieselSurchargeFromRecords,
+  resolveDieselFieldNames,
+  selectLatestTwoByPeildatum,
+} from "./sharePointDieselProvider.js";
 
-// Re-test week pairing via a small local copy of the selection logic expectations
-// by exercising the public provider mapping through exported helpers is not available;
-// instead verify iso-week pairing with an inline replica matching production rules.
-
-function isoWeekKey(peildatum: string) {
-  const time = Date.parse(peildatum);
-  if (!Number.isFinite(time)) return peildatum;
-  const date = new Date(time);
-  const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const weekday = utc.getUTCDay() || 7;
-  utc.setUTCDate(utc.getUTCDate() + 4 - weekday);
-  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
-  return `${utc.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-test("huidige en vorige dieselweek hebben verschillende ISO-weekkeys", () => {
-  const current = "2026-10-13"; // → display week 43
-  const previous = "2026-10-06"; // → display week 42
-  assert.notEqual(isoWeekKey(current), isoWeekKey(previous));
-  assert.equal(isoWeekKey(current) > isoWeekKey(previous), true);
+test("selectie is peildatum DESC zonder Actief-filter", () => {
+  const { latest, previous } = selectLatestTwoByPeildatum([
+    {
+      itemId: "1",
+      referenceDate: "2026-10-07",
+      isoWeek: 41,
+      dieselPricePerLiter: 2.2769,
+      surchargePercentage: 30,
+      actief: true,
+    },
+    {
+      itemId: "2",
+      referenceDate: "2026-10-14",
+      isoWeek: 42,
+      dieselPricePerLiter: 2.2438,
+      surchargePercentage: 28.9,
+      actief: false,
+    },
+  ]);
+  assert.equal(latest?.itemId, "2");
+  assert.equal(previous?.itemId, "1");
+  assert.equal(latest?.actief, false);
 });
 
-test("weekselectie: actief + dichtstbijzijnde eerdere week", () => {
-  const records = [
-    { peildatum: "2026-09-29", toeslagPercentage: 11.2, dieselPrijs: 1.1, actief: false },
-    { peildatum: "2026-10-06", toeslagPercentage: 11.9, dieselPrijs: 1.2, actief: false },
-    { peildatum: "2026-10-13", toeslagPercentage: 12.4, dieselPrijs: 1.3, actief: true },
-  ];
-  const active = records.find((row) => row.actief)!;
-  const previous = records
-    .filter((row) => Date.parse(row.peildatum) < Date.parse(active.peildatum))
-    .sort((a, b) => Date.parse(b.peildatum) - Date.parse(a.peildatum))[0];
-  assert.equal(previous?.peildatum, "2026-10-06");
-  assert.equal(previous?.toeslagPercentage, 11.9);
+test("API-payload weken nieuwste eerst met gekoppelde velden", () => {
+  const payload = buildDieselSurchargeFromRecords([
+    {
+      itemId: "prev",
+      referenceDate: "2026-10-07",
+      isoWeek: 41,
+      dieselPricePerLiter: 2.2769,
+      surchargePercentage: 30,
+      actief: false,
+    },
+    {
+      itemId: "latest",
+      referenceDate: "2026-10-14",
+      isoWeek: 42,
+      dieselPricePerLiter: 2.2438,
+      surchargePercentage: 28.9,
+      actief: false,
+    },
+  ]);
+  assert.equal(payload.weken[0]!.peildatum, payload.peildatum);
+  assert.equal(payload.weken[0]!.dieselPrijs, payload.dieselPrijs);
+  assert.equal(payload.weken[0]!.toeslagPercentage, payload.toeslagPercentage);
+});
+
+test("Graph kolomresolutie vereist DieselprijsPerLiter en ToeslagPercent-prefix", () => {
+  assert.throws(() => resolveDieselFieldNames([{ name: "Peildatum", displayName: "Peildatum" }]), /DieselprijsPerLiter/);
+  const names = resolveDieselFieldNames([
+    { name: "Peildatum", displayName: "Peildatum" },
+    { name: "DieselprijsPerLiter", displayName: "Dieselprijs per liter" },
+    { name: "OData__x0054_oeslag", displayName: "ToeslagPercentage" },
+  ]);
+  assert.equal(names.toeslagPercentage, "OData__x0054_oeslag");
+});
+
+test("providerbron bevat geen hardcoded acceptatiepeildatums als runtime-default", () => {
+  const src = readFileSync(fileURLToPath(new URL("./sharePointDieselProvider.ts", import.meta.url)), "utf8");
+  assert.equal(src.includes("2.2438"), false);
+  assert.equal(src.includes("28.90"), false);
+  assert.equal(src.includes("selectLatestTwoByPeildatum"), true);
+  assert.equal(path.basename(fileURLToPath(import.meta.url)), "sharePointDieselProvider.test.ts");
 });
