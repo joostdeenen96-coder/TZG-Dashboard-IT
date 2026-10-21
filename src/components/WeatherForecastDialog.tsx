@@ -15,7 +15,7 @@ const icons = {
 } satisfies Record<WeatherIconName, typeof Cloud>;
 
 type WeatherForecastDialogProps = {
-  forecast: WeatherForecast;
+  forecast: WeatherForecast | null;
   settings: WeatherWidgetSettings;
   onClose: () => void;
   onInteract: () => void;
@@ -87,10 +87,14 @@ function DayCard({
   );
 }
 
+/** Alias voor de specificatie / tests. */
+export const WeatherForecastModal = WeatherForecastDialog;
+
 export function WeatherForecastDialog({ forecast, settings, onClose, onInteract }: WeatherForecastDialogProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
-  const days = forecast.days.slice(0, settings.forecastDays);
+  const openedAtRef = useRef(Date.now());
+  const days = forecast ? forecast.days.slice(0, settings.forecastDays) : [];
   const todayIso = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Amsterdam",
     year: "numeric",
@@ -99,6 +103,7 @@ export function WeatherForecastDialog({ forecast, settings, onClose, onInteract 
   }).format(new Date());
 
   useEffect(() => {
+    openedAtRef.current = Date.now();
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeRef.current?.focus();
@@ -118,16 +123,23 @@ export function WeatherForecastDialog({ forecast, settings, onClose, onInteract 
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const updated = formatAmsterdamTime(forecast.generatedAt);
-  const stale = forecast.status === "stale";
-  const emptyDays = days.length === 0;
+  const updated = forecast ? formatAmsterdamTime(forecast.generatedAt) : "";
+  const stale = forecast?.status === "stale";
+  const emptyDays = !forecast || days.length === 0;
 
-  // Portal buiten StageShell (CSS transform) zodat position:fixed het viewport dekt.
+  const requestClose = () => {
+    // Voorkom dat dezelfde openingsklik/touch de overlay meteen weer sluit.
+    if (Date.now() - openedAtRef.current < 350) return;
+    onClose();
+  };
+
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-ink/65 p-6 backdrop-blur-md motion-safe:animate-[fadeIn_180ms_ease-out]"
+      data-testid="weather-forecast-modal"
+      className="fixed inset-0 z-[10000] grid place-items-center bg-ink/70 p-6 backdrop-blur-md motion-safe:animate-[fadeIn_180ms_ease-out]"
+      style={{ pointerEvents: "auto" }}
       role="presentation"
-      onClick={onClose}
+      onClick={requestClose}
       onMouseMove={onInteract}
       onPointerDown={onInteract}
     >
@@ -136,7 +148,9 @@ export function WeatherForecastDialog({ forecast, settings, onClose, onInteract 
         aria-modal="true"
         aria-labelledby={titleId}
         className="tv-card relative w-[min(1600px,85vw)] max-h-[min(900px,88vh)] overflow-hidden px-7 py-6 motion-safe:animate-[scaleIn_200ms_ease-out]"
+        style={{ pointerEvents: "auto" }}
         onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <button
           ref={closeRef}
@@ -153,19 +167,21 @@ export function WeatherForecastDialog({ forecast, settings, onClose, onInteract 
             Weersverwachting
           </h2>
           <p className="mt-2 text-[18px] text-mist">
-            {forecast.location}
-            <span className="mx-2 text-gold">·</span>
-            Laatste update {updated}
+            {forecast?.location || "Locatie onbekend"}
+            {updated ? (
+              <>
+                <span className="mx-2 text-gold">·</span>
+                Laatste update {updated}
+              </>
+            ) : null}
             {stale ? <span className="ml-2 text-[#f0b4aa]">(verouderd)</span> : null}
           </p>
         </div>
 
         {emptyDays ? (
           <div className="mt-8 rounded-[22px] border border-veil/12 bg-veil/[0.04] px-6 py-10 text-center">
-            <p className="text-[22px] font-semibold">Geen weekverwachting beschikbaar</p>
-            <p className="mt-2 text-[17px] text-mist">
-              Het actuele weer blijft zichtbaar in de balk. Probeer het later opnieuw.
-            </p>
+            <p className="text-[22px] font-semibold">Weersverwachting tijdelijk niet beschikbaar.</p>
+            <p className="mt-2 text-[17px] text-mist">Probeer het later opnieuw. Het dashboard blijft beschikbaar.</p>
           </div>
         ) : (
           <div className="mt-6 flex gap-3">
@@ -176,8 +192,8 @@ export function WeatherForecastDialog({ forecast, settings, onClose, onInteract 
         )}
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-[14px] text-mist">
-          <p>Bron: {forecast.source}</p>
-          {forecast.status === "partial" ? <p>Een deel van de verwachting ontbreekt.</p> : null}
+          <p>Bron: {forecast?.source || "—"}</p>
+          {forecast?.status === "partial" ? <p>Een deel van de verwachting ontbreekt.</p> : null}
           {stale ? <p>Laatst bekende verwachting wordt getoond.</p> : null}
         </div>
       </section>

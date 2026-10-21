@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readWeatherWidgetSettings, weatherPopupShouldClose } from "../shared/weatherSettings.js";
+import {
+  isWeatherPopupEnabled,
+  readWeatherWidgetSettings,
+  weatherPopupShouldClose,
+} from "../shared/weatherSettings.js";
 
 test("weather settings defaults blijven werken zonder opgeslagen velden", () => {
   const settings = readWeatherWidgetSettings({});
@@ -10,6 +14,24 @@ test("weather settings defaults blijven werken zonder opgeslagen velden", () => 
   assert.equal(settings.showPrecipitation, true);
   assert.equal(settings.showWind, true);
   assert.equal(settings.showSunriseSunset, false);
+});
+
+test("popupEnabled undefined of ontbrekend houdt popup aan", () => {
+  assert.equal(isWeatherPopupEnabled(undefined), true);
+  assert.equal(isWeatherPopupEnabled({}), true);
+  assert.equal(isWeatherPopupEnabled({ popupEnabled: undefined }), true);
+  assert.equal(readWeatherWidgetSettings(undefined).popupEnabled, true);
+});
+
+test("popupEnabled true houdt popup aan", () => {
+  assert.equal(isWeatherPopupEnabled({ popupEnabled: true }), true);
+  assert.equal(isWeatherPopupEnabled({ popupEnabled: "true" }), true);
+});
+
+test("popupEnabled false zet popup uit", () => {
+  assert.equal(isWeatherPopupEnabled({ popupEnabled: false }), false);
+  assert.equal(isWeatherPopupEnabled({ popupEnabled: "false" }), false);
+  assert.equal(readWeatherWidgetSettings({ popupEnabled: false }).popupEnabled, false);
 });
 
 test("weather settings lezen geldige overrides", () => {
