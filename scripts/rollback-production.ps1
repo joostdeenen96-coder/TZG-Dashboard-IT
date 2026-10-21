@@ -1,3 +1,4 @@
+# Non-destructieve applicatierollback. Geen tsx of development npm-scripts.
 param([string]$Image = "")
 Set-Location (Join-Path $PSScriptRoot "..")
 if (-not $Image) {

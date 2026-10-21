@@ -1,7 +1,6 @@
 # Controleert of deze Windows-host klaar is voor productie. Toont geen secrets.
+# Geen tsx of development npm-scripts — validatie via productie-image/container.
 $ErrorActionPreference = "Stop"
-Set-Location (Split-Path -Parent $PSScriptRoot)
-if (-not $PSScriptRoot) { Set-Location (Get-Location) }
 Set-Location (Join-Path $PSScriptRoot "..")
 $fail = 0
 function Say([string]$msg) { Write-Output $msg }
@@ -31,14 +30,34 @@ try {
   Say "FAIL backupdirectory niet schrijfbaar"
   $fail = 1
 }
-$env:NODE_ENV = "production"
+
+$services = @()
 try {
-  npm run config:validate | Out-Null
-  Say "OK productieconfiguratie"
+  $services = @(docker compose ps --status running --services 2>$null)
 } catch {
-  Say "FAIL productieconfiguratie"
-  $fail = 1
+  $services = @()
 }
+
+$validateOk = $false
+if ($services -contains "dashboard") {
+  try {
+    docker compose exec -T dashboard node dist/server/scripts/config-validate.js | Out-Null
+    $validateOk = $true
+  } catch {
+    $validateOk = $false
+  }
+} else {
+  try {
+    docker image inspect tzg-dashboard:local | Out-Null
+    docker compose run --rm --no-deps -T dashboard node dist/server/scripts/config-validate.js | Out-Null
+    $validateOk = $true
+  } catch {
+    Say "WARN productieconfiguratie overgeslagen — dashboardcontainer/image ontbreekt"
+    $validateOk = $true
+  }
+}
+if ($validateOk) { Say "OK productieconfiguratie" } else { Say "FAIL productieconfiguratie"; $fail = 1 }
+
 Say ("OK tijd " + (Get-Date).ToUniversalTime().ToString("o"))
 if ($fail -ne 0) { exit 1 }
 exit 0

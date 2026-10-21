@@ -4,8 +4,8 @@
 2. Deze repository of een release op de server plaatsen. Niet als root-appuser bouwen zonder `.env`.
 3. `.env.production.example` kopiëren naar `.env`. Wachtwoorden uit een kluis, geen `change-me`.
 4. `chmod +x scripts/*.sh`
-5. `./scripts/preflight-linux.sh`
-6. `NODE_ENV=production npm run config:validate` (of via preflight).
+5. `./scripts/preflight-linux.sh` (valideert productieconfiguratie via `docker compose exec … node dist/server/scripts/config-validate.js` — geen `tsx` op de host).
+6. Optioneel handmatig: `docker compose exec -T dashboard node dist/server/scripts/config-validate.js`.
 7. Firewall: TCP **80** en **443** vanaf het LAN (HTTPS via NGINX). Optioneel **8080** (`EXPOSE_INTERNAL_PORT=true`, standaard). PostgreSQL **niet** publiceren op `0.0.0.0`. Compose bindt 5432 op `127.0.0.1`.
 8. `docker compose up -d`
 9. Het entrypoint wacht op PostgreSQL, voert migraties uit en seedt ontbrekende standaarddata (organisatie Teunesen, dashboards planning/ict). Bestaande dashboards worden niet overschreven.
