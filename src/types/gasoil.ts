@@ -20,6 +20,7 @@ export type GasOilSurchargeResult = {
   retrievedAt: string | null;
   product: string | null;
   productLabel: string | null;
+  rawPricePer100LitersCbrb: number | null;
   message: string | null;
 };
 

@@ -100,6 +100,7 @@ function unavailableResult(
     retrievedAt: null,
     product: null,
     productLabel: null,
+    rawPricePer100LitersCbrb: null,
     message,
   };
 }
@@ -124,6 +125,8 @@ function resultFromObservation(
     retrievedAt: observation.retrievedAt,
     product,
     productLabel: product,
+    rawPricePer100LitersCbrb:
+      typeof observation.rawPricePer100LitersCbrb === "number" ? observation.rawPricePer100LitersCbrb : null,
     message,
   };
 }

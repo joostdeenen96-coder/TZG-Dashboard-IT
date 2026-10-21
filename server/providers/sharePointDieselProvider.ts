@@ -110,22 +110,47 @@ function pickActive(records: DieselWeek[]) {
   return active[0];
 }
 
-function latestFourWeeks(records: DieselWeek[]) {
+function latestDistinctWeeks(records: DieselWeek[], count: number) {
   const byWeek = new Map<string, DieselWeek>();
   const chronological = [...records].sort((left, right) => Date.parse(left.peildatum) - Date.parse(right.peildatum));
   for (const record of chronological) {
     if (!Number.isFinite(Date.parse(record.peildatum))) continue;
+    // Later peildatum within the same ISO-week wins.
     byWeek.set(isoWeekKey(record.peildatum), record);
   }
   return [...byWeek.values()]
     .sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum))
-    .slice(0, 4)
+    .slice(0, count)
     .sort((left, right) => Date.parse(left.peildatum) - Date.parse(right.peildatum));
 }
 
+/**
+ * Planning toont huidige + vorige dieselweek. Neem altijd het actieve record op
+ * en vul aan met eerdere ISO-weken uit SharePoint-historie (Actief true/false).
+ */
+function weeksForPlanning(active: DieselWeek, records: DieselWeek[]): DieselWeek[] {
+  const history = latestDistinctWeeks(records, 8);
+  const activeKey = isoWeekKey(active.peildatum);
+  const withoutActiveWeek = history.filter((row) => isoWeekKey(row.peildatum) !== activeKey);
+  const previous = withoutActiveWeek
+    .filter((row) => Date.parse(row.peildatum) < Date.parse(active.peildatum))
+    .sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum))[0];
+  const weken = previous ? [previous, active] : [active];
+  if (!previous) {
+    console.warn(
+      `SharePoint diesel: geen vorige week vóór peildatum ${active.peildatum} gevonden in ${records.length} rijen.`,
+    );
+  } else {
+    console.info(
+      `SharePoint diesel: huidige peildatum ${active.peildatum}, vorige peildatum ${previous.peildatum}.`,
+    );
+  }
+  return weken;
+}
+
 function withWeeks(active: DieselWeek, records: DieselWeek[]): DieselSurcharge {
-  const weken = latestFourWeeks(records);
-  return { ...active, weken: weken.length > 0 ? weken : [{ ...active }] };
+  const weken = weeksForPlanning(active, records);
+  return { ...active, weken };
 }
 
 function odataText(value: string) {
@@ -174,7 +199,7 @@ export class SharePointDieselProvider implements DieselSurchargeProvider {
     const items = await graphList(
       graphUrl(`/sites/${site.id}/lists/${list.id}/items`, {
         $expand: "fields",
-        $top: "100",
+        $top: "200",
       }),
     );
 

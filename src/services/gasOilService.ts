@@ -40,6 +40,8 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
         : typeof row.product === "string"
           ? row.product
           : null,
+    rawPricePer100LitersCbrb:
+      typeof row.rawPricePer100LitersCbrb === "number" ? row.rawPricePer100LitersCbrb : null,
     message: typeof row.message === "string" ? row.message : null,
   };
 }

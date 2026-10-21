@@ -12,6 +12,8 @@ export type GasOilPriceObservation = {
   retrievedAt: string;
   productLabel?: string;
   rawPriceInclPerLiter?: number;
+  /** NL CBRB bronwaarde in €/100L (vóór ×10). */
+  rawPricePer100LitersCbrb?: number;
   conversionNote?: string;
 };
 
@@ -36,6 +38,8 @@ export type GasOilSurchargeResult = {
   /** API-veld uit specificatie; gelijk aan productLabel. */
   product: string | null;
   productLabel: string | null;
+  /** NL: oorspronkelijke CBRB-waarde €/100L. */
+  rawPricePer100LitersCbrb: number | null;
   message: string | null;
 };
 
