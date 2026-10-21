@@ -81,7 +81,15 @@ function monthName(applicableMonth: string | null) {
   return monthFormatter.format(new Date(stamp));
 }
 
-function DieselWeekCell({ week, emphasize }: { week: DieselWeek; emphasize: boolean }) {
+function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasize: boolean }) {
+  if (!week) {
+    return (
+      <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3">
+        <p className="font-display text-[18px] font-semibold text-gold">Dieseltoeslag</p>
+        <p className="mt-1 text-[22px] text-mist">Geen voorgaande week</p>
+      </li>
+    );
+  }
   return (
     <li
       data-week={formatWeekNumber(week.peildatum)}
@@ -170,9 +178,6 @@ export function DieselCard() {
     dieselState.data.weken?.length ? dieselState.data.weken : [dieselState.data],
     2,
   );
-  while (dieselWeeks.length < 2) {
-    dieselWeeks.push(dieselWeeks[0] ?? dieselState.data);
-  }
 
   const gasOil =
     gasOilState.status === "ready" || gasOilState.status === "fallback" ? gasOilState.data : null;
@@ -182,8 +187,8 @@ export function DieselCard() {
     <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-status={dieselState.status}>
       {refreshing ? <span className="absolute inset-x-0 top-0 h-0.5 animate-pulse bg-gold" aria-label="Vernieuwen" /> : null}
       <ul className="grid min-h-0 flex-1 grid-rows-4 gap-2">
-        <DieselWeekCell week={dieselWeeks[0]!} emphasize />
-        <DieselWeekCell week={dieselWeeks[1]!} emphasize={false} />
+        <DieselWeekCell week={dieselWeeks[0] ?? null} emphasize />
+        <DieselWeekCell week={dieselWeeks[1] ?? null} emphasize={false} />
         <GasOilCell
           result={gasOil?.nl ?? null}
           countryLabel="Nederland"
