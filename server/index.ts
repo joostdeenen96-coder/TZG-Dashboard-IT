@@ -26,6 +26,7 @@ import { agendaRouter } from "./routes/agenda.js";
 import { configRouter } from "./routes/config.js";
 import { dashboardsRouter } from "./routes/dashboards.js";
 import { dieselSurchargeRouter } from "./routes/dieselSurcharge.js";
+import { gasOilSurchargesRouter } from "./routes/gasOilSurcharges.js";
 import { diagnosticsRouter, healthRouter, versionRouter } from "./routes/health.js";
 import { newsRouter } from "./routes/news.js";
 import { prtgRouter } from "./routes/prtg.js";
@@ -95,6 +96,7 @@ app.use("/api/news", newsRouter);
 app.use("/api/agenda", agendaRouter);
 app.use("/api/wij-agenda", agendaRouter);
 app.use("/api/dieselsurcharge", dieselSurchargeRouter);
+app.use("/api/gasoil-surcharges", gasOilSurchargesRouter);
 app.use("/api/prtg", prtgRouter);
 
 const repositoryMode = resolveRepositoryMode();

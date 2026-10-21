@@ -1,0 +1,84 @@
+import { useSyncExternalStore } from "react";
+import type { GasOilSurchargeResult, GasOilSurchargesPayload } from "../types/gasoil";
+import { createPollingFeed } from "./tvFeed";
+
+const GASOIL_PATH = "/api/gasoil-surcharges";
+
+function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.country !== country) return null;
+  if (row.status !== "ready" && row.status !== "stale" && row.status !== "unavailable") return null;
+  if (typeof row.source !== "string" || typeof row.sourceLabel !== "string") return null;
+  const staffel =
+    row.staffelRange && typeof row.staffelRange === "object" && !Array.isArray(row.staffelRange)
+      ? (row.staffelRange as Record<string, unknown>)
+      : null;
+  return {
+    country,
+    status: row.status,
+    applicableMonth: typeof row.applicableMonth === "string" ? row.applicableMonth : null,
+    referenceDate: typeof row.referenceDate === "string" ? row.referenceDate : null,
+    priceExVatPer1000Liters: typeof row.priceExVatPer1000Liters === "number" ? row.priceExVatPer1000Liters : null,
+    surchargePerTon: typeof row.surchargePerTon === "number" ? row.surchargePerTon : null,
+    staffelRange:
+      staffel && typeof staffel.from === "number" && typeof staffel.to === "number"
+        ? { from: staffel.from, to: staffel.to }
+        : null,
+    source: row.source,
+    sourceLabel: row.sourceLabel,
+    retrievedAt: typeof row.retrievedAt === "string" ? row.retrievedAt : null,
+    productLabel: typeof row.productLabel === "string" ? row.productLabel : null,
+    message: typeof row.message === "string" ? row.message : null,
+  };
+}
+
+function mapPayload(payload: unknown): GasOilSurchargesPayload | "empty" {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Gasolietoeslag heeft een ongeldig formaat.");
+  }
+  const row = payload as Record<string, unknown>;
+  if (typeof row.error === "string" && row.error.trim()) throw new Error(row.error);
+  const nl = mapResult(row.nl, "NL");
+  const be = mapResult(row.be, "BE");
+  if (!nl || !be) throw new Error("Gasolietoeslag heeft een ongeldig formaat.");
+  return {
+    nl,
+    be,
+    fetchedAt: typeof row.fetchedAt === "string" ? row.fetchedAt : new Date().toISOString(),
+  };
+}
+
+async function loadGasOil(signal: AbortSignal): Promise<GasOilSurchargesPayload | "empty"> {
+  const response = await fetch(GASOIL_PATH, { signal });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+        ? payload.error
+        : `Gasolietoeslag antwoordde met ${response.status}.`;
+    throw new Error(message);
+  }
+  return mapPayload(payload);
+}
+
+function acceptGasOil(value: unknown): GasOilSurchargesPayload | null {
+  try {
+    const mapped = mapPayload(value);
+    return mapped === "empty" ? null : mapped;
+  } catch {
+    return null;
+  }
+}
+
+const gasOilFeed = createPollingFeed<GasOilSurchargesPayload>({
+  name: "gasolietoeslag",
+  storageKey: "teunesen.tv.gasoil.v1",
+  unavailable: "Gasolietoeslag niet bereikbaar.",
+  load: loadGasOil,
+  accept: acceptGasOil,
+});
+
+export function useGasOilSurcharges() {
+  return useSyncExternalStore(gasOilFeed.subscribe, gasOilFeed.getSnapshot, gasOilFeed.getSnapshot);
+}
