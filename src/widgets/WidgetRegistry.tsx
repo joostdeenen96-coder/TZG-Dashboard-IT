@@ -23,7 +23,7 @@ type RegistryEntry = {
 const registry: RegistryEntry[] = [
   { type: "waterlevels", component: () => <WaterLevelsWidget /> },
   { type: "diesel", component: () => <DieselWidget /> },
-  { type: "weather", component: () => <WeatherWidget /> },
+  { type: "weather", component: ({ widget }) => <WeatherWidget widget={widget} /> },
   { type: "news", component: () => <NewsWidget /> },
   { type: "slideshow", component: ({ widget }) => <SlideshowWidget title={widget.title} /> },
   { type: "clock", component: () => <ClockWidget /> },

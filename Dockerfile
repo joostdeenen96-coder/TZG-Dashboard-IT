@@ -8,6 +8,7 @@ RUN npm ci
 COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json tsconfig.server.json ./
 COPY public ./public
 COPY src ./src
+COPY shared ./shared
 COPY server ./server
 
 ARG APP_VERSION=0.4.1

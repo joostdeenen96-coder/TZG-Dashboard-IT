@@ -30,6 +30,7 @@ import { diagnosticsRouter, healthRouter, versionRouter } from "./routes/health.
 import { newsRouter } from "./routes/news.js";
 import { prtgRouter } from "./routes/prtg.js";
 import { waterLevelsRouter } from "./routes/waterLevels.js";
+import { weatherRouter } from "./routes/weather.js";
 import { getDashboardRepository } from "./dashboards/repository.js";
 import { resolveRepositoryMode } from "./db/repositoryMode.js";
 import { playerRouter } from "./routes/player.js";
@@ -89,6 +90,7 @@ app.use(
 );
 app.use("/api/audit", auditRouter);
 app.use("/api/waterlevels", waterLevelsRouter);
+app.use("/api/weather", weatherRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/agenda", agendaRouter);
 app.use("/api/wij-agenda", agendaRouter);

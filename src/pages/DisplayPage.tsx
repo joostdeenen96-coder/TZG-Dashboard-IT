@@ -102,6 +102,7 @@ function PlanningLayout({ dashboard }: { dashboard: DashboardDefinition }) {
   const diesel = active.get("diesel");
   const news = active.get("news");
   const agenda = active.get("agenda");
+  const weather = active.get("weather");
 
   return (
     <StageShell stageWidth={dashboard.layout.stageWidth} stageHeight={dashboard.layout.stageHeight}>
@@ -112,6 +113,7 @@ function PlanningLayout({ dashboard }: { dashboard: DashboardDefinition }) {
         stale={tv.stale}
         adminLabel={authenticated ? "Instellingen" : "Inloggen"}
         onAdmin={() => setAdminOpen(true)}
+        weatherSettings={weather?.settings}
       />
       {(water || diesel) && (
         <section className="grid h-[640px] shrink-0 grid-cols-4 gap-4">
@@ -153,6 +155,7 @@ function IctLayout({ dashboard }: { dashboard: DashboardDefinition }) {
   const prtg = active.get("prtg");
   const news = active.get("news");
   const agenda = active.get("agenda");
+  const weather = active.get("weather");
 
   return (
     <StageShell stageWidth={dashboard.layout.stageWidth} stageHeight={dashboard.layout.stageHeight}>
@@ -163,6 +166,7 @@ function IctLayout({ dashboard }: { dashboard: DashboardDefinition }) {
         stale={tv.stale}
         adminLabel={authenticated ? "Instellingen" : "Inloggen"}
         onAdmin={() => setAdminOpen(true)}
+        weatherSettings={weather?.settings}
       />
       {prtg ? (
         <section className="grid h-[640px] shrink-0 grid-cols-1 gap-4">
@@ -195,6 +199,7 @@ function StackLayout({ dashboard }: { dashboard: DashboardDefinition }) {
     () => dashboard.widgets.filter((item) => item.enabled).sort((a, b) => a.position.order - b.position.order),
     [dashboard.widgets],
   );
+  const weather = widgets.find((item) => item.type === "weather");
 
   return (
     <StageShell stageWidth={dashboard.layout.stageWidth} stageHeight={dashboard.layout.stageHeight}>
@@ -205,6 +210,7 @@ function StackLayout({ dashboard }: { dashboard: DashboardDefinition }) {
         stale={tv.stale}
         adminLabel={authenticated ? "Instellingen" : "Inloggen"}
         onAdmin={() => setAdminOpen(true)}
+        weatherSettings={weather?.settings}
       />
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         {widgets

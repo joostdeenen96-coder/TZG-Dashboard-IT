@@ -25,6 +25,14 @@ export function createDefaultDashboards(now = new Date().toISOString()): Dashboa
       position: { order: 10 },
       layout: { area: "header" },
       dataSource: { kind: "builtin", name: "weather" },
+      settings: {
+        popupEnabled: true,
+        forecastDays: 7,
+        popupAutoCloseSeconds: 60,
+        showPrecipitation: true,
+        showWind: true,
+        showSunriseSunset: false,
+      },
     }),
     widget({
       type: "clock",
@@ -76,6 +84,14 @@ export function createDefaultDashboards(now = new Date().toISOString()): Dashboa
       position: { order: 10 },
       layout: { area: "header" },
       dataSource: { kind: "builtin", name: "weather" },
+      settings: {
+        popupEnabled: true,
+        forecastDays: 7,
+        popupAutoCloseSeconds: 60,
+        showPrecipitation: true,
+        showWind: true,
+        showSunriseSunset: false,
+      },
     }),
     widget({
       type: "clock",
