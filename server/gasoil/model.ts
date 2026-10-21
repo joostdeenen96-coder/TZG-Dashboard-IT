@@ -33,14 +33,41 @@ export type GasOilSurchargeResult = {
   source: GasOilSourceId;
   sourceLabel: string;
   retrievedAt: string | null;
+  /** API-veld uit specificatie; gelijk aan productLabel. */
+  product: string | null;
   productLabel: string | null;
   message: string | null;
+};
+
+export type GasOilBeDiagnostics = {
+  referenceDate: string | null;
+  applicableMonth: string | null;
+  productIdentifier: string;
+  unit: string;
+  vatStatus: "excl" | "incl-converted" | "cache" | "unavailable";
+  vatDivisor: number | null;
+  sourceRecord: {
+    dayLabel: string;
+    isoDate: string;
+    product: string;
+    priceIncl: number | null;
+    priceExcl: number | null;
+    unit: string;
+    vatStatus: "excl" | "incl";
+  } | null;
+  cacheHit: boolean;
+  historyEndpoint: string;
+  dayEndpoint: string;
 };
 
 export type GasOilSurchargesPayload = {
   nl: GasOilSurchargeResult;
   be: GasOilSurchargeResult;
   fetchedAt: string;
+  /** Alleen in development of bij GASOIL_DIAGNOSTICS=1. */
+  diagnostics?: {
+    be: GasOilBeDiagnostics;
+  };
 };
 
 export type GasOilProviderHealth = {

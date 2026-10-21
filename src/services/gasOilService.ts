@@ -28,7 +28,18 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
     source: row.source,
     sourceLabel: row.sourceLabel,
     retrievedAt: typeof row.retrievedAt === "string" ? row.retrievedAt : null,
-    productLabel: typeof row.productLabel === "string" ? row.productLabel : null,
+    product:
+      typeof row.product === "string"
+        ? row.product
+        : typeof row.productLabel === "string"
+          ? row.productLabel
+          : null,
+    productLabel:
+      typeof row.productLabel === "string"
+        ? row.productLabel
+        : typeof row.product === "string"
+          ? row.product
+          : null,
     message: typeof row.message === "string" ? row.message : null,
   };
 }

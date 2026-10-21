@@ -35,6 +35,8 @@ export function currentApplicableMonth(now = new Date()) {
 /**
  * Peiling for an applicable month: 15th of the previous calendar month.
  * November 2026 → 2026-10-15
+ * October 2026 → 2026-09-15
+ * January 2027 → 2026-12-15
  */
 export function referenceDateForApplicableMonth(applicableMonth: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(applicableMonth);
@@ -47,6 +49,9 @@ export function referenceDateForApplicableMonth(applicableMonth: string) {
   }
   return formatIsoDate(year, month, 15);
 }
+
+/** Spec-alias: getReferenceDate(applicableMonth) */
+export const getReferenceDate = referenceDateForApplicableMonth;
 
 export function applicableMonthFromReferenceDate(referenceDate: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(referenceDate);

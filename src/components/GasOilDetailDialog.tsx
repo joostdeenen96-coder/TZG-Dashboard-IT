@@ -96,7 +96,7 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
             <dd className="font-semibold capitalize text-paper">{monthLabel(result.applicableMonth)}</dd>
           </div>
           <div>
-            <dt className="text-mist">Referentieprijs</dt>
+            <dt className="text-mist">Gasolieprijs</dt>
             <dd className="font-semibold text-paper">
               {typeof result.priceExVatPer1000Liters === "number"
                 ? `${pricePer1000Formatter.format(result.priceExVatPer1000Liters)} / 1000 L ex BTW`

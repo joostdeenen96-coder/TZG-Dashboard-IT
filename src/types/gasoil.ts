@@ -18,6 +18,7 @@ export type GasOilSurchargeResult = {
   source: string;
   sourceLabel: string;
   retrievedAt: string | null;
+  product: string | null;
   productLabel: string | null;
   message: string | null;
 };
