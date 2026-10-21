@@ -5,49 +5,47 @@
 | Veld | Waarde |
 | --- | --- |
 | Homepage | `https://www.interrijn.com/nl/` |
-| Archief-URL | `https://www.interrijn.com/nl/gasolieprijzen-archief/` |
-| Machineleesbare feed | **Geen** publieke gasolie-API; WP REST (`wp/v2/pages`) bevat de widget niet; geen custom `wp-json` gasolie-route |
-| Extractie | HTML-sectie `table.gas-levels` (laatste optie per preferentievolgorde) |
+| Archief | `https://www.interrijn.com/nl/gasolieprijzen-archief/` (loginwall publiek) |
+| Label | `CBRB/KBN via Interrijn` |
+| Widget | `table.gas-levels` / `GASOLIEPRIJS (€/100L CBRB)` |
+| Eenheid | €/100L CBRB |
+| Conversie | `priceExVatPer1000Liters = pricePer100Liters × 10` (geen BTW-correctie) |
 
-## Live HTML-structuur (gevalideerd 2026-10-21)
+## BTW (business confirmation)
 
-1. Sectie: `<caption>…GASOLIEPRIJS (€/100L CBRB)…</caption>` in `table.gas-levels`
-2. Eenheid: caption + `<span class="wt-info">€/100L CBRB | <time …>`
-3. Prijsveld-label: `<tr class="gass-price">` → `<span>Prijs</span>` (sr-only)
-4. Actuele prijs: `<div class="gas-arrow" data-level="…">` + sibling `<span class="wt-centered">€ …</span>`
-5. Publicatie: `<time datetime="DD-MM-YY HH:MM">` in `.wt-info` onder de tabel
-6. Prijsstijging/daling: aparte `<tr class="gas-difference">` — **nooit** als prijs gebruiken
+De CBRB/KBN-prijs die Interrijn publiceert is voor Teunesen de officiële NL-basis en wordt behandeld als **exclusief BTW**.
 
-## Archief
+Production default:
 
-- Pagina is HTTP-bereikbaar maar toont een **login/registratie-wall**.
-- Geen publieke historische CBRB-rijen zonder account.
-- Geen Teunesen.nl als vervanging.
+`GASOIL_NL_CBRB_VAT_STATUS=ex-vat`
 
-## BTW-status
+## Maandlogica
 
-Op de publieke homepage én achter de archief-loginwall (zonder credentials) is **niet** aantoonbaar of de CBRB-prijs exclusief of inclusief BTW is:
+Peildatum = 15e van de vorige maand → toepassingsmaand.
 
-- geen “excl. BTW” / “incl. BTW” bij de gasolie-widget;
-- geen gestructureerd VAT-veld in JSON.
+| Peildatum | Toepassingsmaand |
+| --- | --- |
+| 15 september | oktober |
+| 15 oktober | november |
+| 15 november | december |
 
-**Conclusie runtime:** `vatStatus = unknown`.
+De homepage-dagprijs mag **alleen** gebruikt worden wanneer de publicatiedatum exact de peildatum (15e) is.
 
-Daardoor:
+Historische peildatums: bij voorkeur Interrijn-archief. Zonder archieftoegang → fail-closed (geen verzonnen dagprijs).
 
-- geen productie-toeslag;
-- `GET /api/gasoil-surcharges` → NL `status: unavailable`;
-- health `interrijn-cbrb` → `unavailable` (niet `healthy`);
-- NL9 = **NIET GETEST**.
+## Business acceptance fixtures (tests only)
 
-Optionele override alleen na aantoonbare bronbewijslast:
+Teunesen-referentie (niet runtime):
 
-`GASOIL_NL_CBRB_VAT_STATUS=ex-vat` (of `incl-vat` — incl. vereist eerst gedocumenteerde conversie; nog niet geïmplementeerd).
+| Maand | Peildatum | €/1000L ex BTW | Toeslag |
+| --- | --- | --- | --- |
+| okt 2026 | 2026-09-15 | 1686.50 | €2,00 |
+| nov 2026 | 2026-10-15 | 1642.60 | €1,90 |
 
-## Eenheidsconversie (alleen bij bewezen ex-BTW)
+Deze bedragen worden niet gehardcode als actuele runtimewaarde.
 
-`priceExVatPer1000Liters = pricePer100Liters * 10`
+## Verboden runtimebronnen
 
-Voorbeeld ter controle van de eenheid (niet hardcoden als productieprijs):
-
-`163.55 €/100L → 1635.50 €/1000L`
+- Teunesen.nl
+- be.STAT
+- mock/hardcoded maandprijzen of toeslagen

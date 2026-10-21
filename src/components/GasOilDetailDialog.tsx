@@ -95,24 +95,24 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
             <dt className="text-mist">Toepassingsmaand</dt>
             <dd className="font-semibold capitalize text-paper">{monthLabel(result.applicableMonth)}</dd>
           </div>
-          <div>
-            <dt className="text-mist">
-              {result.country === "NL" ? "CBRB gasolieprijs" : "Gasolieprijs"}
-            </dt>
-            <dd className="font-semibold text-paper">
-              {typeof result.priceExVatPer1000Liters === "number"
-                ? `${pricePer1000Formatter.format(result.priceExVatPer1000Liters)} / 1000 L ex BTW`
-                : "—"}
-            </dd>
-          </div>
           {result.country === "NL" && typeof result.rawPricePer100LitersCbrb === "number" ? (
             <div>
-              <dt className="text-mist">Oorspronkelijke bronwaarde</dt>
+              <dt className="text-mist">CBRB/KBN prijs</dt>
               <dd className="font-semibold text-paper">
-                {pricePer1000Formatter.format(result.rawPricePer100LitersCbrb)} / 100 L CBRB
+                {pricePer1000Formatter.format(result.rawPricePer100LitersCbrb)} / 100 L ex BTW
               </dd>
             </div>
           ) : null}
+          <div>
+            <dt className="text-mist">
+              {result.country === "NL" ? "Prijs per 1000 liter" : "Gasolieprijs"}
+            </dt>
+            <dd className="font-semibold text-paper">
+              {typeof result.priceExVatPer1000Liters === "number"
+                ? `${pricePer1000Formatter.format(result.priceExVatPer1000Liters)} ex BTW`
+                : "—"}
+            </dd>
+          </div>
           <div>
             <dt className="text-mist">Staffel</dt>
             <dd className="font-semibold text-paper">

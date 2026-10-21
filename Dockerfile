@@ -51,7 +51,8 @@ RUN npm ci --omit=dev && chown -R appuser:appuser /app/node_modules
 
 COPY --from=build --chown=appuser:appuser /app/dist ./dist
 COPY --from=build --chown=appuser:appuser /app/server/db/migrations /app/server/db/migrations
-COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 755 /app/docker-entrypoint.sh
 
 # Start as root zodat entrypoint data-volume ownership kan herstellen, daarna drop naar appuser.
 USER root

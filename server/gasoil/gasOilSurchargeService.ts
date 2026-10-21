@@ -39,7 +39,7 @@ import {
 import { calculateSurcharge, staffelRangeFor } from "./staffelEngine.js";
 
 export type GasOilServiceDeps = {
-  nlProvider?: GasOilPriceProvider;
+  nlProvider?: GasOilPriceProvider | NetherlandsInterrijnGasOilProvider;
   beProvider?: GasOilPriceProvider | BelgiumStatbelGasOilProvider;
   now?: () => Date;
   /** Force network fetch even when month cache exists (tests). */
@@ -141,13 +141,96 @@ function isBelgiumProvider(
   return provider instanceof BelgiumStatbelGasOilProvider;
 }
 
-async function resolveNetherlands(
-  provider: GasOilPriceProvider,
+function isNetherlandsProvider(
+  provider: GasOilPriceProvider | NetherlandsInterrijnGasOilProvider,
+): provider is NetherlandsInterrijnGasOilProvider {
+  return provider instanceof NetherlandsInterrijnGasOilProvider;
+}
+
+async function fetchAndCacheNetherlandsMonth(
+  provider: NetherlandsInterrijnGasOilProvider,
   applicableMonth: string,
+): Promise<{ result: GasOilSurchargeResult | null; reason: string | null }> {
+  const monthCached = readGasOilMonthCache("NL", applicableMonth);
+  const outcome = await provider.getObservationForApplicableMonth(applicableMonth);
+
+  if (outcome.ok) {
+    const { observation, rawSourceValue } = outcome;
+    if (
+      observation.country !== "NL" ||
+      !Number.isFinite(observation.priceExVatPer1000Liters) ||
+      observation.priceExVatPer1000Liters <= 0
+    ) {
+      if (monthCached) {
+        return {
+          result: resultFromObservation(
+            monthEntryToObservation(monthCached),
+            "stale",
+            "Laatste gevalideerde maandwaarde (nieuwe fetch ongeldig).",
+          ),
+          reason: "Ongeldige bronobservation.",
+        };
+      }
+      return {
+        result: unavailableResult("NL", "interrijn-cbrb-kbn", INTERRIJN_SOURCE_LABEL, "Ongeldige bronobservation."),
+        reason: "Ongeldige bronobservation.",
+      };
+    }
+
+    writeGasOilMonthCache(
+      observationToMonthEntry(observation, {
+        rawSourceValue,
+        vatStatus: "excl",
+        productIdentifier: observation.productLabel ?? "GASOLIEPRIJS (€/100L CBRB)",
+      }),
+    );
+    writeGasOilCache(observation);
+    return {
+      result: resultFromObservation(observation, "ready", null),
+      reason: null,
+    };
+  }
+
+  if (monthCached) {
+    return {
+      result: resultFromObservation(
+        monthEntryToObservation(monthCached),
+        "stale",
+        `Maandcache ${applicableMonth}. ${outcome.reason}`,
+      ),
+      reason: outcome.reason,
+    };
+  }
+
+  return { result: null, reason: outcome.reason };
+}
+
+async function resolveNetherlands(
+  provider: GasOilPriceProvider | NetherlandsInterrijnGasOilProvider,
+  applicableMonth: string,
+  options: { forceRefresh: boolean; now: Date },
 ): Promise<GasOilSurchargeResult> {
-  const source = provider.sourceId as GasOilSurchargeResult["source"];
-  const sourceLabel = provider.sourceLabel;
-  const cached = readGasOilCache(provider.country);
+  const source = "interrijn-cbrb-kbn" as const;
+  const sourceLabel = provider.sourceLabel || INTERRIJN_SOURCE_LABEL;
+
+  const monthCached = readGasOilMonthCache("NL", applicableMonth);
+  if (monthCached && !options.forceRefresh) {
+    return resultFromObservation(monthEntryToObservation(monthCached), "ready", null);
+  }
+
+  if (isNetherlandsProvider(provider)) {
+    const { result, reason } = await fetchAndCacheNetherlandsMonth(provider, applicableMonth);
+    if (result) return result;
+    return unavailableResult(
+      "NL",
+      source,
+      sourceLabel,
+      reason ?? "Interrijn peildatum niet gevonden. Geen fallback op dagprijs.",
+    );
+  }
+
+  // Generic mock providers (tests)
+  const cached = readGasOilCache("NL");
   let outcome: GasOilFetchOutcome;
   try {
     outcome = await provider.getCurrentObservation();
@@ -158,26 +241,33 @@ async function resolveNetherlands(
   if (outcome.ok) {
     const observation = outcome.observation;
     if (
-      observation.country !== provider.country ||
+      observation.country !== "NL" ||
       !Number.isFinite(observation.priceExVatPer1000Liters) ||
       observation.priceExVatPer1000Liters <= 0
     ) {
       if (cached && observationMatchesApplicableMonth(cached, applicableMonth)) {
         return resultFromObservation(cached, "stale", "Laatste gevalideerde waarde (nieuwe fetch ongeldig).");
       }
-      return unavailableResult(provider.country, source, sourceLabel, "Ongeldige bronobservation.");
+      return unavailableResult("NL", source, sourceLabel, "Ongeldige bronobservation.");
     }
-    writeGasOilCache(observation);
-    const status: "ready" | "stale" = observationMatchesApplicableMonth(observation, applicableMonth)
-      ? "ready"
-      : "stale";
-    return resultFromObservation(
-      observation,
-      status,
-      status === "stale" ? "Bronwaarde hoort bij een andere toepassingsmaand." : null,
+    writeGasOilMonthCache(
+      observationToMonthEntry(observation, {
+        rawSourceValue: observation.rawPricePer100LitersCbrb ?? observation.priceExVatPer1000Liters / 10,
+        vatStatus: "excl",
+        productIdentifier: observation.productLabel ?? "GASOLIEPRIJS (€/100L CBRB)",
+      }),
     );
+    writeGasOilCache(observation);
+    return resultFromObservation(observation, "ready", null);
   }
 
+  if (monthCached) {
+    return resultFromObservation(
+      monthEntryToObservation(monthCached),
+      "stale",
+      `Maandcache. ${outcome.reason}`,
+    );
+  }
   if (cached) {
     const monthNote = observationMatchesApplicableMonth(cached, applicableMonth)
       ? `Laatst bijgewerkt ${cached.retrievedAt}`
@@ -185,7 +275,7 @@ async function resolveNetherlands(
     return resultFromObservation(cached, "stale", `${monthNote}. ${outcome.reason}`);
   }
 
-  return unavailableResult(provider.country, source, sourceLabel, outcome.reason);
+  return unavailableResult("NL", source, sourceLabel, outcome.reason);
 }
 
 async function fetchAndCacheBelgiumMonth(
@@ -432,26 +522,33 @@ async function resolveBelgium(
 export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise<GasOilSurchargesPayload> {
   const now = deps.now?.() ?? new Date();
   const applicableMonth = currentApplicableMonth(now);
-  const nlProvider = deps.nlProvider ?? new NetherlandsInterrijnGasOilProvider();
+  const nlProvider = deps.nlProvider ?? new NetherlandsInterrijnGasOilProvider({ now: deps.now });
   const beProvider = deps.beProvider ?? new BelgiumStatbelGasOilProvider({ now: deps.now });
   const forceRefresh = deps.forceRefresh === true;
 
   const [nl, beResolved] = await Promise.all([
-    resolveNetherlands(nlProvider, applicableMonth),
+    resolveNetherlands(nlProvider, applicableMonth, { forceRefresh, now }),
     resolveBelgium(beProvider, applicableMonth, { forceRefresh, now }),
   ]);
 
-  // Prefetch next month when its peildatum is already available (does not affect NL).
-  if (isBelgiumProvider(beProvider) && beResolved.result.status === "ready") {
-    const today = amsterdamParts(now);
-    const todayIso = formatIsoDate(today.year, today.month, today.day);
-    const upcoming = nextApplicableMonth(applicableMonth);
-    const upcomingRef = referenceDateForApplicableMonth(upcoming);
-    if (upcomingRef <= todayIso && (forceRefresh || !readGasOilMonthCache("BE", upcoming))) {
+  // Prefetch next month when its peildatum is already available.
+  const today = amsterdamParts(now);
+  const todayIso = formatIsoDate(today.year, today.month, today.day);
+  const upcoming = nextApplicableMonth(applicableMonth);
+  const upcomingRef = referenceDateForApplicableMonth(upcoming);
+  if (upcomingRef <= todayIso) {
+    if (isBelgiumProvider(beProvider) && (forceRefresh || !readGasOilMonthCache("BE", upcoming))) {
       try {
         await fetchAndCacheBelgiumMonth(beProvider, upcoming);
       } catch {
-        // Prefetch is best-effort; current month remains authoritative.
+        // Prefetch is best-effort.
+      }
+    }
+    if (isNetherlandsProvider(nlProvider) && (forceRefresh || !readGasOilMonthCache("NL", upcoming))) {
+      try {
+        await fetchAndCacheNetherlandsMonth(nlProvider, upcoming);
+      } catch {
+        // Prefetch is best-effort.
       }
     }
   }
