@@ -1,7 +1,7 @@
 import { Droplet, LoaderCircle, Moon, Sun } from "lucide-react";
 import { useDisplayPrefs } from "../hooks/useDisplayPrefs";
 import { formatAmsterdamStamp, formatAmsterdamTime } from "../lib/format";
-import { InteractiveWeather } from "./InteractiveWeather";
+import { WeatherCard } from "./WeatherCard";
 
 type HeaderProps = {
   now: Date;
@@ -14,7 +14,7 @@ type HeaderProps = {
 };
 
 function HeaderWeather({ settings }: { settings?: Record<string, unknown> }) {
-  return <InteractiveWeather variant="header" settings={settings} />;
+  return <WeatherCard variant="header" settings={settings} />;
 }
 
 function DisplayToggles() {

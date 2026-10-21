@@ -1,4 +1,4 @@
-import { WeatherWidgetView } from "../components/InteractiveWeather";
+import { WeatherWidgetView } from "../components/WeatherCard";
 import type { DashboardWidget } from "../types/dashboard";
 
 type WeatherWidgetProps = {

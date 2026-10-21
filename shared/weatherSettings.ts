@@ -29,11 +29,24 @@ function int(value: unknown, fallback: number, min: number, max: number) {
   return n;
 }
 
+/**
+ * Popup is AAN tenzij expliciet uitgezet.
+ * undefined / ontbrekend / true → aan
+ * false / "false" → uit
+ */
+export function isWeatherPopupEnabled(settings: Record<string, unknown> | null | undefined): boolean {
+  const row = settings && typeof settings === "object" ? settings : {};
+  if (!("popupEnabled" in row)) return true;
+  if (row.popupEnabled === false || row.popupEnabled === "false") return false;
+  if (row.popupEnabled === true || row.popupEnabled === "true") return true;
+  return true;
+}
+
 /** Veilige defaults voor bestaande widgets zonder nieuwe settings. */
 export function readWeatherWidgetSettings(settings: Record<string, unknown> | null | undefined): WeatherWidgetSettings {
   const row = settings && typeof settings === "object" ? settings : {};
   return {
-    popupEnabled: bool(row.popupEnabled, DEFAULTS.popupEnabled),
+    popupEnabled: isWeatherPopupEnabled(row),
     forecastDays: int(row.forecastDays, DEFAULTS.forecastDays, 1, 7),
     popupAutoCloseSeconds: int(row.popupAutoCloseSeconds, DEFAULTS.popupAutoCloseSeconds, 0, 3600),
     showPrecipitation: bool(row.showPrecipitation, DEFAULTS.showPrecipitation),
