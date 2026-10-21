@@ -1,9 +1,7 @@
-import { Cloud, CloudDrizzle, CloudRain, CloudSun, Droplet, LoaderCircle, Moon, Sun } from "lucide-react";
+import { Droplet, LoaderCircle, Moon, Sun } from "lucide-react";
 import { useDisplayPrefs } from "../hooks/useDisplayPrefs";
 import { formatAmsterdamStamp, formatAmsterdamTime } from "../lib/format";
-import { readWeather } from "../services/dashboardService";
-import { useScreenConfig } from "../services/dashboardConfigService";
-import type { WeatherIconName } from "../types";
+import { InteractiveWeather } from "./InteractiveWeather";
 
 type HeaderProps = {
   now: Date;
@@ -12,33 +10,11 @@ type HeaderProps = {
   stale: boolean;
   adminLabel: string;
   onAdmin: () => void;
+  weatherSettings?: Record<string, unknown>;
 };
 
-const weatherIcons = {
-  cloud: Cloud,
-  rain: CloudRain,
-  showers: CloudDrizzle,
-  sun: Sun,
-  "sun-cloud": CloudSun,
-} satisfies Record<WeatherIconName, typeof Cloud>;
-
-function HeaderWeather() {
-  const plaatsnaam = useScreenConfig().weer.plaatsnaam;
-  const state = readWeather();
-  if (state.status !== "ready") return null;
-  const weather = state.data;
-  const Icon = weatherIcons[weather.icon];
-  return (
-    <div className="flex items-center gap-3 border-r border-veil/12 pr-5" aria-label="Weerbericht">
-      <Icon className="h-8 w-8 shrink-0 text-gold" strokeWidth={2.1} />
-      <div className="min-w-0 leading-none">
-        <p className="font-display text-[34px] font-semibold tabular-nums">{weather.temperatureC}°</p>
-        <p className="mt-1 max-w-[240px] truncate text-[15px] text-mist">
-          {weather.condition} · {plaatsnaam || weather.location}
-        </p>
-      </div>
-    </div>
-  );
+function HeaderWeather({ settings }: { settings?: Record<string, unknown> }) {
+  return <InteractiveWeather variant="header" settings={settings} />;
 }
 
 function DisplayToggles() {
@@ -71,7 +47,7 @@ function DisplayToggles() {
   );
 }
 
-export function Header({ now, fetchedAt, refreshing, stale, adminLabel, onAdmin }: HeaderProps) {
+export function Header({ now, fetchedAt, refreshing, stale, adminLabel, onAdmin, weatherSettings }: HeaderProps) {
   const stamp = formatAmsterdamStamp(now);
   const [date, time] = stamp.split(" · ");
   const updatedClock = fetchedAt ? formatAmsterdamTime(fetchedAt) : "";
@@ -89,7 +65,7 @@ export function Header({ now, fetchedAt, refreshing, stale, adminLabel, onAdmin 
         <img src="/teunesen-logo.png" alt="Teunesen" className="h-[46px] w-auto" />
       </span>
       <div className="flex items-center gap-5">
-        <HeaderWeather />
+        <HeaderWeather settings={weatherSettings} />
         <div className="text-right">
           <p className="leading-none text-paper" data-clock={stamp}>
             <span className="text-[22px]">{date}</span>

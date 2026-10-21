@@ -1,21 +1,4 @@
-import type { ProjectSlide, QueryState, WeatherReport } from "../types";
-
-const weather: WeatherReport = {
-  location: "Gennep",
-  temperatureC: 14,
-  feelsLikeC: 12,
-  condition: "Bewolkt",
-  summary: "Overwegend bewolkt, later een enkele bui.",
-  icon: "cloud",
-  wind: "ZW 4 Bft",
-  humidityPct: 78,
-  forecast: [
-    { day: "Vandaag", icon: "cloud", highC: 15, lowC: 9, condition: "Bewolkt" },
-    { day: "Woensdag", icon: "rain", highC: 13, lowC: 8, condition: "Regen" },
-    { day: "Donderdag", icon: "showers", highC: 14, lowC: 7, condition: "Buien" },
-    { day: "Vrijdag", icon: "sun-cloud", highC: 16, lowC: 8, condition: "Opklaringen" },
-  ],
-};
+import type { ProjectSlide, QueryState } from "../types";
 
 const slides: ProjectSlide[] = [
   {
@@ -62,10 +45,6 @@ const slides: ProjectSlide[] = [
 
 const slideIntervalMs = 8000;
 
-export function getWeather() {
-  return weather;
-}
-
 function readResult<T>(load: () => T, isEmpty: (value: T) => boolean, emptyMessage: string): QueryState<T> {
   try {
     const data = load();
@@ -75,10 +54,6 @@ function readResult<T>(load: () => T, isEmpty: (value: T) => boolean, emptyMessa
     const message = error instanceof Error ? error.message : emptyMessage;
     return { status: "error", message, refreshing: false, fetchedAt: null };
   }
-}
-
-export function readWeather(): QueryState<WeatherReport> {
-  return readResult(getWeather, () => false, "Weerbericht niet beschikbaar.");
 }
 
 export function readSlides(): QueryState<ProjectSlide[]> {
