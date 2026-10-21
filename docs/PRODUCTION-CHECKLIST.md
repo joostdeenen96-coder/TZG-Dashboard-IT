@@ -1,7 +1,7 @@
 # Productiechecklist
 
 - [ ] `.env` bestaat, niet in Git, geen placeholders
-- [ ] `npm run config:validate` (NODE_ENV=production) slaagt
+- [ ] Productieconfiguratie: `docker compose exec -T dashboard node dist/server/scripts/config-validate.js` (geen `tsx`)
 - [ ] Preflight Linux of Windows slaagt
 - [ ] Firewall 8080 open, 5432 niet naar LAN
 - [ ] `docker compose up -d` — postgres, dashboard, backup
@@ -12,9 +12,9 @@
 - [ ] `/api/version` toont versie/commit
 - [ ] `/display/planning` en `/display/ict` werken
 - [ ] `/player/:token` werkt voor een testscherm
-- [ ] Backupservice of `npm run backup:create` maakt een dump
-- [ ] `npm run backup:verify` slaagt
-- [ ] `npm run backup:restore-test` raakt productie niet
+- [ ] Backupservice of `docker compose exec -T dashboard node dist/server/scripts/backup-create.js` maakt een dump
+- [ ] `docker compose exec -T dashboard node dist/server/scripts/backup-verify.js` slaagt
+- [ ] Restore-test raakt productie niet (`backup:restore-test:prod` / docs/BACKUP.md)
 - [ ] Volume `tzg-postgres` en `tzg-backups` bestaan
 - [ ] Logrotatie op de Docker-host geconfigureerd
 - [ ] NTP/tijd OK

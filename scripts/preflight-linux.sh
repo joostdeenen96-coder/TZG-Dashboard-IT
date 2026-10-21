@@ -69,11 +69,29 @@ else
   say "FAIL backupdirectory niet schrijfbaar"
   fail=1
 fi
-if NODE_ENV=production npm run config:validate >/tmp/tzg-config-validate.json 2>/tmp/tzg-config-validate.log; then
-  say "OK productieconfiguratie"
+# Productieconfiguratie via gecompileerde validator in de image — nooit tsx op de host.
+if $DOCKER compose ps --status running --services 2>/dev/null | grep -qx dashboard; then
+  if $DOCKER compose exec -T dashboard \
+    node dist/server/scripts/config-validate.js \
+    >/tmp/tzg-config-validate.json \
+    2>/tmp/tzg-config-validate.log; then
+    say "OK productieconfiguratie"
+  else
+    say "FAIL productieconfiguratie"
+    fail=1
+  fi
+elif $DOCKER image inspect tzg-dashboard:local >/dev/null 2>&1; then
+  if $DOCKER compose run --rm --no-deps -T dashboard \
+    node dist/server/scripts/config-validate.js \
+    >/tmp/tzg-config-validate.json \
+    2>/tmp/tzg-config-validate.log; then
+    say "OK productieconfiguratie (nieuwe image)"
+  else
+    say "FAIL productieconfiguratie"
+    fail=1
+  fi
 else
-  say "FAIL productieconfiguratie"
-  fail=1
+  say "WARN productieconfiguratie overgeslagen — dashboardcontainer/image ontbreekt"
 fi
 if timedatectl status >/dev/null 2>&1 || date -u >/dev/null; then
   say "OK tijd beschikbaar: $(date -u +%Y-%m-%dT%H:%M:%SZ)"

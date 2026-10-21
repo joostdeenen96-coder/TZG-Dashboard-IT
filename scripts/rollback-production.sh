@@ -1,5 +1,6 @@
 #!/bin/sh
 # Non-destructieve applicatierollback. Geen automatische database-downgrade.
+# Geen tsx of development npm-scripts — alleen Docker Compose / image-tag.
 set -eu
 cd "$(dirname "$0")/.."
 image="${1:-}"
