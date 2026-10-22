@@ -163,7 +163,7 @@ test("BE1–BE18 functionele acceptatie (offline + live waar mogelijk)", async (
     });
     mark(
       "BE13",
-      first.be.status === "ready" &&
+      first.be.status === "ok" &&
         readGasOilMonthCache("BE", "2026-10")?.priceExVatPer1000Liters === 1262.3,
     );
 
@@ -201,7 +201,7 @@ test("BE1–BE18 functionele acceptatie (offline + live waar mogelijk)", async (
     });
     mark(
       "BE15",
-      recovered.be.status === "ready" &&
+      recovered.be.status === "ok" &&
         recovered.be.priceExVatPer1000Liters === 1262.3 &&
         (recovered.be.retrievedAt ?? "") > "2026-10-01",
     );
@@ -211,7 +211,7 @@ test("BE1–BE18 functionele acceptatie (offline + live waar mogelijk)", async (
     mark(
       "BE16",
       first.be.country === "BE" &&
-        first.be.status === "ready" &&
+        first.be.status === "ok" &&
         typeof first.be.surchargePerTon === "number",
     );
     mark(

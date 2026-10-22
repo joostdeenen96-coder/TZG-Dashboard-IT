@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -147,19 +148,28 @@ test("provider gebruikt archief vóór homepage voor peildatum", async () => {
 });
 
 test("provider fail-closed wanneer peildatum niet in archief/homepage", async () => {
-  const provider = new NetherlandsInterrijnGasOilProvider({
-    fetchText: async (url) => {
-      if (url.includes("archief")) {
-        return "<html><title>Gasolieprijzen archief</title><body>uitsluitend toegankelijk na registratie. inloggen</body></html>";
-      }
-      return liveSectionHtml; // published 20-10-26
-    },
-    now: () => new Date("2026-10-21T12:00:00+02:00"),
-    vatStatus: "ex-vat",
-  });
-  const outcome = await provider.getCurrentObservation();
-  assert.equal(outcome.ok, false);
-  if (!outcome.ok) assert.match(outcome.reason, /peildatum|dagprijs|archief|login/i);
+  const dir = mkdtempSync(path.join(tmpdir(), "gasoil-nl-provider-"));
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = dir;
+  try {
+    const provider = new NetherlandsInterrijnGasOilProvider({
+      fetchText: async (url) => {
+        if (url.includes("archief")) {
+          return "<html><title>Gasolieprijzen archief</title><body>uitsluitend toegankelijk na registratie. inloggen</body></html>";
+        }
+        return liveSectionHtml; // published 20-10-26
+      },
+      now: () => new Date("2026-10-21T12:00:00+02:00"),
+      vatStatus: "ex-vat",
+    });
+    const outcome = await provider.getCurrentObservation();
+    assert.equal(outcome.ok, false);
+    if (!outcome.ok) assert.match(outcome.reason, /peildatum|dagprijs|archief|login/i);
+  } finally {
+    if (previous === undefined) delete process.env.DATA_DIR;
+    else process.env.DATA_DIR = previous;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("archief loginwall detectie", () => {

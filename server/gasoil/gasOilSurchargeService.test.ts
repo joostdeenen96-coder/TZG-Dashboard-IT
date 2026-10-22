@@ -135,7 +135,7 @@ test("BE novemberfixture via provider observation -> 0.96 + product veld", async
         },
       }),
     });
-    assert.equal(payload.be.status, "ready");
+    assert.equal(payload.be.status, "ok");
     assert.equal(payload.be.surchargePerTon, 0.96);
     assert.equal(payload.be.priceExVatPer1000Liters, 1294.7);
     assert.equal(payload.be.product, NOVEMBER_2026_FIXTURE.product);
@@ -164,7 +164,7 @@ test("BE maandcache: geen herhaalde fetch + stale bij bronstoring", async () => 
       }),
       beProvider: provider,
     });
-    assert.equal(first.be.status, "ready");
+    assert.equal(first.be.status, "ok");
     assert.equal(first.be.referenceDate, "2026-09-15");
     assert.equal(first.be.priceExVatPer1000Liters, 1262.3);
     assert.equal(first.be.surchargePerTon, 0.93);
@@ -182,7 +182,7 @@ test("BE maandcache: geen herhaalde fetch + stale bij bronstoring", async () => 
       }),
       beProvider: provider,
     });
-    assert.equal(second.be.status, "ready");
+    assert.equal(second.be.status, "ok");
     assert.equal(second.be.priceExVatPer1000Liters, 1262.3);
     // Month cache hit: no additional history/day fetch for current month.
     // Prefetch of November may still run once if not cached.
@@ -250,7 +250,7 @@ test("NL unavailable beïnvloedt BE niet", async () => {
       beProvider: provider,
     });
     assert.equal(payload.nl.status, "unavailable");
-    assert.equal(payload.be.status, "ready");
+    assert.equal(payload.be.status, "ok");
     assert.equal(payload.be.surchargePerTon, 0.93);
   });
 });
@@ -334,7 +334,7 @@ test("NL herstel na storing schrijft verse ready-waarde", async () => {
       }),
       beProvider: mockProvider("BE", "bestat-statbel", "be.STAT / FOD Economie", { ok: false, reason: "skip" }),
     });
-    assert.equal(payload.nl.status, "ready");
+    assert.equal(payload.nl.status, "ok");
     assert.equal(payload.nl.surchargePerTon, 1.9);
   });
 });

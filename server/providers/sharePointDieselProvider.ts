@@ -11,11 +11,13 @@ import type { DieselSurcharge, DieselSurchargeProvider, DieselWeek } from "./die
 
 export { resetGraphCache };
 export {
+  floorSurchargePercentage,
   mapSharePointFieldsToRecord,
+  pickToeslagPercentageColumnName,
   resolveDieselFieldNames,
   selectLatestTwoByPeildatum,
 } from "../diesel/selection.js";
-export { isoWeekFromCalendarDate, isoWeekFromPeildatumIso, peildatumToCalendarIso } from "../diesel/peildatum.js";
+export { peildatumToCalendarIso } from "../diesel/peildatum.js";
 
 type GraphColumn = {
   name: string;
@@ -46,9 +48,11 @@ function recordToWeek(record: DieselSurchargeRecord): DieselWeek {
   return {
     itemId: record.itemId,
     peildatum: record.referenceDate,
-    isoWeek: record.isoWeek,
+    websiteWeek: record.websiteWeek,
     dieselPrijs: record.dieselPricePerLiter,
-    toeslagPercentage: record.surchargePercentage,
+    toeslagPercentage: record.displaySurchargePercentage,
+    toeslagPercentageRaw: record.rawSurchargePercentage,
+    toeslagPercentageDisplay: record.displaySurchargePercentage,
     actief: record.actief,
   };
 }
@@ -119,12 +123,6 @@ export class SharePointDieselProvider implements DieselSurchargeProvider {
       (column): column is GraphColumn => typeof column.name === "string" && typeof column.displayName === "string",
     );
 
-    const names = resolveDieselFieldNames(columns);
-    console.info(
-      `SharePoint diesel kolommen: Peildatum=${names.peildatum}, DieselprijsPerLiter=${names.dieselPrijs}, Toeslag=${names.toeslagPercentage}` +
-        (names.actief ? `, Actief=${names.actief} (niet gebruikt voor selectie)` : " (geen Actief-kolom)"),
-    );
-
     const items = await graphList(
       graphUrl(`/sites/${siteId}/lists/${listId}/items`, {
         $expand: "fields",
@@ -132,13 +130,22 @@ export class SharePointDieselProvider implements DieselSurchargeProvider {
       }),
     );
 
+    const fieldSamples = items.map((item) => asObject(item.fields ?? {}, "Velden ontbreken."));
+    const names = resolveDieselFieldNames(columns, fieldSamples);
+    console.info(
+      `SharePoint diesel kolommen: Peildatum=${names.peildatum}, WebsiteWeek=${names.websiteWeek}, ` +
+        `DieselprijsPerLiter=${names.dieselPrijs}, Toeslag=${names.toeslagPercentage}` +
+        (names.actief ? `, Actief=${names.actief} (niet gebruikt voor selectie)` : " (geen Actief-kolom)"),
+    );
+
     const records = mapItemsToRecords(items, names);
     const payload = buildDieselSurchargeFromRecords(records);
     const previous = payload.weken[1];
     console.info(
-      `SharePoint diesel (${listName}): nieuwste peildatum ${payload.peildatum} (week ${payload.isoWeek}), ` +
+      `SharePoint diesel (${listName}): nieuwste peildatum ${payload.peildatum} WebsiteWeek ${payload.websiteWeek} ` +
+        `raw ${payload.toeslagPercentageRaw}% → display ${payload.toeslagPercentageDisplay}%, ` +
         (previous
-          ? `een-na-nieuwste ${previous.peildatum} (week ${previous.isoWeek}), `
+          ? `een-na-nieuwste ${previous.peildatum} WebsiteWeek ${previous.websiteWeek}, `
           : "geen een-na-nieuwste, ") +
         `${records.length} geldige rijen.`,
     );

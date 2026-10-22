@@ -1,6 +1,13 @@
 import { fetchBytes } from "../../providers/http.js";
+import { readGasOilDayPrice, writeGasOilDayPrice } from "../cache.js";
 import type { GasOilPriceObservation } from "../model.js";
-import { applicableMonthFromReferenceDate, currentApplicableMonth, formatIsoDate, getReferenceDate } from "../monthLogic.js";
+import {
+  applicableMonthFromReferenceDate,
+  currentApplicableMonthNetherlands,
+  formatIsoDate,
+  getReferenceDate,
+} from "../monthLogic.js";
+import { readGasOilDayPriceFromPg, upsertGasOilDayPrice } from "../pgStore.js";
 import type { GasOilFetchOutcome, GasOilPriceProvider } from "./gasOilPriceProvider.js";
 
 export const INTERRIJN_URL = "https://www.interrijn.com/nl/";
@@ -394,6 +401,70 @@ export function observationFromArchiveForReferenceDate(options: {
   };
 }
 
+/**
+ * Persist homepage CBRB day price (file + optional PG). Used so the 15e peildatum
+ * can be locked even when later daily prices differ.
+ */
+export async function captureInterrijnDayPrice(options: {
+  html: string;
+  retrievedAt: string;
+  vatStatus?: InterrijnVatStatus;
+}): Promise<{ captured: boolean; publishedDate: string | null; reason?: string }> {
+  const vatBlock = assertExVat(options.vatStatus ?? interrijnCbrbVatStatus());
+  if (vatBlock) return { captured: false, publishedDate: null, reason: vatBlock.reason };
+
+  const parsed = parseInterrijnGasolieSection(options.html);
+  if (!parsed.ok) return { captured: false, publishedDate: null, reason: parsed.reason };
+  if (!parsed.parsed.publishedAtIso) {
+    return { captured: false, publishedDate: null, reason: "Publicatiedatum ontbreekt." };
+  }
+
+  const entry = {
+    country: "NL" as const,
+    publishedDate: parsed.parsed.publishedAtIso,
+    pricePer100Liters: parsed.parsed.pricePer100Liters,
+    priceExVatPer1000Liters: cbrbPer100ToPer1000(parsed.parsed.pricePer100Liters),
+    source: INTERRIJN_SOURCE_ID,
+    publishedAtLabel: parsed.parsed.publishedAtLabel,
+    observedAt: options.retrievedAt,
+    sourceUrl: INTERRIJN_URL,
+    sourceIdentifier: INTERRIJN_PRODUCT,
+    validationStatus: "valid" as const,
+    retrievedAt: options.retrievedAt,
+  };
+  writeGasOilDayPrice(entry);
+  void upsertGasOilDayPrice(entry);
+  return { captured: true, publishedDate: entry.publishedDate };
+}
+
+async function observationFromDayHistory(options: {
+  referenceDate: string;
+  retrievedAt: string;
+  vatStatus: InterrijnVatStatus;
+}): Promise<NetherlandsFetchOutcome | null> {
+  const vatBlock = assertExVat(options.vatStatus);
+  if (vatBlock) return vatBlock;
+
+  let day = readGasOilDayPrice("NL", options.referenceDate);
+  if (!day) {
+    day = await readGasOilDayPriceFromPg("NL", options.referenceDate, INTERRIJN_SOURCE_ID);
+    if (day) writeGasOilDayPrice(day);
+  }
+  if (!day) return null;
+
+  return {
+    ok: true,
+    sourceKind: "homepage",
+    rawSourceValue: day.pricePer100Liters,
+    observation: observationFromCbrbExVat({
+      pricePer100Liters: day.pricePer100Liters,
+      referenceDate: options.referenceDate,
+      retrievedAt: options.retrievedAt,
+      publishedAtLabel: day.publishedAtLabel,
+    }),
+  };
+}
+
 /** @deprecated prefer getObservationForApplicableMonth — kept for narrow parse tests */
 export function parseInterrijnHtml(
   html: string,
@@ -403,7 +474,8 @@ export function parseInterrijnHtml(
     return { ok: false, reason: "Interrijn-parser is nog niet gevalideerd." };
   }
   const now = options.now ?? new Date();
-  const referenceDate = options.referenceDate ?? getReferenceDate(currentApplicableMonth(now));
+  const referenceDate =
+    options.referenceDate ?? getReferenceDate(currentApplicableMonthNetherlands(now));
   const outcome = observationFromHomepageForReferenceDate({
     html,
     referenceDate,
@@ -436,7 +508,7 @@ export class NetherlandsInterrijnGasOilProvider implements GasOilPriceProvider {
     const vatStatus = this.vatStatusOverride ?? interrijnCbrbVatStatus();
 
     try {
-      // 1) Archief (historische peildatum) — voorkeur boven homepage-dagprijs
+      // 1) Archief (historische peildatum) — voorkeur wanneer publiek leesbaar
       try {
         const archiveHtml = await this.fetchText(INTERRIJN_ARCHIVE_URL);
         const fromArchive = observationFromArchiveForReferenceDate({
@@ -446,17 +518,28 @@ export class NetherlandsInterrijnGasOilProvider implements GasOilPriceProvider {
           vatStatus,
         });
         if (fromArchive.ok) return fromArchive;
-        // Loginwall / missing row: fall through to homepage exact-date match
+        // Loginwall / missing row: fall through
       } catch {
-        // Archive fetch optional; homepage may still match exact peildatum
+        // Archive fetch optional
       }
 
+      // 2) Persistente daghistorie voor exacte peildatum (vastgelegd op/na de 15e)
+      const fromHistory = await observationFromDayHistory({ referenceDate, retrievedAt, vatStatus });
+      if (fromHistory?.ok) return fromHistory;
+
+      // 3) Homepage alleen bij exacte publicatiedatum = peildatum; altijd day-capture
       const homeHtml = await this.fetchText(INTERRIJN_URL);
       if (isNonProductInterrijnHtml(homeHtml)) {
         this.lastParse = { ok: false, reason: "Interrijn levert geen productpagina." };
         return { ok: false, reason: "Interrijn levert geen productpagina." };
       }
       this.lastParse = parseInterrijnGasolieSection(homeHtml);
+      await captureInterrijnDayPrice({ html: homeHtml, retrievedAt, vatStatus });
+
+      // Herlees historie: als homepage exact peildatum publiceerde, zit die nu in day cache
+      const afterCapture = await observationFromDayHistory({ referenceDate, retrievedAt, vatStatus });
+      if (afterCapture?.ok) return afterCapture;
+
       return observationFromHomepageForReferenceDate({
         html: homeHtml,
         referenceDate,
@@ -472,7 +555,7 @@ export class NetherlandsInterrijnGasOilProvider implements GasOilPriceProvider {
 
   async getCurrentObservation(): Promise<GasOilFetchOutcome> {
     const now = this.nowFn?.() ?? new Date();
-    const outcome = await this.getObservationForApplicableMonth(currentApplicableMonth(now));
+    const outcome = await this.getObservationForApplicableMonth(currentApplicableMonthNetherlands(now));
     if (outcome.ok) return { ok: true, observation: outcome.observation };
     return { ok: false, reason: outcome.reason };
   }
