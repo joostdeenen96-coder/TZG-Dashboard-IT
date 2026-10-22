@@ -87,6 +87,8 @@ De publieke dataset die de HVZ-site zelf ververst, bestaat uit twee gestructuree
 
 De kaart tekent dezelfde donkere grafiek als Kaub en Ruhrort. De lijn komt uit de PEGELONLINE-tijdreeks `W` van station `b6c6d5c8-e2d5-4469-8dd8-fa972ef7eaea`, de laatste vier dagen, uitgedund tot 48 punten. De actuele centimeter, status en daggemiddelde blijven van HVZ. PEGELONLINE heeft voor Maxau geen tijdreeks `WV`, dus de kaart toont geen verwachtingscijfers en geen fouttekst daarover. Faalt de reeks, dan blijft de HVZ-stand staan en is `series` leeg.
 
+HVZ toont op de peilpagina een tab **Vorhersage**, maar vult die alleen met een GIF (`gifs/09016-2001.GIF` via `mgr_peg.js`). Er is geen machineleesbare HVZ/LUBW-forecastfeed gevonden (JSON/XML/CSV/XHR). Daarom blijft `maxau.forecast` leeg; er wordt geen forecast verzonnen en geen OCR op de GIF toegepast. Details: `docs/MAXAU-FORECAST.md`. HVZ labelt de data als "Ungeprüfte Rohdaten!".
+
 ## Dieseltoeslag
 
 `DieselSurchargeProvider` heeft `getCurrentData()`. De registratie staat in `server/services/dieselSurchargeService.ts`. Standaard is SharePoint actief:
