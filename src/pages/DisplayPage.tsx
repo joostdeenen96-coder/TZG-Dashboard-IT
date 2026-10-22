@@ -131,11 +131,11 @@ function PlanningLayout({ dashboard }: { dashboard: DashboardDefinition }) {
           ) : null}
         </section>
       )}
-      <section className="h-[400px] shrink-0 overflow-hidden" data-testid="planning-ships">
+      <section className="h-[368px] shrink-0 overflow-hidden" data-testid="planning-ships">
         <ShipPlanningBoard />
       </section>
       {news ? (
-        <section className="h-[88px] shrink-0 overflow-hidden" data-testid="planning-news">
+        <section className="h-[120px] shrink-0 overflow-hidden" data-testid="planning-news">
           <NewsWidget density="compact" />
         </section>
       ) : null}

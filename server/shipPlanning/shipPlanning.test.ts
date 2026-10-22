@@ -355,9 +355,10 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   const planning = display.slice(display.indexOf("function PlanningLayout"), display.indexOf("function IctLayout"));
   assert.match(planning, /overflow-hidden/);
   assert.match(planning, /min-h-0 flex-1/);
-  assert.match(planning, /h-\[400px\] shrink-0 overflow-hidden/);
+  assert.match(planning, /h-\[368px\] shrink-0 overflow-hidden/);
   assert.doesNotMatch(planning, /h-\[320px\]/);
-  assert.match(planning, /h-\[88px\]/);
+  assert.doesNotMatch(planning, /h-\[400px\]/);
+  assert.match(planning, /h-\[120px\]/);
   assert.match(planning, /h-\[118px\]/);
   assert.match(planning, /ShipPlanningBoard/);
   assert.match(planning, /data-testid="planning-ships"/);
@@ -460,15 +461,35 @@ test("V4-V14 adaptieve kolommen, paginering en compacte kaart", () => {
     Array.from({ length: 18 }, (_, index) => index),
   );
 
-  const balanced = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships("HOOFDSTRAAT", 8) }], 6);
-  assert.equal(balanced[0]?.columns, 2);
+  for (const count of [1, 2, 3, 4, 5, 6]) {
+    const single = buildLocationPages([{ location: "TEUNESEN OVERSLAG VENLO", entries: ships("TEUNESEN OVERSLAG VENLO", count) }], 6);
+    assert.equal(single.length, 1);
+    assert.equal(single[0]?.columns, 1);
+    assert.equal(single[0]?.left.length, count);
+    assert.equal(single[0]?.right.length, 0);
+  }
+
+  const seven = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships("HOOFDSTRAAT", 7) }], 6);
+  assert.equal(seven.length, 1);
+  assert.equal(seven[0]?.columns, 2);
   assert.deepEqual(
-    balanced[0]?.left.map((item) => item.sourceOrder),
-    [0, 1, 2, 3],
+    seven[0]?.left.map((item) => item.sourceOrder),
+    [0, 1, 2, 3, 4, 5],
   );
   assert.deepEqual(
-    balanced[0]?.right.map((item) => item.sourceOrder),
-    [4, 5, 6, 7],
+    seven[0]?.right.map((item) => item.sourceOrder),
+    [6],
+  );
+
+  const eight = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships("HOOFDSTRAAT", 8) }], 6);
+  assert.equal(eight[0]?.columns, 2);
+  assert.deepEqual(
+    eight[0]?.left.map((item) => item.sourceOrder),
+    [0, 1, 2, 3, 4, 5],
+  );
+  assert.deepEqual(
+    eight[0]?.right.map((item) => item.sourceOrder),
+    [6, 7],
   );
 
   assert.equal(rowsPerColumn(288, 32), 9);
@@ -484,7 +505,12 @@ test("V4-V14 adaptieve kolommen, paginering en compacte kaart", () => {
     assert.equal(board.includes(hidden), false);
   }
   assert.match(board, /grid-cols-2/);
-  assert.match(board, /max-w-\[1240px\]/);
+  assert.equal(board.includes("max-w-[1240px]"), false);
+  assert.match(board, /SHIPS_PER_COLUMN/);
+  assert.match(board, /ship-rotation-progress/);
+  assert.match(board, /data-paused/);
+  assert.match(read("src/index.css"), /prefers-reduced-motion: reduce/);
+  assert.match(read("src/index.css"), /animation-play-state: paused/);
   assert.match(board, /ROW_HEIGHT = 40/);
   assert.match(board, /text-right/);
   assert.match(board, /truncate/);

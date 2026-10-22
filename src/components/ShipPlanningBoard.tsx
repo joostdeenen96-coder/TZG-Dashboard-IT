@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatPlanningDate } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
   ROTATION_MS,
+  SHIPS_PER_COLUMN,
   buildLocationPages,
   nextRotationIndex,
-  rowsPerColumn,
   type LocationPage,
 } from "../shipPlanning/rotation";
 import { useShipPlanning } from "../services/shipPlanningService";
@@ -23,11 +23,13 @@ const headings = [
   { label: "Schip", align: "left" },
 ] as const;
 
-const columnClass =
-  "grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.9fr)_minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,1.3fr)] items-center gap-x-1.5 px-1";
+const columnTrack =
+  "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,2.1fr)_minmax(0,1.1fr)_minmax(0,1.4fr)] items-center";
+
+const singleColumnClass = `${columnTrack} gap-x-2 px-1`;
+const splitColumnClass = `${columnTrack} gap-x-1 px-0.5`;
 
 const ROW_HEIGHT = 40;
-const COLUMN_HEAD = 20;
 
 function cellTitle(value: string | null | undefined) {
   const text = value?.trim();
@@ -93,11 +95,13 @@ function ShipTable({
   entries,
   location,
   label,
+  columnClass,
   onOpen,
 }: {
   entries: ShipPlanningEntry[];
   location: string;
   label: string;
+  columnClass: string;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
 }) {
   return (
@@ -159,6 +163,7 @@ function LocationSlide({
   dateLabel,
   notices,
   onOpen,
+  onProgress,
 }: {
   day: ShipPlanningDay;
   resetKey: string;
@@ -168,30 +173,18 @@ function LocationSlide({
   dateLabel: string | null;
   notices: ReactNode;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
+  onProgress: (state: { key: string; active: boolean }) => void;
 }) {
-  const listRef = useRef<HTMLDivElement>(null);
-  const [perColumn, setPerColumn] = useState(8);
   const groups = useMemo(() => groupEntries(day.entries), [day.entries]);
-  const pages = useMemo(() => buildLocationPages(groups, perColumn), [groups, perColumn]);
+  const pages = useMemo(() => buildLocationPages(groups, SHIPS_PER_COLUMN), [groups]);
   const rotation = useRotation(pages, resetKey, paused);
-
-  useEffect(() => {
-    const element = listRef.current;
-    if (!element) return;
-    const measure = () => {
-      const available = element.clientHeight - COLUMN_HEAD;
-      if (available < ROW_HEIGHT) return;
-      const next = rowsPerColumn(available, ROW_HEIGHT);
-      setPerColumn((current) => (current === next ? current : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   const page = rotation.page;
   const pageLabel = rotation.count > 1 ? `${rotation.index + 1} / ${rotation.count}` : null;
+  const progressKey = page ? `${resetKey}:${page.location}:${page.pageInLocation}` : resetKey;
+
+  useEffect(() => {
+    onProgress({ key: progressKey, active: rotation.count > 1 && page != null });
+  }, [onProgress, page, progressKey, rotation.count]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -219,24 +212,36 @@ function LocationSlide({
             </p>
           </div>
           <div
-            ref={listRef}
             className="relative mt-2 min-h-0 flex-1 overflow-hidden"
-            data-rows-per-column={perColumn}
+            data-ships-per-column={SHIPS_PER_COLUMN}
             data-columns={page.columns}
             data-layout={page.columns === 1 ? "single" : "split"}
           >
             {page.columns === 1 ? (
-              <div className="max-w-[1240px]">
-                <ShipTable entries={page.left} location={page.location} label={page.label} onOpen={onOpen} />
-              </div>
+              <ShipTable
+                entries={page.left}
+                location={page.location}
+                label={page.label}
+                columnClass={singleColumnClass}
+                onOpen={onOpen}
+              />
             ) : (
-              <>
-                <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10" />
-                <div className="grid grid-cols-2 gap-x-6">
-                  <ShipTable entries={page.left} location={page.location} label={page.label} onOpen={onOpen} />
-                  <ShipTable entries={page.right} location={page.location} label={page.label} onOpen={onOpen} />
-                </div>
-              </>
+              <div className="grid grid-cols-2 gap-x-6">
+                <ShipTable
+                  entries={page.left}
+                  location={page.location}
+                  label={page.label}
+                  columnClass={splitColumnClass}
+                  onOpen={onOpen}
+                />
+                <ShipTable
+                  entries={page.right}
+                  location={page.location}
+                  label={page.label}
+                  columnClass={splitColumnClass}
+                  onOpen={onOpen}
+                />
+              </div>
             )}
           </div>
         </>
@@ -273,6 +278,10 @@ export function ShipPlanningBoard() {
   const finished = data?.switchReason === "today-empty-confirmed" && data.displayedDay === "tomorrow";
   const title = data ? planningTitle(data, bothEmpty) : "Schepenplanning";
   const dateLabel = shownDays.length === 1 && shownDays[0] && !bothEmpty ? formatPlanningDate(shownDays[0].date) : null;
+  const [progress, setProgress] = useState<{ key: string; active: boolean } | null>(null);
+  const onProgress = useCallback((next: { key: string; active: boolean }) => {
+    setProgress((current) => (current?.key === next.key && current.active === next.active ? current : next));
+  }, []);
   const notices = (
     <>
       {status === "stale" ? <p className="truncate text-[14px] leading-none text-gold">Gegevens tijdelijk niet vernieuwd</p> : null}
@@ -333,11 +342,23 @@ export function ShipPlanningBoard() {
                           : "Vandaag",
                   })
                 }
+                onProgress={onProgress}
               />
             ))}
           </div>
         </div>
       )}
+      {progress?.active ? (
+        <div className="pointer-events-none absolute inset-x-4 bottom-1.5 z-10 h-[3px] overflow-hidden rounded-full bg-white/10" data-testid="ship-rotation-track">
+          <div
+            key={progress.key}
+            data-testid="ship-rotation-progress"
+            data-paused={selected != null ? "true" : "false"}
+            className="ship-rotation-progress h-full rounded-full bg-gold"
+            style={{ animationDuration: `${ROTATION_MS}ms` }}
+          />
+        </div>
+      ) : null}
       {selected ? (
         <ShipPlanningDetailDialog
           entry={selected.entry}

@@ -227,6 +227,26 @@ body {
   animation-fill-mode: forwards;
 }
 
+.ship-rotation-progress {
+  width: 100%;
+  transform-origin: left center;
+  animation-name: teunesen-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.ship-rotation-progress[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ship-rotation-progress {
+    width: 2rem;
+    animation: none;
+    transform: none;
+  }
+}
+
 /* Alleen de storingenlijst mag scrollen op de ICT-TV; dunne balk. */
 .prtg-alarms-scroll {
   scrollbar-width: thin;

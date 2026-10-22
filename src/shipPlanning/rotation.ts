@@ -2,6 +2,9 @@ import type { ShipPlanningEntry } from "../types/shipPlanning";
 
 export const ROTATION_MS = 12_000;
 
+/** Vaste grens: tot en met 6 schepen één tabel, daarboven twee tabellen van maximaal 6. */
+export const SHIPS_PER_COLUMN = 6;
+
 export const PRIORITY_LOCATIONS = [
   { source: "HOOFDSTRAAT", label: "Hoofdstraat" },
   { source: "HOOGVELD(I)", label: "Hoogveld" },
@@ -55,12 +58,11 @@ export function rowsPerColumn(listHeight: number, rowHeight = 32) {
 
 export const rowsPerPage = rowsPerColumn;
 
-/** Sequentiële verdeling: links de eerste helft, rechts de rest. Geen oneven/even. */
+/** Links eerst vullen tot de kolomgrens, daarna rechts. Geen oneven/even. */
 export function splitSequential(entries: ShipPlanningEntry[], perColumn: number) {
   const size = Math.max(1, perColumn);
   if (entries.length <= size) return { columns: 1 as const, left: entries, right: [] as ShipPlanningEntry[] };
-  const mid = Math.ceil(entries.length / 2);
-  return { columns: 2 as const, left: entries.slice(0, mid), right: entries.slice(mid) };
+  return { columns: 2 as const, left: entries.slice(0, size), right: entries.slice(size) };
 }
 
 export function buildLocationPages(

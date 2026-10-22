@@ -71,7 +71,7 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className={density === "compact" ? "flex h-full min-h-0 items-center gap-4 px-5 py-2" : "flex h-full min-h-0 gap-8 px-10 py-6"}>
+          <div className={density === "compact" ? "flex h-full min-h-0 items-center gap-4 px-5 py-3" : "flex h-full min-h-0 gap-8 px-10 py-6"}>
             {density === "regular" && active.imagePath && hiddenPhoto !== active.id ? (
               <div className="flex w-[380px] shrink-0 items-center justify-center">
                 <img
@@ -92,10 +92,10 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
                   {String((shown.indexOf(active) >= 0 ? shown.indexOf(active) : index) + 1).padStart(2, "0")} / {String(shown.length).padStart(2, "0")}
                 </p>
               </div>
-              <h2 className={density === "compact" ? "truncate font-display text-[22px] leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
+              <h2 className={density === "compact" ? "mt-1 truncate font-display text-[26px] leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
                 {active.title}
               </h2>
-              <p className={density === "compact" ? "truncate text-[15px] text-paper/90" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
+              <p className={density === "compact" ? "mt-1 truncate text-[17px] text-paper/90" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
               {density === "regular" ? (
                 <p className={`mt-3 text-[18px] ${state.status === "fallback" ? "text-gold" : "text-mist"}`}>
                   {state.status === "fallback" ? "Laatste bekende gegevens · " : ""}
