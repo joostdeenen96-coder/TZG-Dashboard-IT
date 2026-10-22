@@ -375,12 +375,12 @@ export function ShipPlanningBoard() {
         </div>
       )}
       {progress?.active ? (
-        <div className="pointer-events-none absolute inset-x-4 bottom-1.5 z-10 h-[3px] overflow-hidden rounded-full bg-white/10" data-testid="ship-rotation-track">
+        <div className="dashboard-progress-track" data-testid="ship-rotation-track">
           <div
             key={progress.key}
             data-testid="ship-rotation-progress"
             data-paused={selected != null ? "true" : "false"}
-            className="ship-rotation-progress h-full rounded-full bg-gold"
+            className="ship-rotation-progress dashboard-progress-bar"
             style={{ animationDuration: `${ROTATION_MS}ms` }}
           />
         </div>

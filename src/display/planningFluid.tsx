@@ -18,11 +18,35 @@ export const PLANNING_TRACKS = {
   agenda: "minmax(0, 6.5fr)",
 } as const;
 
-export function planningGridRows(hasOperations: boolean, hasNews: boolean, hasAgenda: boolean) {
+/**
+ * On tall 16:9 viewports the ship rows must not keep growing with the card.
+ * The freed share goes to the water charts. News and agenda stay on the same tracks.
+ */
+export const PLANNING_TRACKS_TALL = {
+  operations: "minmax(0, 50fr)",
+  ships: "minmax(0, 24fr)",
+  news: "minmax(0, 8.5fr)",
+  agenda: "minmax(0, 6.5fr)",
+} as const;
+
+function rowsFor(
+  tracks: { operations: string; ships: string; news: string; agenda: string },
+  hasOperations: boolean,
+  hasNews: boolean,
+  hasAgenda: boolean,
+) {
   const rows = ["auto"];
-  if (hasOperations) rows.push(PLANNING_TRACKS.operations);
-  rows.push(PLANNING_TRACKS.ships);
-  if (hasNews) rows.push(PLANNING_TRACKS.news);
-  if (hasAgenda) rows.push(PLANNING_TRACKS.agenda);
+  if (hasOperations) rows.push(tracks.operations);
+  rows.push(tracks.ships);
+  if (hasNews) rows.push(tracks.news);
+  if (hasAgenda) rows.push(tracks.agenda);
   return rows.join(" ");
+}
+
+export function planningGridRows(hasOperations: boolean, hasNews: boolean, hasAgenda: boolean) {
+  return rowsFor(PLANNING_TRACKS, hasOperations, hasNews, hasAgenda);
+}
+
+export function planningGridRowsTall(hasOperations: boolean, hasNews: boolean, hasAgenda: boolean) {
+  return rowsFor(PLANNING_TRACKS_TALL, hasOperations, hasNews, hasAgenda);
 }

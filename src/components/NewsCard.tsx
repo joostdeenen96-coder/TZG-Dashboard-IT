@@ -106,8 +106,8 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
           </div>
         </motion.div>
       </AnimatePresence>
-      <div className="absolute right-0 bottom-0 left-0 z-10 h-1.5 bg-veil/15" data-news-progress="">
-        <div key={`${active.id}-${index}`} className="progress-bar h-full w-full bg-gold" style={{ animationDuration: `${ROTATE_MS}ms` }} />
+      <div className="dashboard-progress-track" data-news-progress="">
+        <div key={`${active.id}-${index}`} className="progress-bar dashboard-progress-bar" style={{ animationDuration: `${ROTATE_MS}ms` }} />
       </div>
     </article>
   );

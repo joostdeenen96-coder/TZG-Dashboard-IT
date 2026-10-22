@@ -9,7 +9,7 @@ import { useIctTvStatus } from "../services/ictTvStatus";
 import { useTvStatus } from "../services/tvStatus";
 import type { DashboardDefinition, DashboardWidget, DashboardWidgetType } from "../types/dashboard";
 import { ShipPlanningBoard } from "../components/ShipPlanningBoard";
-import { PlanningFluidProvider, planningGridRows } from "../display/planningFluid";
+import { PlanningFluidProvider, planningGridRows, planningGridRowsTall } from "../display/planningFluid";
 import { RenderWidget } from "../widgets/WidgetRegistry";
 import { NewsWidget } from "../widgets/NewsWidget";
 
@@ -119,7 +119,10 @@ function PlanningLayout({ dashboard }: { dashboard: DashboardDefinition }) {
         <div className="glass-backdrop pointer-events-none absolute inset-0" />
         <div
           className="planning-frame"
-          style={{ gridTemplateRows: planningGridRows(hasOperations, Boolean(news), Boolean(agenda)) }}
+          style={{
+            ["--planning-rows" as string]: planningGridRows(hasOperations, Boolean(news), Boolean(agenda)),
+            ["--planning-rows-tall" as string]: planningGridRowsTall(hasOperations, Boolean(news), Boolean(agenda)),
+          }}
         >
           <Header
             now={now}

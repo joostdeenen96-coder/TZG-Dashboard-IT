@@ -374,7 +374,11 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   assert.match(tracks, /minmax\(0, 6\.5fr\)/);
   const css = read("src/index.css");
   assert.match(css, /--ship-row: clamp\(30px, 2\.8vh, 52px\)/);
-  assert.match(css, /--ship-row-max: clamp\(40px, 4\.5vh, 96px\)/);
+  assert.match(css, /--ship-row-max: clamp\(46px, 4\.2vh, 72px\)/);
+  assert.match(css, /--dashboard-progress-height: clamp\(2px, 0\.2vh, 3px\)/);
+  assert.match(css, /repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(read("src/components/DieselCard.tsx"), /repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(read("src/components/NewsCard.tsx"), /dashboard-progress-track/);
   assert.match(read("src/components/ShipPlanningBoard.tsx"), /--ship-row-max/);
   assert.match(read("src/components/ShipPlanningBoard.tsx"), /length: SHIPS_PER_COLUMN/);
   assert.match(css, /data-agenda-extra/);
