@@ -14,6 +14,7 @@ import {
   tokenFromHeader,
 } from "../services/adminSession.js";
 import { getDashboardConfig, parseDashboardConfig, saveDashboardConfig } from "../services/dashboardConfig.js";
+import { getShipPlanningAdminSettings, saveShipPlanningSettings } from "../shipPlanning/settings.js";
 import { resetPrtgCache } from "../services/prtgService.js";
 import { checkAdminLogin, getPublicSettings, updateSettings } from "../services/settingsService.js";
 
@@ -106,6 +107,8 @@ adminRouter.put("/config", (req, res) => {
     const config = saveDashboardConfig({
       ...body,
       prtg: body && typeof body === "object" && "prtg" in body ? body.prtg : current.prtg,
+      shipPlanning:
+        body && typeof body === "object" && "shipPlanning" in body ? body.shipPlanning : current.shipPlanning,
     });
     resetGraphCache();
     resetWijNewsCache();
@@ -144,6 +147,28 @@ adminRouter.post("/test", async (req, res) => {
     const message = error instanceof Error ? error.message : "Verbinding mislukt.";
     console.error(`Graph-test mislukt: ${message}`);
     res.status(502).json({ error: message });
+  }
+});
+
+adminRouter.get("/ship-planning", (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  res.json(getShipPlanningAdminSettings());
+});
+
+adminRouter.put("/ship-planning", (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  try {
+    const saved = saveShipPlanningSettings(req.body ?? {});
+    res.json(saved);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Instellingen niet opgeslagen.";
+    res.status(400).json({ error: message });
   }
 });
 

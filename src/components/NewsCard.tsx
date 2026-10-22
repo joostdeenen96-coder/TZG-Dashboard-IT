@@ -26,7 +26,7 @@ const previews: WijNewsItem[] = [
   },
 ];
 
-export function NewsCard() {
+export function NewsCard({ density = "regular" }: { density?: "regular" | "compact" }) {
   const state = useWijNews();
   const [index, setIndex] = useState(0);
   const [hiddenPhoto, setHiddenPhoto] = useState<string | null>(null);
@@ -71,8 +71,8 @@ export function NewsCard() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className="flex h-full min-h-0 gap-8 px-10 py-6">
-            {active.imagePath && hiddenPhoto !== active.id ? (
+          <div className={density === "compact" ? "flex h-full min-h-0 items-center gap-4 px-5 py-2" : "flex h-full min-h-0 gap-8 px-10 py-6"}>
+            {density === "regular" && active.imagePath && hiddenPhoto !== active.id ? (
               <div className="flex w-[380px] shrink-0 items-center justify-center">
                 <img
                   src={active.imagePath}
@@ -82,7 +82,7 @@ export function NewsCard() {
                 />
               </div>
             ) : null}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
               <div className="flex items-center justify-between gap-6">
                 <p className="text-[13px] font-semibold tracking-[0.08em] text-gold uppercase">
                   WijTeunesen
@@ -92,14 +92,16 @@ export function NewsCard() {
                   {String((shown.indexOf(active) >= 0 ? shown.indexOf(active) : index) + 1).padStart(2, "0")} / {String(shown.length).padStart(2, "0")}
                 </p>
               </div>
-              <h2 className="mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]">
+              <h2 className={density === "compact" ? "truncate font-display text-[22px] leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
                 {active.title}
               </h2>
-              <p className="mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90">{active.summary}</p>
-              <p className={`mt-3 text-[18px] ${state.status === "fallback" ? "text-gold" : "text-mist"}`}>
-                {state.status === "fallback" ? "Laatste bekende gegevens · " : ""}
-                {ready?.data.connected ? formatPublicationDate(active.publishedAt) : "Voorbeeld"}
-              </p>
+              <p className={density === "compact" ? "truncate text-[15px] text-paper/90" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
+              {density === "regular" ? (
+                <p className={`mt-3 text-[18px] ${state.status === "fallback" ? "text-gold" : "text-mist"}`}>
+                  {state.status === "fallback" ? "Laatste bekende gegevens · " : ""}
+                  {ready?.data.connected ? formatPublicationDate(active.publishedAt) : "Voorbeeld"}
+                </p>
+              ) : null}
             </div>
           </div>
         </motion.div>

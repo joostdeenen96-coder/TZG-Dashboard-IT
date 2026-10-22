@@ -8,7 +8,9 @@ import { fetchDashboardBySlug } from "../services/dashboardApi";
 import { useIctTvStatus } from "../services/ictTvStatus";
 import { useTvStatus } from "../services/tvStatus";
 import type { DashboardDefinition, DashboardWidget, DashboardWidgetType } from "../types/dashboard";
+import { ShipPlanningBoard } from "../components/ShipPlanningBoard";
 import { RenderWidget } from "../widgets/WidgetRegistry";
+import { NewsWidget } from "../widgets/NewsWidget";
 
 type DisplayPageProps = {
   slug: string;
@@ -116,26 +118,27 @@ function PlanningLayout({ dashboard }: { dashboard: DashboardDefinition }) {
         weatherSettings={weather?.settings}
       />
       {(water || diesel) && (
-        <section className="grid h-[640px] shrink-0 grid-cols-4 gap-4">
+        <section className="grid min-h-0 flex-1 grid-cols-4 gap-4" data-testid="planning-operations">
           {water ? (
-            <div className={diesel ? "col-span-3" : "col-span-4"}>
+            <div className={diesel ? "col-span-3 h-full min-h-0" : "col-span-4 h-full min-h-0"}>
               <RenderWidget widget={water} />
             </div>
           ) : null}
           {diesel ? (
-            <div className={water ? "col-span-1" : "col-span-4"}>
+            <div className={water ? "col-span-1 h-full min-h-0" : "col-span-4 h-full min-h-0"}>
               <RenderWidget widget={diesel} />
             </div>
           ) : null}
         </section>
       )}
+      <section className="h-[400px] shrink-0 overflow-hidden" data-testid="planning-ships">
+        <ShipPlanningBoard />
+      </section>
       {news ? (
-        <section className="min-h-0 flex-1">
-          <RenderWidget widget={news} />
+        <section className="h-[88px] shrink-0 overflow-hidden" data-testid="planning-news">
+          <NewsWidget density="compact" />
         </section>
-      ) : (
-        <section className="min-h-0 flex-1" />
-      )}
+      ) : null}
       {agenda ? (
         <section className="h-[118px] shrink-0">
           <RenderWidget widget={agenda} />

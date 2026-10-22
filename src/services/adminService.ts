@@ -33,9 +33,13 @@ function token() {
   return sessionStorage.getItem(TOKEN_KEY);
 }
 
-function authHeaders(): Record<string, string> {
+export function adminAuthHeaders(): Record<string, string> {
   const current = token();
   return current ? { authorization: `Bearer ${current}` } : {};
+}
+
+function authHeaders(): Record<string, string> {
+  return adminAuthHeaders();
 }
 
 async function readError(response: Response) {
