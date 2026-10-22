@@ -53,13 +53,16 @@ export function dieselPeriodKey(now = new Date()) {
 function isWeek(value: unknown): value is DieselWeek {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
+  const dieselOk = row.dieselPrijs === null || typeof row.dieselPrijs === "number";
   return (
     typeof row.peildatum === "string" &&
-    typeof row.dieselPrijs === "number" &&
+    typeof row.websiteWeek === "number" &&
+    dieselOk &&
     typeof row.toeslagPercentage === "number" &&
+    typeof row.toeslagPercentageRaw === "number" &&
+    typeof row.toeslagPercentageDisplay === "number" &&
     typeof row.actief === "boolean" &&
-    (row.itemId === undefined || typeof row.itemId === "string") &&
-    (row.isoWeek === undefined || typeof row.isoWeek === "number")
+    (row.itemId === undefined || typeof row.itemId === "string")
   );
 }
 
@@ -103,7 +106,7 @@ export async function getDieselSurcharge(): Promise<DieselSurcharge> {
   try {
     const record = await dieselProviders[activeDieselSource].getCurrentData();
     console.info(
-      `Dieseltoeslag via SharePointDieselProvider: peildatum ${record.peildatum}, week ${record.isoWeek ?? "?"}, toeslag ${record.toeslagPercentage}%, ${record.weken.length} tegels.`,
+      `Dieseltoeslag via SharePointDieselProvider: peildatum ${record.peildatum}, WebsiteWeek ${record.websiteWeek}, raw ${record.toeslagPercentageRaw}% → ${record.toeslagPercentageDisplay}%, ${record.weken.length} tegels.`,
     );
     writeCache({ periodKey, data: record });
     console.info(`Dieseltoeslag bewaard voor ochtend ${periodKey}. Volgende lijstcontrole na 07:00.`);

@@ -26,10 +26,29 @@ export function formatIsoDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-/** Applicable surcharge month for "now" (calendar month in Amsterdam). */
+/** Applicable surcharge month for "now" (calendar month in Amsterdam). Used by BE. */
 export function currentApplicableMonth(now = new Date()) {
   const { year, month } = amsterdamParts(now);
   return formatYearMonth(year, month);
+}
+
+/**
+ * NL: peildatum 15e → toeslag voor de daaropvolgende maand.
+ * Vanaf de 15e (Amsterdam) is die volgende maand de getoonde toepassingsmaand.
+ * 10 okt → oktober (peildatum 15 sep); 15/22 okt → november (peildatum 15 okt).
+ */
+export function currentApplicableMonthNetherlands(now = new Date()) {
+  const { year, month, day } = amsterdamParts(now);
+  if (day >= 15) {
+    if (month === 12) return formatYearMonth(year + 1, 1);
+    return formatYearMonth(year, month + 1);
+  }
+  return formatYearMonth(year, month);
+}
+
+export function amsterdamCalendarDate(now = new Date()) {
+  const { year, month, day } = amsterdamParts(now);
+  return formatIsoDate(year, month, day);
 }
 
 /**

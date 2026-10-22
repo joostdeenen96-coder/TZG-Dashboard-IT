@@ -7,18 +7,22 @@ import type { DieselSurcharge, DieselSurchargeProvider } from "./dieselSurcharge
 const latest = {
   itemId: "mock-latest",
   peildatum: "2026-01-06",
-  isoWeek: 2,
+  websiteWeek: 2,
   dieselPrijs: 1.2345,
-  toeslagPercentage: 10.12,
+  toeslagPercentage: 10,
+  toeslagPercentageRaw: 10.12,
+  toeslagPercentageDisplay: 10,
   actief: false,
 };
 
 const previous = {
   itemId: "mock-previous",
   peildatum: "2025-12-30",
-  isoWeek: 1,
+  websiteWeek: 1,
   dieselPrijs: 1.1111,
-  toeslagPercentage: 9.99,
+  toeslagPercentage: 9,
+  toeslagPercentageRaw: 9.99,
+  toeslagPercentageDisplay: 9,
   actief: false,
 };
 

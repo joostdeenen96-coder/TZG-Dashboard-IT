@@ -17,7 +17,7 @@ const dateFormatter = new Intl.DateTimeFormat("nl-NL", {
   year: "numeric",
 });
 
-const pricePer1000Formatter = new Intl.NumberFormat("nl-NL", {
+const priceFormatter = new Intl.NumberFormat("nl-NL", {
   style: "currency",
   currency: "EUR",
   minimumFractionDigits: 2,
@@ -48,7 +48,11 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const countryName = result.country === "NL" ? "Nederland" : "België";
   const statusLabel =
-    result.status === "ready" ? "Actueel" : result.status === "stale" ? "Verouderd" : "Niet beschikbaar";
+    result.status === "ok" ? "Actueel" : result.status === "stale" ? "Verouderd" : "Niet beschikbaar";
+  const bronPrijs =
+    typeof result.sourcePricePer100Liters === "number"
+      ? result.sourcePricePer100Liters
+      : result.rawPricePer100LitersCbrb;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -91,25 +95,22 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
             <dt className="text-mist">Peildatum</dt>
             <dd className="font-semibold text-paper">{peildatumLabel(result.referenceDate)}</dd>
           </div>
-          <div>
-            <dt className="text-mist">Toepassingsmaand</dt>
-            <dd className="font-semibold capitalize text-paper">{monthLabel(result.applicableMonth)}</dd>
-          </div>
-          {result.country === "NL" && typeof result.rawPricePer100LitersCbrb === "number" ? (
+          {result.country === "NL" && typeof bronPrijs === "number" ? (
             <div>
-              <dt className="text-mist">CBRB/KBN prijs</dt>
-              <dd className="font-semibold text-paper">
-                {pricePer1000Formatter.format(result.rawPricePer100LitersCbrb)} / 100 L ex BTW
-              </dd>
+              <dt className="text-mist">CBRB/KBN bronprijs</dt>
+              <dd className="font-semibold text-paper">{priceFormatter.format(bronPrijs)} / 100 L</dd>
             </div>
-          ) : null}
+          ) : (
+            <div>
+              <dt className="text-mist">Toepassingsmaand</dt>
+              <dd className="font-semibold capitalize text-paper">{monthLabel(result.applicableMonth)}</dd>
+            </div>
+          )}
           <div>
-            <dt className="text-mist">
-              {result.country === "NL" ? "Prijs per 1000 liter" : "Gasolieprijs"}
-            </dt>
+            <dt className="text-mist">{result.country === "NL" ? "Prijs staffel" : "Gasolieprijs"}</dt>
             <dd className="font-semibold text-paper">
               {typeof result.priceExVatPer1000Liters === "number"
-                ? `${pricePer1000Formatter.format(result.priceExVatPer1000Liters)} ex BTW`
+                ? `${priceFormatter.format(result.priceExVatPer1000Liters)} / 1000 L ex BTW`
                 : "—"}
             </dd>
           </div>
@@ -117,7 +118,7 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
             <dt className="text-mist">Staffel</dt>
             <dd className="font-semibold text-paper">
               {result.staffelRange
-                ? `${pricePer1000Formatter.format(result.staffelRange.from)} - ${pricePer1000Formatter.format(result.staffelRange.to)}`
+                ? `${priceFormatter.format(result.staffelRange.from)} - ${priceFormatter.format(result.staffelRange.to)}`
                 : "—"}
             </dd>
           </div>
@@ -131,18 +132,22 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
             <dt className="text-mist">Status</dt>
             <dd className="font-semibold text-paper">{statusLabel}</dd>
           </div>
-          <div className="col-span-2">
+          <div>
             <dt className="text-mist">Bron</dt>
             <dd className="font-semibold text-paper">{result.sourceLabel}</dd>
           </div>
-          {result.productLabel ? (
-            <div className="col-span-2">
-              <dt className="text-mist">Product</dt>
-              <dd className="font-semibold text-paper">{result.productLabel}</dd>
-            </div>
-          ) : null}
+          <div>
+            <dt className="text-mist">Vastlegging</dt>
+            <dd className="font-semibold text-paper">
+              {result.sourceType === "manual-bootstrap"
+                ? "Handmatige bootstrap"
+                : result.sourceType === "automatic"
+                  ? "Automatisch"
+                  : "—"}
+            </dd>
+          </div>
           <div className="col-span-2">
-            <dt className="text-mist">Laatst opgehaald</dt>
+            <dt className="text-mist">Laatst bijgewerkt</dt>
             <dd className="font-semibold text-paper">
               {result.retrievedAt ? formatAmsterdamTime(result.retrievedAt) : "—"}
             </dd>

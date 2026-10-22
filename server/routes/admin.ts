@@ -1,4 +1,7 @@
 import { Router } from "express";
+import { getGasOilCaptureStatus, runNetherlandsDailyCapture } from "../gasoil/dailyCapture.js";
+import { commitNetherlandsBootstrap, previewNetherlandsBootstrap } from "../gasoil/manualBootstrap.js";
+import { readGasOilMonthCache } from "../gasoil/cache.js";
 import { resetGraphCache, testSharePointConnection } from "../providers/sharePointDieselProvider.js";
 import { resetWijNewsCache, testNewsLibrary } from "../providers/wijNewsProvider.js";
 import {
@@ -141,5 +144,87 @@ adminRouter.post("/test", async (req, res) => {
     const message = error instanceof Error ? error.message : "Verbinding mislukt.";
     console.error(`Graph-test mislukt: ${message}`);
     res.status(502).json({ error: message });
+  }
+});
+
+adminRouter.get("/gasoil/capture-status", (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  res.json(getGasOilCaptureStatus());
+});
+
+adminRouter.post("/gasoil/capture-now", async (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  try {
+    const result = await runNetherlandsDailyCapture();
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Capture mislukt.";
+    res.status(502).json({ error: message });
+  }
+});
+
+adminRouter.get("/gasoil/months/:month", (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  const month = String(req.params.month || "");
+  const entry = readGasOilMonthCache("NL", month);
+  if (!entry) {
+    res.status(404).json({ error: "Geen maandobservatie." });
+    return;
+  }
+  res.json(entry);
+});
+
+adminRouter.post("/gasoil/bootstrap/preview", (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    const preview = previewNetherlandsBootstrap({
+      country: typeof body.country === "string" ? body.country : "NL",
+      referenceDate: typeof body.referenceDate === "string" ? body.referenceDate : "",
+      pricePer100Liters: body.pricePer100Liters,
+      sourceNote: typeof body.sourceNote === "string" ? body.sourceNote : "",
+    });
+    res.json(preview);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Preview mislukt.";
+    res.status(400).json({ error: message });
+  }
+});
+
+adminRouter.post("/gasoil/bootstrap", async (req, res) => {
+  if (!requireAdmin(req.header("authorization"))) {
+    res.status(401).json({ error: "Niet aangemeld." });
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    // Toeslag mag nooit handmatig worden aangeleverd — negeer/blokkeer.
+    if (body.surchargePerTon != null || body.toeslagPerTon != null) {
+      res.status(400).json({ error: "Toeslag per ton is niet handmatig invulbaar." });
+      return;
+    }
+    const entry = await commitNetherlandsBootstrap({
+      country: typeof body.country === "string" ? body.country : "NL",
+      referenceDate: typeof body.referenceDate === "string" ? body.referenceDate : "",
+      pricePer100Liters: body.pricePer100Liters,
+      sourceNote: typeof body.sourceNote === "string" ? body.sourceNote : "",
+      actor: "admin",
+    });
+    res.json({ ok: true, entry });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bootstrap mislukt.";
+    res.status(400).json({ error: message });
   }
 });
