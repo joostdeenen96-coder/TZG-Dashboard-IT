@@ -32,6 +32,8 @@
     "db:migrate:status:prod": "node dist/server/scripts/db-migrate-status.js",
     "db:seed:prod": "node dist/server/scripts/db-seed.js",
     "db:import-json:prod": "node dist/server/scripts/db-import-json.js",
+    "ship-planning:discover": "node dist/server/shipPlanning/discoverAuthenticated.js",
+    "ship-planning:discover:build": "tsc -p tsconfig.server.json && node dist/server/shipPlanning/discoverAuthenticated.js",
     "lint": "oxlint",
     "preview": "vite preview"
   },

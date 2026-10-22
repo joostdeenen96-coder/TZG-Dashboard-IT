@@ -46,6 +46,7 @@ test("Linux production scripts bevatten geen tsx", () => {
     "scripts/backup-now.sh",
     "scripts/restore-postgres.sh",
     "scripts/export-dashboard-config.sh",
+    "scripts/ship-planning-discover.sh",
   ]) {
     assertNoTsx(rel);
   }

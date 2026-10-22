@@ -4,9 +4,23 @@ Branch: `feature/schepenplanning-dashboard`
 Bron: https://planning.teunesen.nl/  
 Besluit: **STOP** — fase 1 (publiek) afgerond; fase 2 (authenticated discovery) geblokkeerd tot dedicated secrets in de Cloud Agent-runtime staan.
 
-Authenticated output (zodra secrets er zijn): `docs/SCHEPENPLANNING-AUTH.md` via  
-`npx tsx server/shipPlanning/discoverAuthenticated.ts`  
-(geen credentials/tokens in logs).
+Authenticated discovery (TEU-NC-01, **geen tsx** op de host):
+
+```sh
+# na image/build met dist:
+npm run ship-planning:discover
+# of:
+./scripts/ship-planning-discover.sh
+# of expliciet:
+node dist/server/shipPlanning/discoverAuthenticated.js
+```
+
+Docker (als host-`dist` ontbreekt): het script valt terug op  
+`docker compose run … node dist/server/shipPlanning/discoverAuthenticated.js`  
+met `SHIP_PLANNING_*` uit `.env` via compose.
+
+Rapport: `docs/SCHEPENPLANNING-AUTH.md` of `data/ship-planning-discovery.md`  
+(geen credentials/tokens/username in logs of rapport).
 
 ## 1. Integratieanalyse
 
@@ -130,9 +144,14 @@ Alles wat login, dataType-discovery, normalisatie, widget, Admin-sectie, cache, 
 
 ## 16. Update-instructie TEU-NC-01
 
-Nog geen deploy. Na oplevering van serviceaccount:
-
-1. Secrets zetten (`SHIP_PLANNING_*` of Admin-secretstore).
-2. Agent/PR hervatten: login → capture schepenplanning XHR → provider + widget.
-3. `docker compose build dashboard && docker compose up -d dashboard`.
-4. SP1–SP40 met live data; geen credentials in rapport of screenshots.
+1. Zet in `/pad/naar/repo/.env` (niet in Git):
+   - `SHIP_PLANNING_USERNAME`
+   - `SHIP_PLANNING_PASSWORD`
+   - optioneel `SHIP_PLANNING_TOTP_SECRET`
+2. Checkout `feature/schepenplanning-dashboard`, build dashboard-image of lokale `dist`:
+   - `docker compose build dashboard` **of** `npm run build`
+3. Discovery (geen UI):
+   - `./scripts/ship-planning-discover.sh`
+4. Beoordeel `docs/SCHEPENPLANNING-AUTH.md` / `data/ship-planning-discovery.md`  
+   (AUTH/DATASET/dataTypeId/mapping). Commit alleen het **gesanitizeerde** rapport.
+5. Pas daarna widget/provider ontwerpen — niet eerder.

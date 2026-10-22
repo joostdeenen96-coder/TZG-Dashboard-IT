@@ -77,6 +77,12 @@ services:
       PRTG_GROUP_ID: ${PRTG_GROUP_ID:-}
       PRTG_TAG: ${PRTG_TAG:-}
       PRTG_TLS_INSECURE: ${PRTG_TLS_INSECURE:-}
+      # Schepenplanning (Tarasa) — alleen server-side; nooit naar frontend.
+      SHIP_PLANNING_BASE_URL: ${SHIP_PLANNING_BASE_URL:-https://planning.teunesen.nl}
+      SHIP_PLANNING_USERNAME: ${SHIP_PLANNING_USERNAME:-}
+      SHIP_PLANNING_PASSWORD: ${SHIP_PLANNING_PASSWORD:-}
+      SHIP_PLANNING_TOTP_SECRET: ${SHIP_PLANNING_TOTP_SECRET:-}
+      SHIP_PLANNING_API_KEY: ${SHIP_PLANNING_API_KEY:-}
     volumes:
       - ./data:/app/data
       - tzg-backups:/backups
