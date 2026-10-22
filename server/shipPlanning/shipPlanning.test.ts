@@ -11,7 +11,7 @@ import { SHIP_PLANNING_ENTITY_TYPE_ID, SHIP_PLANNING_QUERY_PATH, shipPlanningDay
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider } from "./teunesenShipPlanningProvider.js";
 import { groupEntries } from "../../src/shipPlanning/groupEntries.ts";
-import { orderLocationGroups } from "../../src/shipPlanning/rotation.ts";
+import { buildLocationPages, orderLocationGroups, rowsPerColumn } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -354,7 +354,9 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   const display = read("src/pages/DisplayPage.tsx");
   const planning = display.slice(display.indexOf("function PlanningLayout"), display.indexOf("function IctLayout"));
   assert.match(planning, /overflow-hidden/);
-  assert.match(planning, /h-\[320px\]/);
+  assert.match(planning, /min-h-0 flex-1/);
+  assert.match(planning, /h-\[400px\] shrink-0 overflow-hidden/);
+  assert.doesNotMatch(planning, /h-\[320px\]/);
   assert.match(planning, /h-\[88px\]/);
   assert.match(planning, /h-\[118px\]/);
   assert.match(planning, /ShipPlanningBoard/);
@@ -419,4 +421,73 @@ test("SP admin zonder credentials en diagnostisch script", () => {
   assert.match(admin, /Configured/);
   assert.match(admin, /Not configured/);
   assert.equal(admin.includes("SHIP_PLANNING_PASSWORD"), false);
+});
+
+test("V4-V14 adaptieve kolommen, paginering en compacte kaart", () => {
+  const ships = (location: string, count: number) =>
+    Array.from({ length: count }, (_, index) => entry({ loadingLocation: location, sourceOrder: index, sourceId: `${location}-${index}` }));
+
+  const few = buildLocationPages([{ location: "HOOGVELD(I)", entries: ships("HOOGVELD(I)", 3) }], 6);
+  assert.equal(few.length, 1);
+  assert.equal(few[0]?.columns, 1);
+  assert.equal(few[0]?.left.length, 3);
+  assert.equal(few[0]?.right.length, 0);
+  assert.equal(few[0]?.locationCount, 3);
+
+  const twelve = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships("HOOFDSTRAAT", 12) }], 6);
+  assert.equal(twelve.length, 1);
+  assert.equal(twelve[0]?.columns, 2);
+  assert.deepEqual(
+    twelve[0]?.left.map((item) => item.sourceOrder),
+    [0, 1, 2, 3, 4, 5],
+  );
+  assert.deepEqual(
+    twelve[0]?.right.map((item) => item.sourceOrder),
+    [6, 7, 8, 9, 10, 11],
+  );
+
+  const eighteen = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships("HOOFDSTRAAT", 18) }], 6);
+  assert.equal(eighteen.length, 2);
+  assert.equal(eighteen[0]?.columns, 2);
+  assert.equal(eighteen[0]?.left.length, 6);
+  assert.equal(eighteen[0]?.right.length, 6);
+  assert.equal(eighteen[1]?.columns, 1);
+  assert.equal(eighteen[1]?.pageInLocation, 1);
+  assert.equal(eighteen[1]?.locationPageCount, 2);
+  assert.equal(eighteen[1]?.locationCount, 18);
+  assert.deepEqual(
+    eighteen.flatMap((page) => [...page.left, ...page.right].map((item) => item.sourceOrder)),
+    Array.from({ length: 18 }, (_, index) => index),
+  );
+
+  const balanced = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships("HOOFDSTRAAT", 8) }], 6);
+  assert.equal(balanced[0]?.columns, 2);
+  assert.deepEqual(
+    balanced[0]?.left.map((item) => item.sourceOrder),
+    [0, 1, 2, 3],
+  );
+  assert.deepEqual(
+    balanced[0]?.right.map((item) => item.sourceOrder),
+    [4, 5, 6, 7],
+  );
+
+  assert.equal(rowsPerColumn(288, 32), 9);
+  assert.equal(rowsPerColumn(32, 32), 1);
+  assert.equal(rowsPerColumn(63, 32), 1);
+  assert.equal(rowsPerColumn(64, 32), 2);
+
+  const board = read("src/components/ShipPlanningBoard.tsx");
+  for (const label of ["Tijd", "Klant", "Losplaats", "Conditie", "Product", "Hoeveelheid", "Schip"]) {
+    assert.match(board, new RegExp(label));
+  }
+  for (const hidden of ["Vervoerder", "Telnr", "Losdatum", "Opmerking"]) {
+    assert.equal(board.includes(hidden), false);
+  }
+  assert.match(board, /grid-cols-2/);
+  assert.match(board, /max-w-\[1240px\]/);
+  assert.match(board, /ROW_HEIGHT = 40/);
+  assert.match(board, /text-right/);
+  assert.match(board, /truncate/);
+  assert.equal(/overflow-y-auto|marquee/.test(board), false);
+  assert.match(board, /ROTATION_MS/);
 });

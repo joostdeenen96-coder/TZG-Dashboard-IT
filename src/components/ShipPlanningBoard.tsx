@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatPlanningDate } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
@@ -6,28 +6,32 @@ import {
   ROTATION_MS,
   buildLocationPages,
   nextRotationIndex,
-  rowsPerPage,
+  rowsPerColumn,
   type LocationPage,
 } from "../shipPlanning/rotation";
 import { useShipPlanning } from "../services/shipPlanningService";
 import type { ShipPlanningDay, ShipPlanningEntry, ShipPlanningResponse } from "../types/shipPlanning";
 import { ShipPlanningDetailDialog } from "./ShipPlanningDetailDialog";
 
-const columns = ["Tijd", "Klant", "Losplaats", "Conditie", "Product", "Hoeveelheid", "Schip"] as const;
+const headings = [
+  { label: "Tijd", align: "left" },
+  { label: "Klant", align: "left" },
+  { label: "Losplaats", align: "left" },
+  { label: "Conditie", align: "left" },
+  { label: "Product", align: "left" },
+  { label: "Hoeveelheid", align: "right" },
+  { label: "Schip", align: "left" },
+] as const;
 
 const columnClass =
-  "grid grid-cols-[88px_minmax(0,1.4fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_110px_minmax(0,1fr)] items-center gap-3 px-2";
+  "grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.9fr)_minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,1.3fr)] items-center gap-x-1.5 px-1";
 
-const ROW_HEIGHT = 44;
+const ROW_HEIGHT = 40;
+const COLUMN_HEAD = 20;
 
-function ColumnHead() {
-  return (
-    <div className={`${columnClass} h-5 text-[14px] leading-none font-semibold tracking-[0.08em] text-mist uppercase`}>
-      {columns.map((label) => (
-        <span key={label}>{label}</span>
-      ))}
-    </div>
-  );
+function cellTitle(value: string | null | undefined) {
+  const text = value?.trim();
+  return text ? text : undefined;
 }
 
 function useRotation(pages: LocationPage[], resetKey: string, paused: boolean) {
@@ -58,27 +62,128 @@ function useRotation(pages: LocationPage[], resetKey: string, paused: boolean) {
   return { page: pages[safeIndex] ?? null, index: safeIndex, count: pages.length };
 }
 
+function BoardTitle({
+  title,
+  dateLabel,
+  notices,
+  pageLabel,
+}: {
+  title: string;
+  dateLabel: string | null;
+  notices: ReactNode;
+  pageLabel: string | null;
+}) {
+  return (
+    <header className="grid shrink-0 grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-3">
+      <h2 className="truncate font-display text-[22px] leading-none font-semibold tracking-[0.06em] uppercase">{title}</h2>
+      {dateLabel ? <p className="truncate text-[16px] leading-none text-mist">{dateLabel}</p> : <span />}
+      <div className="flex min-w-0 items-center justify-end gap-3">
+        {notices}
+        {pageLabel ? (
+          <p className="shrink-0 text-[16px] leading-none text-mist tabular-nums" data-testid="ship-rotation">
+            {pageLabel}
+          </p>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+function ShipTable({
+  entries,
+  location,
+  label,
+  onOpen,
+}: {
+  entries: ShipPlanningEntry[];
+  location: string;
+  label: string;
+  onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className={`${columnClass} h-5 text-[12px] leading-none font-semibold tracking-[0.08em] text-mist uppercase`}>
+        {headings.map((heading) => (
+          <span key={heading.label} className={heading.align === "right" ? "text-right" : undefined}>
+            {heading.label}
+          </span>
+        ))}
+      </div>
+      <ul>
+        {entries.map((entry, rowIndex) => {
+          const quantity = formatQuantity(entry);
+          return (
+            <li key={entry.sourceId ?? `${location}-${rowIndex}`}>
+              <button
+                type="button"
+                className={`${columnClass} w-full overflow-hidden text-left text-[20px] leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold ${rowIndex % 2 === 1 ? "bg-white/[0.04]" : ""}`}
+                style={{ height: ROW_HEIGHT }}
+                onClick={() => onOpen(entry, location, label)}
+              >
+                <span className="min-w-0 truncate font-display font-semibold tabular-nums" title={cellTitle(entry.time)}>
+                  {entry.time ?? "—"}
+                </span>
+                <span className="min-w-0 truncate" title={cellTitle(entry.customer)}>
+                  {entry.customer ?? "—"}
+                </span>
+                <span className="min-w-0 truncate" title={cellTitle(entry.unloadingLocation)}>
+                  {entry.unloadingLocation ?? "—"}
+                </span>
+                <span className="min-w-0 truncate" title={cellTitle(entry.condition)}>
+                  {entry.condition ?? "—"}
+                </span>
+                <span className="min-w-0 truncate" title={cellTitle(entry.product)}>
+                  {entry.product ?? "—"}
+                </span>
+                <span className="min-w-0 truncate text-right tabular-nums" title={cellTitle(quantity)}>
+                  {quantity ?? "—"}
+                </span>
+                <span className="min-w-0 truncate" title={cellTitle(entry.vessel)}>
+                  {entry.vessel ?? "—"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function LocationSlide({
   day,
   resetKey,
   paused,
+  embedTitle,
+  title,
+  dateLabel,
+  notices,
   onOpen,
 }: {
   day: ShipPlanningDay;
   resetKey: string;
   paused: boolean;
+  embedTitle: boolean;
+  title: string;
+  dateLabel: string | null;
+  notices: ReactNode;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [pageSize, setPageSize] = useState(8);
+  const [perColumn, setPerColumn] = useState(8);
   const groups = useMemo(() => groupEntries(day.entries), [day.entries]);
-  const pages = useMemo(() => buildLocationPages(groups, pageSize), [groups, pageSize]);
+  const pages = useMemo(() => buildLocationPages(groups, perColumn), [groups, perColumn]);
   const rotation = useRotation(pages, resetKey, paused);
 
   useEffect(() => {
     const element = listRef.current;
     if (!element) return;
-    const measure = () => setPageSize(rowsPerPage(element.clientHeight - 20, ROW_HEIGHT));
+    const measure = () => {
+      const available = element.clientHeight - COLUMN_HEAD;
+      if (available < ROW_HEIGHT) return;
+      const next = rowsPerColumn(available, ROW_HEIGHT);
+      setPerColumn((current) => (current === next ? current : next));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -86,47 +191,56 @@ function LocationSlide({
   }, []);
 
   const page = rotation.page;
-  if (!page) return <p className="mt-3 text-[18px] text-mist">Geen schepen gepland voor deze dag.</p>;
+  const pageLabel = rotation.count > 1 ? `${rotation.index + 1} / ${rotation.count}` : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="mt-2 flex items-baseline justify-between gap-3">
-        <h3
-          className="truncate font-display text-[32px] leading-none font-semibold tracking-[0.06em] text-paper uppercase"
-          data-location={page.location}
-          data-location-label={page.label}
-        >
-          {page.label}
-        </h3>
-        {rotation.count > 1 ? (
-          <p className="shrink-0 text-[14px] text-mist">
-            {rotation.index + 1}/{rotation.count}
-          </p>
-        ) : null}
-      </div>
-      <div ref={listRef} className="mt-2 min-h-0 flex-1 overflow-hidden" data-rows-per-page={pageSize}>
-        <ColumnHead />
-        <ul>
-          {page.entries.map((entry, rowIndex) => (
-            <li key={entry.sourceId ?? `${page.location}-${rowIndex}`}>
-              <button
-                type="button"
-                className={`${columnClass} w-full text-left leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold`}
-                style={{ height: ROW_HEIGHT }}
-                onClick={() => onOpen(entry, page.location, page.label)}
-              >
-                <span className="truncate font-display text-[22px] font-semibold tabular-nums">{entry.time ?? "—"}</span>
-                <span className="truncate text-[20px]">{entry.customer ?? "—"}</span>
-                <span className="truncate text-[20px]">{entry.unloadingLocation ?? "—"}</span>
-                <span className="truncate text-[20px]">{entry.condition ?? "—"}</span>
-                <span className="truncate text-[20px]">{entry.product ?? "—"}</span>
-                <span className="truncate text-[20px] tabular-nums">{formatQuantity(entry) ?? "—"}</span>
-                <span className="truncate text-[20px]">{entry.vessel ?? "—"}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {embedTitle ? <BoardTitle title={title} dateLabel={dateLabel} notices={notices} pageLabel={pageLabel} /> : null}
+      {!page ? (
+        <p className="mt-2 text-[18px] text-mist">Geen schepen gepland voor deze dag.</p>
+      ) : (
+        <>
+          {!embedTitle && dateLabel ? <p className="text-[16px] leading-none text-mist">{dateLabel}</p> : null}
+          <div className="mt-1 flex shrink-0 items-baseline justify-between gap-3">
+            <h3
+              className="truncate font-display text-[20px] leading-none font-semibold tracking-[0.04em] uppercase"
+              data-location={page.location}
+              data-location-label={page.label}
+            >
+              {page.label}
+              {page.locationPageCount > 1 ? (
+                <span className="ml-3 text-[16px] font-medium tracking-normal text-mist">
+                  {page.pageInLocation + 1}/{page.locationPageCount}
+                </span>
+              ) : null}
+            </h3>
+            <p className="shrink-0 text-[16px] leading-none text-mist" data-ship-count={page.locationCount}>
+              {page.locationCount === 1 ? "1 schip" : `${page.locationCount} schepen`}
+            </p>
+          </div>
+          <div
+            ref={listRef}
+            className="relative mt-2 min-h-0 flex-1 overflow-hidden"
+            data-rows-per-column={perColumn}
+            data-columns={page.columns}
+            data-layout={page.columns === 1 ? "single" : "split"}
+          >
+            {page.columns === 1 ? (
+              <div className="max-w-[1240px]">
+                <ShipTable entries={page.left} location={page.location} label={page.label} onOpen={onOpen} />
+              </div>
+            ) : (
+              <>
+                <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10" />
+                <div className="grid grid-cols-2 gap-x-6">
+                  <ShipTable entries={page.left} location={page.location} label={page.label} onOpen={onOpen} />
+                  <ShipTable entries={page.right} location={page.location} label={page.label} onOpen={onOpen} />
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -157,59 +271,71 @@ export function ShipPlanningBoard() {
   );
   const shownDays = data?.scope === "today-and-tomorrow" ? data.days : data?.days.slice(0, 1) ?? [];
   const finished = data?.switchReason === "today-empty-confirmed" && data.displayedDay === "tomorrow";
+  const title = data ? planningTitle(data, bothEmpty) : "Schepenplanning";
+  const dateLabel = shownDays.length === 1 && shownDays[0] && !bothEmpty ? formatPlanningDate(shownDays[0].date) : null;
+  const notices = (
+    <>
+      {status === "stale" ? <p className="truncate text-[14px] leading-none text-gold">Gegevens tijdelijk niet vernieuwd</p> : null}
+      {finished ? <p className="truncate text-[14px] leading-none text-mist">Planning vandaag afgerond</p> : null}
+      {status === "disabled" ? <p className="truncate text-[14px] leading-none text-mist">Uitgeschakeld</p> : null}
+    </>
+  );
 
   return (
     <article
-      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-4 py-3"
+      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-4 py-2"
       data-testid="ship-planning"
       data-displayed-day={data?.displayedDay ?? ""}
       data-switch-reason={data?.switchReason ?? ""}
       data-status={status}
       data-presentation={data?.scope === "today-and-tomorrow" ? "today-and-tomorrow" : (data?.displayedDay ?? "")}
     >
-      <header className="flex shrink-0 items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="font-display text-[26px] leading-none font-semibold tracking-[0.06em] uppercase">
-            {data ? planningTitle(data, bothEmpty) : "Schepenplanning"}
-          </h2>
-          {shownDays.length === 1 && shownDays[0] && !bothEmpty ? (
-            <p className="mt-1 text-[18px] text-mist">{formatPlanningDate(shownDays[0].date)}</p>
-          ) : null}
-        </div>
-        <div className="shrink-0 text-right">
-          {status === "stale" ? <p className="text-[14px] text-gold">Gegevens tijdelijk niet vernieuwd</p> : null}
-          {finished ? <p className="text-[14px] text-mist">Planning vandaag afgerond</p> : null}
-          {status === "disabled" ? <p className="text-[14px] text-mist">Uitgeschakeld</p> : null}
-        </div>
-      </header>
-      {data?.scope === "today-and-tomorrow" ? (
-        <p className="mt-1 text-[14px] text-mist">Beide dagen zijn bij veel ritten minder leesbaar op het scherm.</p>
-      ) : null}
       {status === "unavailable" || status === "disabled" ? (
-        <p className="mt-3 text-[18px] text-mist">
-          {status === "disabled" ? "Schepenplanning staat uit." : "Schepenplanning tijdelijk niet beschikbaar."}
-        </p>
+        <>
+          <BoardTitle title={title} dateLabel={null} notices={notices} pageLabel={null} />
+          <p className="mt-2 text-[18px] text-mist">
+            {status === "disabled" ? "Schepenplanning staat uit." : "Schepenplanning tijdelijk niet beschikbaar."}
+          </p>
+        </>
       ) : bothEmpty ? (
-        <p className="mt-3 text-[18px] text-mist">Geen schepen gepland voor vandaag of morgen.</p>
+        <>
+          <BoardTitle title={title} dateLabel={null} notices={notices} pageLabel={null} />
+          <p className="mt-2 text-[18px] text-mist">Geen schepen gepland voor vandaag of morgen.</p>
+        </>
       ) : (
-        <div className={`mt-1 flex min-h-0 flex-1 flex-col overflow-hidden ${shownDays.length > 1 ? "gap-3" : ""}`}>
-          {shownDays.map((day) => (
-            <LocationSlide
-              key={`${day.date}-${data?.displayedDay ?? ""}`}
-              day={day}
-              resetKey={`${data?.displayedDay ?? ""}:${day.date}`}
-              paused={selected != null}
-              onOpen={(entry, location, label) =>
-                setSelected({
-                  entry,
-                  location,
-                  label,
-                  planningDate: formatPlanningDate(day.date),
-                  dayLabel: data?.displayedDay === "tomorrow" && data.scope !== "today-and-tomorrow" ? "Morgen" : day === shownDays[1] ? "Morgen" : "Vandaag",
-                })
-              }
-            />
-          ))}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {shownDays.length > 1 ? <BoardTitle title={title} dateLabel={null} notices={notices} pageLabel={null} /> : null}
+          {data?.scope === "today-and-tomorrow" ? (
+            <p className="mt-1 shrink-0 text-[14px] text-mist">Beide dagen zijn bij veel ritten minder leesbaar op het scherm.</p>
+          ) : null}
+          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${shownDays.length > 1 ? "gap-2" : ""}`}>
+            {shownDays.map((day, dayIndex) => (
+              <LocationSlide
+                key={`${day.date}-${data?.displayedDay ?? ""}`}
+                day={day}
+                resetKey={`${data?.displayedDay ?? ""}:${day.date}`}
+                paused={selected != null}
+                embedTitle={shownDays.length === 1}
+                title={title}
+                dateLabel={shownDays.length === 1 ? dateLabel : formatPlanningDate(day.date)}
+                notices={shownDays.length === 1 ? notices : null}
+                onOpen={(entry, location, label) =>
+                  setSelected({
+                    entry,
+                    location,
+                    label,
+                    planningDate: formatPlanningDate(day.date),
+                    dayLabel:
+                      data?.displayedDay === "tomorrow" && data.scope !== "today-and-tomorrow"
+                        ? "Morgen"
+                        : dayIndex === 1
+                          ? "Morgen"
+                          : "Vandaag",
+                  })
+                }
+              />
+            ))}
+          </div>
         </div>
       )}
       {selected ? (

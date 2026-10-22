@@ -17,6 +17,11 @@ export type LocationGroup = {
 
 export type LocationPage = LocationGroup & {
   pageInLocation: number;
+  locationPageCount: number;
+  locationCount: number;
+  columns: 1 | 2;
+  left: ShipPlanningEntry[];
+  right: ShipPlanningEntry[];
 };
 
 export function locationLabel(source: string) {
@@ -42,21 +47,46 @@ export function orderLocationGroups(groups: { location: string; entries: ShipPla
   return ordered;
 }
 
-export function rowsPerPage(listHeight: number, rowHeight = 44) {
+/** Rijen die veilig in één kolomblok passen. */
+export function rowsPerColumn(listHeight: number, rowHeight = 32) {
   if (!Number.isFinite(listHeight) || listHeight < rowHeight) return 1;
   return Math.max(1, Math.floor(listHeight / rowHeight));
 }
 
-export function buildLocationPages(groups: { location: string; entries: ShipPlanningEntry[] }[], pageSize: number): LocationPage[] {
-  const size = Math.max(1, pageSize);
+export const rowsPerPage = rowsPerColumn;
+
+/** Sequentiële verdeling: links de eerste helft, rechts de rest. Geen oneven/even. */
+export function splitSequential(entries: ShipPlanningEntry[], perColumn: number) {
+  const size = Math.max(1, perColumn);
+  if (entries.length <= size) return { columns: 1 as const, left: entries, right: [] as ShipPlanningEntry[] };
+  const mid = Math.ceil(entries.length / 2);
+  return { columns: 2 as const, left: entries.slice(0, mid), right: entries.slice(mid) };
+}
+
+export function buildLocationPages(
+  groups: { location: string; entries: ShipPlanningEntry[] }[],
+  perColumn: number,
+): LocationPage[] {
+  const columnSize = Math.max(1, perColumn);
+  const pageCapacity = columnSize * 2;
   const pages: LocationPage[] = [];
   for (const group of orderLocationGroups(groups)) {
-    for (let index = 0; index < group.entries.length; index += size) {
+    const locationCount = group.entries.length;
+    const locationPageCount = Math.ceil(locationCount / pageCapacity);
+    for (let pageInLocation = 0; pageInLocation < locationPageCount; pageInLocation += 1) {
+      const start = pageInLocation * pageCapacity;
+      const slice = group.entries.slice(start, start + pageCapacity);
+      const split = splitSequential(slice, columnSize);
       pages.push({
         location: group.location,
         label: group.label,
-        entries: group.entries.slice(index, index + size),
-        pageInLocation: Math.floor(index / size),
+        entries: slice,
+        pageInLocation,
+        locationPageCount,
+        locationCount,
+        columns: split.columns,
+        left: split.left,
+        right: split.right,
       });
     }
   }

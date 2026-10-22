@@ -86,6 +86,8 @@ Rapporteert recordcount, veldnamen, types en of operationele paden aanwezig zijn
 
 Alleen het Planning-dashboard. Waterstanden, diesel, gasolie NL/BE, weer (header) en agenda blijven. Wij Teunesen is compacter.
 
+Schepenplanning is een vaste kaart van 400px op het 2560×1440-podium (300px op 1920×1080). De kaart groeit niet mee met het aantal schepen. Een rij is 40px op het podium (30px op 1920×1080). Waterstanden vullen de ruimte erboven. Per state één laadplaats. Passen de rijen in één kolom, dan staat er één compacte tabel. Anders twee gelijke kolomblokken, links de eerste helft en rechts de rest. Past dat ook niet, dan volgen pagina’s van die laadplaats elkaar op. Iedere pagina blijft 12 seconden staan.
+
 Standaardweergave is Auto: één laadplaats tegelijk, 12 seconden per pagina. Zolang de succesvolle query van vandaag minimaal één rit heeft, is de titel Schepenplanning vandaag. Twee opeenvolgende geldige lege vandaag-responses (`totalCount` 0, volledige pagination, HTTP 200) schakelen naar morgen. Fouten, timeouts, stale cache en afgekapte pagination schakelen niet; de laatste geldige planning blijft staan met “Gegevens tijdelijk niet vernieuwd”.
 
 `SHIP_PLANNING_EMPTY_CONFIRMATION_COUNT` staat standaard op 2 en hoort niet in Admin. Admin-modi: Auto, Today, Tomorrow, TodayAndTomorrow. TodayAndTomorrow is niet de smallecastingstandaard.
