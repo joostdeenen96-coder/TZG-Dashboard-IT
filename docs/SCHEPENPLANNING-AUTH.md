@@ -1,24 +1,55 @@
 # Schepenplanning — authenticated discovery
 
-Gegenereerd: 2026-10-22T09:06:20.736Z (UTC)
-Base URL: `https://planning.teunesen.nl`
-Output: `/workspace/docs/SCHEPENPLANNING-AUTH.md`
+## Cloud Agent / deze checkout
 
-## Status: BLOKKADE
+AUTH: FAIL  
+DATASET: FAIL  
+dataTypeId:  
+tomorrow query: vastgesteld nee  
+today query: vastgesteld nee  
 
-Geen dedicated serviceaccount-secrets in de runtime / `.env`.
+Geen `SHIP_PLANNING_*` in deze runtime. Geen UI gebouwd.
 
-Vereist op TEU-NC-01 in `.env` (niet committen):
-- `SHIP_PLANNING_USERNAME`
-- `SHIP_PLANNING_PASSWORD`
-- optioneel `SHIP_PLANNING_TOTP_SECRET` / `SHIP_PLANNING_API_KEY`
+## TEU-NC-01 (waar `.env` de credentials bevat)
 
-## Summary
+Secrets staan lokaal in `.env` en mogen niet gelogd, gecommit of naar de frontend.
 
-AUTH: FAIL
-DATASET: FAIL
-dataTypeId: 
-tomorrow query: vastgesteld nee
-today query: vastgesteld nee
+```sh
+git fetch origin feature/schepenplanning-dashboard
+git checkout feature/schepenplanning-dashboard
+git pull origin feature/schepenplanning-dashboard
 
-STOP — geen UI.
+# Image of dist bijwerken
+docker compose build dashboard
+# of: npm run build
+
+# Discovery zonder tsx op de host
+./scripts/ship-planning-discover.sh
+```
+
+Alternatieven:
+
+```sh
+npm run ship-planning:discover
+node dist/server/shipPlanning/discoverAuthenticated.js
+```
+
+Docker-only (script doet dit automatisch als host-`dist` ontbreekt):
+
+```sh
+docker compose run --rm --no-deps \
+  -e SHIP_PLANNING_DISCOVERY_OUT=/app/data/ship-planning-discovery.md \
+  -e SHIP_PLANNING_FORCE_DATA_OUT=1 \
+  dashboard \
+  node dist/server/shipPlanning/discoverAuthenticated.js
+```
+
+Na een geslaagde run bevat dit bestand (of `data/ship-planning-discovery.md`) het gesanitizeerde rapport met:
+
+- AUTH / DATASET
+- dataTypeId
+- tomorrow/today query
+- veldmapping
+- laadplaatsen
+
+Commit **alleen** het gesanitizeerde rapport; nooit `.env`. Geen credentials/tokens/username in logs of rapport.
