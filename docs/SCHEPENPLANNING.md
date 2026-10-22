@@ -2,7 +2,11 @@
 
 Branch: `feature/schepenplanning-dashboard`  
 Bron: https://planning.teunesen.nl/  
-Besluit: **STOP na analyse** — geautoriseerde toegang ontbreekt; geen productie-scraper zonder serviceaccount.
+Besluit: **STOP** — fase 1 (publiek) afgerond; fase 2 (authenticated discovery) geblokkeerd tot dedicated secrets in de Cloud Agent-runtime staan.
+
+Authenticated output (zodra secrets er zijn): `docs/SCHEPENPLANNING-AUTH.md` via  
+`npx tsx server/shipPlanning/discoverAuthenticated.ts`  
+(geen credentials/tokens in logs).
 
 ## 1. Integratieanalyse
 
@@ -53,14 +57,18 @@ Lijsten gebruiken o.a. `orderBy.field`, `orderBy.dir`, Redux-achtige acties `sim
 
 ## 4. Responsevelden schepenplanning
 
-**Niet vastgesteld.** Vereist na login:
+**Niet vastgesteld** (geen login). SPA-contract voor data na auth (uit bundles):
 
-- menu/route naar “Schepenplanning”;
-- `dataTypeId` / entity-naam;
-- queryparameters voor datum en laadplaats;
-- veldmapping (Tijd, Klant, Losplaats, Conditie, Product, Hoeveelheid, Schip, …);
-- sortering en paginering;
-- of vandaag/morgen apart querybaar zijn.
+| Item | Detail |
+| --- | --- |
+| Query | `POST /api/data/v2/{entityTypeId}/query` |
+| Body (bekend) | `filter`, `orderBy` (`field:asc\|desc`), `pageSize` (default 50), `continuationToken`, `join`, `project` |
+| Filtertaal | Simba `DataFilter`: `field EQ "…"`, `AND`/`OR`, `BETWEEN`, `IN`, … |
+| Schema | `GET /api/config/v2/data-types/{id}` |
+| Aggregate | `POST /api/data/v2/{id}/aggregate`, `POST /api/data/v2/aggregate-batch` |
+| Live | SignalR `/api/live` |
+
+Nog te bepalen na login: welk `entityTypeId` = Schepenplanning; welk filterveld = laad-/plandatum; bronvolgorde; laadplaatsgroepering; echte veldnamen.
 
 ## 5. Ontbrekende technische toegang
 
