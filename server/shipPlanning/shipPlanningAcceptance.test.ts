@@ -44,7 +44,8 @@ test("SP1–SP40 schepenplanning acceptatie (STOP zonder serviceaccount)", async
   mark(
     "SP8",
     !docs.includes("SHIP_PLANNING_PASSWORD=") &&
-      docs.includes("geen credentials in rapport") &&
+      (docs.includes("geen credentials in rapport") ||
+        docs.includes("geen credentials/tokens/username in logs of rapport")) &&
       docs.includes("STOP"),
   );
   mark("SP9", !frontendWater.includes("planning.teunesen.nl") && !dashboardService.includes("planning.teunesen.nl"));
