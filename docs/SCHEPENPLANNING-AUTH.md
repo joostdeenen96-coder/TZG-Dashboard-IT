@@ -1,66 +1,45 @@
 # Schepenplanning — authenticated discovery
 
-## TEU-NC-01 LIVE (bekend)
+## TEU-NC-01 LIVE
 
-AUTH: **PASS** (Login HTTP 200, TOTP required: no)  
-DATASET: **FAIL** (page/formatter GUID werd eerder als dataTypeId gequeried → 404)
+AUTH: **PASS** (Login HTTP 200, TOTP: no)  
+Refresh HTTP 401 (`auth.token.missing`) mag worden genegeerd zolang de login-Bearer werkt — auth niet herontwerpen.
 
-Credentials werken. **Authenticatie niet herontwerpen.**
-
-## Bevestigde SPA-route
+Route:
 
 ```
-https://planning.teunesen.nl/#/data/page/e339106e-2bc5-4ed9-9295-d722a78eec3f
+#/data/page/e339106e-2bc5-4ed9-9295-d722a78eec3f
 ```
 
-| Identifier | Rol (SPA MainRouter-bewijs) |
+| Id | Rol |
 | --- | --- |
-| `e339106e-2bc5-4ed9-9295-d722a78eec3f` | **page path GUID / formatter.id** — niet automatisch `dataTypeId` |
-| sitemap `type: "page"` | component `Dn({ formatterId, pageName })` |
-| pad `/data/page/{guid}` | strip `/data/` → route `page/{guid}` |
-| `props.formatterId` | laadt formatter; daarna `settings.pluginConfig` (PluginFormatter) |
+| `e339106e-…` | page / **formatter.id** (PluginFormatter) — **geen** dataTypeId |
 
-Query `/api/data/v2/e339106e-…/query` → **404** is consistent met “verkeerde identifier”, niet met auth-falen.  
-`GET /api/config/data-types` → **403** is een apart autorisatieprobleem op config-listing.
+## SPA call chain (productiebundels)
 
-## Cloud Agent / deze checkout (geen secrets)
+1. Sitemap `type:"page"` + `props.formatterId`
+2. `Dn({ formatterId })` (MainRouter)
+3. Formatter uit `/api/ui-config/formatters`
+4. `PluginContext.Ye(pluginConfig)` → URL `.js` → `.t2.js`, `loadRemote(scope/module)`
+5. Remote `Formatter` + `tarasaConfiguration`
+6. Datasource-queries zitten in de **plugin-module**
 
-AUTH: FAIL  
-DATASET: FAIL  
+Discovery volgt uitsluitend deze keten. Geen generieke formatter-id probing.
 
-Geen `SHIP_PLANNING_*` in deze runtime. Geen UI gebouwd.
-
-## Discovery-gedrag (na deze update)
-
-1. Auth-flow ongewijzigd.
-2. Sitemap-entry voor Schepenplanning / path-GUID → veilige props (`label`, `path`, `type`, `formatterId`, `pageName`, `menuLabel`, `hasSubroutes`, `props`).
-3. Formatterobject `id == e339…` of `name == Schepenplanning` → structureel gerapporteerd.
-4. **Alleen** `formatter.dataTypeId` (+ nested list/entry formatters) als query-kandidaten — **nooit** `formatter.id` als dataTypeId.
-5. Rapport default: `data/ship-planning-discovery.md`; host-leesbare kopie: `ship-planning-discovery.md` (mode 640, owner = script-aanroeper).
-
-## Opnieuw draaien op TEU-NC-01
+## Opnieuw op TEU-NC-01
 
 ```sh
-git fetch origin feature/schepenplanning-dashboard
-git checkout feature/schepenplanning-dashboard
 git pull origin feature/schepenplanning-dashboard
-
 docker compose build dashboard
 ./scripts/ship-planning-discover.sh
-
-# Lees het host-owned rapport (niet het eventuele uid-10001 data-volume bestand):
 less ship-planning-discovery.md
 ```
 
-Beoordeel in het rapport:
+Beoordeel: volledig formatterobject, `pluginConfig`, plugin-source API-paden, resolved `dataTypeId`, S1–S24.
 
-- Schepenplanning route / Page/formatter id / Resolved dataTypeId / Resolved query endpoint
-- Acceptatie S1–S24
-- tomorrow/today filter + veldmapping
-
-Commit **alleen** een gesanitizeerd uittreksel indien nodig; nooit `.env`.  
-`ship-planning-discovery.md` staat in `.gitignore`.
+Host-leesbaar rapport: `ship-planning-discovery.md` (mode 640).  
+Data-volume `data/ship-planning-discovery.md` kan uid 10001 blijven — gebruik het host-bestand.
 
 ## STOP
 
-Geen widget / Admin credentials UI tot S6–S20 PASS (echt dataTypeId + query + mapping).
+Geen widget tot S1–S20 PASS.

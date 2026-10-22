@@ -1,15 +1,14 @@
 /**
  * Authenticated Schepenplanning discovery against planning.teunesen.nl.
  *
+ * Focus: formatter e339… (page/PluginFormatter) → pluginConfig → datasource.
+ * Geen generieke probing van alle formatter-ids als dataTypeId.
+ *
  * Production (TEU-NC-01, geen tsx):
  *   node dist/server/shipPlanning/discoverAuthenticated.js
  *   ./scripts/ship-planning-discover.sh
  *
- * Development:
- *   npx tsx server/shipPlanning/discoverAuthenticated.ts
- *
- * Secrets: SHIP_PLANNING_USERNAME / PASSWORD (optioneel TOTP / API_KEY / BASE_URL)
- * uit process.env of lokale `.env` — nooit loggen, committen of naar de frontend.
+ * Secrets: SHIP_PLANNING_* uit process.env of `.env` — nooit loggen/committen.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -24,7 +23,13 @@ const SECRET_ENV_KEYS = [
   "SHIP_PLANNING_BASE_URL",
 ] as const;
 
-/** Laad alleen SHIP_PLANNING_* uit .env wanneer nog niet in process.env. Geen logging van waarden. */
+/** Tarasa PluginContext: Xe = 2 → plugin URL .js wordt .t2.js */
+const TARASA_PLUGIN_RUNTIME_VERSION = 2;
+
+/** Door gebruiker bevestigde SPA-route / formatter id (≠ dataTypeId). */
+const SCHEPEN_PAGE_GUID = "e339106e-2bc5-4ed9-9295-d722a78eec3f";
+const SCHEPEN_SPA_ROUTE = `#/data/page/${SCHEPEN_PAGE_GUID}`;
+
 function loadShipPlanningEnvFile() {
   const candidates = [
     process.env.SHIP_PLANNING_ENV_FILE?.trim(),
@@ -68,12 +73,11 @@ const BASE = (process.env.SHIP_PLANNING_BASE_URL || "https://planning.teunesen.n
 function resolveOutPath() {
   const fromEnv = process.env.SHIP_PLANNING_DISCOVERY_OUT?.trim();
   if (fromEnv) return path.resolve(fromEnv);
-  // Default: data-volume. Voorkomt overschrijven van docs/SCHEPENPLANNING-AUTH.md
-  // bij blocked/missing-secrets runs. Docker mount data/; docs blijft instructie-document.
   return path.join(dataDir(), "ship-planning-discovery.md");
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+type Acceptance = "PASS" | "FAIL" | "NIET GETEST";
 
 const REDACT_KEY =
   /(password|passwd|token|secret|authorization|cookie|set-cookie|totp|api[_-]?key|username|userName|email|refresh)/i;
@@ -89,7 +93,7 @@ function redactDeep(value: unknown, depth = 0): Json {
     return value.length > 200 ? `${value.slice(0, 60)}…[truncated ${value.length}]` : value;
   }
   if (typeof value === "number" || typeof value === "boolean") return value;
-  if (Array.isArray(value)) return value.slice(0, 30).map((item) => redactDeep(item, depth + 1));
+  if (Array.isArray(value)) return value.slice(0, 40).map((item) => redactDeep(item, depth + 1));
   if (typeof value === "object") {
     const out: Record<string, Json> = {};
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
@@ -122,9 +126,12 @@ function amsterdamYmd(offsetDays: number) {
   return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
 }
 
-/** Tarasa SPA: numerieke ids → /api/data/{id}/query; overige → /api/data/v2/{id}/query */
 function isNumericTypeId(typeId: string) {
   return /^\d+$/.test(typeId.trim());
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 function dataQueryPath(typeId: string) {
@@ -135,61 +142,6 @@ function dataQueryPath(typeId: string) {
 function configTypePath(typeId: string) {
   const id = encodeURIComponent(typeId);
   return isNumericTypeId(typeId) ? `/api/config/data-types/${id}` : `/api/config/v2/data-types/${id}`;
-}
-
-/** Daggrenzen als epoch-ms in Europe/Amsterdam (Tarasa dateTimeFilter BETWEEN). */
-function amsterdamDayBoundsMs(ymd: string): [number, number] {
-  const noonParts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Amsterdam",
-    timeZoneName: "shortOffset",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(`${ymd}T12:00:00Z`));
-  const tzName = noonParts.find((part) => part.type === "timeZoneName")?.value ?? "GMT+2";
-  const match = /GMT([+-]\d+)(?::(\d+))?/.exec(tzName);
-  const hours = match ? Number(match[1]) : 2;
-  const mins = match?.[2] ? Number(match[2]) : 0;
-  const sign = hours >= 0 ? 1 : -1;
-  const offsetMs = (Math.abs(hours) * 60 + mins) * 60 * 1000 * sign;
-  const dayStart = Date.parse(`${ymd}T00:00:00Z`) - offsetMs;
-  const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
-  return [dayStart, dayEnd];
-}
-
-function nextYmd(ymd: string) {
-  const base = new Date(`${ymd}T12:00:00Z`);
-  base.setUTCDate(base.getUTCDate() + 1);
-  return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
-}
-
-function dateFilterVariants(field: string, ymd: string): string[] {
-  const [dayStart, dayEnd] = amsterdamDayBoundsMs(ymd);
-  return [
-    `${field} EQ ${JSON.stringify(ymd)}`,
-    `${field} EQ ${JSON.stringify(dayStart)}`,
-    `${field} BETWEEN ${JSON.stringify([dayStart, dayEnd])}`,
-    `${field} BETWEEN ${JSON.stringify([dayStart - 1, dayEnd])}`,
-    `${field} GEQ ${JSON.stringify(ymd)} AND ${field} LT ${JSON.stringify(nextYmd(ymd))}`,
-  ];
-}
-
-function contentScore(blob: string) {
-  const low = blob.toLowerCase();
-  let score = 0;
-  for (const token of ["hoofdstraat", "hoogveld", "venlo", "cuijk"]) {
-    if (low.includes(token)) score += 25;
-  }
-  for (const token of ["schip", "vessel", "binnenschip", "laadplaats", "losplaats", "groeve"]) {
-    if (low.includes(token)) score += 8;
-  }
-  for (const token of ["ton", "tonnage", "order", "vervoerder"]) {
-    if (low.includes(token)) score += 2;
-  }
-  return score;
 }
 
 async function api(method: string, pathname: string, token: string | null, body?: unknown) {
@@ -208,7 +160,250 @@ async function api(method: string, pathname: string, token: string | null, body?
   } catch {
     json = { _nonJson: true, _bytes: text.length };
   }
-  return { status: response.status, json, bytes: text.length };
+  return { status: response.status, json, bytes: text.length, contentType: response.headers.get("content-type") };
+}
+
+async function fetchText(url: string, token: string | null) {
+  const headers: Record<string, string> = { accept: "*/*" };
+  if (token) headers.authorization = `Bearer ${token}`;
+  const response = await fetch(url, { method: "GET", headers });
+  const text = await response.text();
+  return {
+    status: response.status,
+    bytes: text.length,
+    contentType: response.headers.get("content-type"),
+    text,
+  };
+}
+
+function extractToken(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const row = payload as Record<string, unknown>;
+  if (typeof row.token === "string" && row.token) return row.token;
+  if (typeof row.accessToken === "string" && row.accessToken) return row.accessToken;
+  if (row.authToken && typeof row.authToken === "object") {
+    const nested = row.authToken as Record<string, unknown>;
+    if (typeof nested.token === "string") return nested.token;
+  }
+  return null;
+}
+
+function looksLikeTotpRequired(payload: unknown, status: number) {
+  const text = JSON.stringify(payload ?? {}).toLowerCase();
+  return (
+    status === 401 ||
+    status === 403 ||
+    text.includes("totp") ||
+    text.includes("twofactor") ||
+    text.includes("two-factor") ||
+    text.includes("mfa")
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function collectObjects(node: unknown, into: Record<string, unknown>[] = []): Record<string, unknown>[] {
+  if (!node) return into;
+  if (Array.isArray(node)) {
+    for (const item of node) collectObjects(item, into);
+    return into;
+  }
+  if (typeof node === "object") {
+    into.push(node as Record<string, unknown>);
+    for (const nested of Object.values(node as Record<string, unknown>)) {
+      if (nested && typeof nested === "object") collectObjects(nested, into);
+    }
+  }
+  return into;
+}
+
+function indexById(payload: unknown): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of collectObjects(payload)) {
+    if (typeof row.id === "string" || typeof row.id === "number") map.set(String(row.id), row);
+  }
+  return map;
+}
+
+function findSchepenSitemapEntries(payload: unknown): Record<string, unknown>[] {
+  const hits: Record<string, unknown>[] = [];
+  for (const row of collectObjects(payload)) {
+    const pathValue = typeof row.path === "string" ? row.path : "";
+    const label = String(row.label ?? row.menuLabel ?? row.displayName ?? row.name ?? "");
+    const props = asRecord(row.props) ?? {};
+    const formatterId = String(props.formatterId ?? row.formatterId ?? "");
+    const blob = `${pathValue} ${label} ${formatterId}`.toLowerCase();
+    if (
+      pathValue.includes(SCHEPEN_PAGE_GUID) ||
+      formatterId === SCHEPEN_PAGE_GUID ||
+      blob.includes("schepenplanning")
+    ) {
+      hits.push(row);
+    }
+  }
+  return hits;
+}
+
+function safeSitemapEntryView(entry: Record<string, unknown>) {
+  const props = asRecord(entry.props) ?? {};
+  return {
+    label: entry.label ?? entry.menuLabel ?? entry.displayName ?? null,
+    path: entry.path ?? null,
+    type: entry.type ?? null,
+    formatterId: props.formatterId ?? entry.formatterId ?? null,
+    pageName: props.pageName ?? entry.pageName ?? null,
+    menuLabel: entry.menuLabel ?? props.menuLabel ?? null,
+    hasSubroutes: entry.hasSubroutes ?? null,
+    props: {
+      formatterId: props.formatterId ?? null,
+      pageName: props.pageName ?? null,
+      entityTypeId: props.entityTypeId ?? null,
+      menuLabel: props.menuLabel ?? null,
+    },
+  };
+}
+
+/** Volledig structureel formatterobject (gesanitiseerd), gericht op Schepenplanning. */
+function fullSanitizedFormatter(fmt: Record<string, unknown>) {
+  const settings = asRecord(fmt.settings) ?? {};
+  const plugin = asRecord(settings.pluginConfig);
+  const attributes = Array.isArray(settings.attributes)
+    ? settings.attributes.map((item) => {
+        const row = asRecord(item) ?? {};
+        return {
+          displayName: row.displayName ?? null,
+          uniqueId: row.uniqueId ?? null,
+          attributePath: row.attributePath ?? null,
+          formatterId: row.formatterId ?? null,
+          category: row.category ?? null,
+        };
+      })
+    : settings.attributes ?? null;
+  return redactDeep({
+    id: fmt.id ?? null,
+    name: fmt.name ?? null,
+    menuCategory: fmt.menuCategory ?? null,
+    menuLabel: fmt.menuLabel ?? null,
+    path: fmt.path ?? null,
+    formatterType: fmt.formatterType ?? null,
+    dataTypeId: fmt.dataTypeId ?? null,
+    componentType: fmt.componentType ?? null,
+    settings: {
+      pluginConfig: plugin
+        ? { url: plugin.url ?? null, scope: plugin.scope ?? null, module: plugin.module ?? null }
+        : settings.pluginConfig ?? null,
+      listFormatterId: settings.listFormatterId ?? null,
+      entryFormatterId: settings.entryFormatterId ?? null,
+      searchField: settings.searchField ?? null,
+      attributes,
+      rows: settings.rows ?? null,
+      includedAttributes: settings.includedAttributes ?? null,
+      scriptType: settings.scriptType ?? null,
+      globalFilter: settings.globalFilter ?? null,
+      config: settings.config ?? null,
+      lists: settings.lists ?? null,
+      cards: settings.cards ?? null,
+    },
+  });
+}
+
+/** Zoals PluginContext.Ye: .js → .t{TARASA_PLUGIN_RUNTIME_VERSION}.js */
+function resolvePluginScriptUrls(url: string): string[] {
+  const absolute = url.startsWith("http") ? url : `${BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+  const urls = new Set<string>([absolute]);
+  if (/\.t\d+\.js$/i.test(absolute)) {
+    urls.add(absolute.replace(/\.t\d+\.js$/i, ".js"));
+  } else if (absolute.endsWith(".js")) {
+    urls.add(absolute.replace(/\.js$/i, `.t${TARASA_PLUGIN_RUNTIME_VERSION}.js`));
+  }
+  return [...urls];
+}
+
+type PluginAnalysis = {
+  apiPaths: string[];
+  dataTypeIds: string[];
+  filterSnippets: string[];
+  fieldLiterals: string[];
+  locationHits: string[];
+  queryBodyKeys: string[];
+};
+
+function analyzePluginSource(source: string): PluginAnalysis {
+  const apiPaths = new Set<string>();
+  for (const match of source.matchAll(/["'`](\/api\/[^"'`]+)["'`]/g)) {
+    apiPaths.add(match[1]);
+  }
+  for (const match of source.matchAll(/\/api\/data(?:\/v2)?\/\$\{[^}]+\}\/query/g)) {
+    apiPaths.add(match[0]);
+  }
+
+  const dataTypeIds = new Set<string>();
+  for (const match of source.matchAll(/dataTypeId["'\s:=]+["']([^"']+)["']/gi)) {
+    if (match[1] !== SCHEPEN_PAGE_GUID) dataTypeIds.add(match[1]);
+  }
+  for (const match of source.matchAll(/entityTypeId["'\s:=]+["']?(\d{1,8}|[0-9a-f-]{36})["']?/gi)) {
+    if (match[1] !== SCHEPEN_PAGE_GUID) dataTypeIds.add(match[1]);
+  }
+  for (const match of source.matchAll(/\/api\/data\/v2\/([A-Za-z0-9._-]+)\/query/g)) {
+    if (match[1] !== SCHEPEN_PAGE_GUID && !match[1].includes("${")) dataTypeIds.add(match[1]);
+  }
+  for (const match of source.matchAll(/\/api\/data\/(\d+)\/query/g)) {
+    dataTypeIds.add(match[1]);
+  }
+
+  const filterSnippets: string[] = [];
+  for (const match of source.matchAll(
+    /[A-Za-z0-9_.]+ (?:EQ|NEQ|GT|LT|GEQ|LEQ|BETWEEN|IN|STRCON|STREQ) [^"'`;\n]{0,80}/g,
+  )) {
+    filterSnippets.push(match[0].slice(0, 120));
+  }
+
+  const fieldLiterals = new Set<string>();
+  for (const token of [
+    "Tijd",
+    "Klant",
+    "Losplaats",
+    "Conditie",
+    "Product",
+    "Hoeveelheid",
+    "Schip",
+    "Order",
+    "Vervoerder",
+    "Telnr",
+    "Losdatum",
+    "Laadplaats",
+    "Opmerking",
+    "laaddatum",
+    "loadingDate",
+    "unloadingDate",
+  ]) {
+    if (source.includes(token)) fieldLiterals.add(token);
+  }
+
+  const locationHits: string[] = [];
+  for (const location of ["Hoofdstraat", "Hoogveld", "Venlo", "Cuijk"]) {
+    if (source.toLowerCase().includes(location.toLowerCase())) locationHits.push(location);
+  }
+
+  const queryBodyKeys = new Set<string>();
+  for (const key of ["filter", "pageSize", "continuationToken", "orderBy", "project", "join"]) {
+    if (new RegExp(`["']${key}["']`).test(source) || new RegExp(`\\b${key}\\b`).test(source)) {
+      queryBodyKeys.add(key);
+    }
+  }
+
+  return {
+    apiPaths: [...apiPaths].sort().slice(0, 80),
+    dataTypeIds: [...dataTypeIds].filter((id) => id && id !== SCHEPEN_PAGE_GUID).slice(0, 40),
+    filterSnippets: [...new Set(filterSnippets)].slice(0, 40),
+    fieldLiterals: [...fieldLiterals],
+    locationHits,
+    queryBodyKeys: [...queryBodyKeys],
+  };
 }
 
 function collectKeys(value: unknown, prefix = "", into = new Set<string>()) {
@@ -225,121 +420,6 @@ function collectKeys(value: unknown, prefix = "", into = new Set<string>()) {
     }
   }
   return into;
-}
-
-function scoreName(name: string) {
-  const low = name.toLowerCase().replace(/\s+/g, "");
-  let score = 0;
-  for (const token of [
-    "schepenplanning",
-    "scheepsplanning",
-    "shipplanning",
-    "scheepvaartplanning",
-    "binnenvaartplanning",
-  ]) {
-    if (low.includes(token)) score += 40;
-  }
-  for (const token of ["scheep", "schip", "ship", "vessel", "binnenvaart", "laadplaats"]) {
-    if (low.includes(token)) score += 12;
-  }
-  for (const token of ["planning", "laad", "lossing", "order", "groeve"]) {
-    if (low.includes(token)) score += 4;
-  }
-  for (const token of ["hoofdstraat", "hoogveld", "venlo", "cuijk"]) {
-    if (low.includes(token)) score += 6;
-  }
-  return score;
-}
-
-function collectAttributeNames(schema: unknown): string[] {
-  const names = new Set<string>();
-  const walk = (node: unknown) => {
-    if (!node) return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    if (typeof node !== "object") return;
-    const row = node as Record<string, unknown>;
-    for (const key of ["attributeName", "name", "path", "field", "key", "id"]) {
-      const value = row[key];
-      if (typeof value === "string" && value.trim() && !REDACT_KEY.test(value)) names.add(value.trim());
-    }
-    for (const nested of Object.values(row)) {
-      if (nested && typeof nested === "object") walk(nested);
-    }
-  };
-  walk(schema);
-  return [...names];
-}
-
-function dateFieldCandidatesFrom(names: string[], mapping: Partial<Record<TargetField, string>>) {
-  const preferred = [
-    mapping.unloadingDate,
-    ...names.filter((name) => {
-      const low = name.toLowerCase();
-      return (
-        low.includes("datum") ||
-        low.includes("date") ||
-        low.includes("dag") ||
-        low.includes("day") ||
-        low.includes("laad") ||
-        low.includes("plan")
-      );
-    }),
-    "date",
-    "Datum",
-    "laaddatum",
-    "Laaddatum",
-    "loadingDate",
-    "plannedDate",
-    "planDatum",
-    "PlanDatum",
-    "dag",
-    "Day",
-  ].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index);
-  return preferred;
-}
-
-function readPriorDiscoveryHints(): string[] {
-  const hints: string[] = [];
-  const candidates = [
-    path.join(dataDir(), "ship-planning-discovery.md"),
-    path.join(appRoot(), "data", "ship-planning-discovery.md"),
-    path.join(appRoot(), "docs", "SCHEPENPLANNING-AUTH.md"),
-  ];
-  for (const file of candidates) {
-    if (!existsSync(file)) continue;
-    try {
-      const text = readFileSync(file, "utf8");
-      if (/AUTH:\s*PASS/i.test(text)) hints.push(`Prior report ${file}: AUTH PASS`);
-      if (/DATASET:\s*FAIL/i.test(text)) hints.push(`Prior report ${file}: DATASET FAIL`);
-      for (const match of text.matchAll(/dataTypeId:\s*`?([^`\n]+)`?/gi)) {
-        const id = match[1].trim();
-        if (id && id !== "(niet vastgesteld)" && !id.includes("redacted")) {
-          hints.push(`Prior dataTypeId hint: ${id}`);
-        }
-      }
-      for (const match of text.matchAll(/id=`([^`]+)`\s+name=`([^`]+)`/g)) {
-        hints.push(`Prior candidate: ${match[1]} / ${match[2]}`);
-      }
-    } catch {
-      // ignore unreadable prior report
-    }
-  }
-  return hints;
-}
-
-function extractToken(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const row = payload as Record<string, unknown>;
-  if (typeof row.token === "string" && row.token) return row.token;
-  if (typeof row.accessToken === "string" && row.accessToken) return row.accessToken;
-  if (row.authToken && typeof row.authToken === "object") {
-    const nested = row.authToken as Record<string, unknown>;
-    if (typeof nested.token === "string") return nested.token;
-  }
-  return null;
 }
 
 function extractEntities(payload: unknown): unknown[] {
@@ -398,14 +478,13 @@ const FIELD_SYNONYMS: Record<TargetField, string[]> = {
   orderNumber: ["order", "ordernummer", "ordernumber", "orderid", "ordernr"],
   carrier: ["vervoerder", "carrier", "rederij", "transporteur"],
   phoneNumber: ["telnr", "telefoon", "phone", "phonenumber", "tel"],
-  unloadingDate: ["losdatum", "unloadingdate", "lossingsdatum"],
+  unloadingDate: ["losdatum", "unloadingdate", "lossingsdatum", "laaddatum", "loadingdate", "datum", "date"],
   planningRemark: ["opmerking", "remark", "opmerkingplanning", "planningremark", "note", "notitie"],
 };
 
 function matchField(keys: string[], target: TargetField): string | null {
   const synonyms = FIELD_SYNONYMS[target];
   const normalized = keys.map((key) => ({
-    key,
     leaf: key.split(".").pop() || key,
     low: (key.split(".").pop() || key).toLowerCase().replace(/[^a-z0-9]/g, ""),
   }));
@@ -426,156 +505,18 @@ function operationalSample(entity: unknown, mapping: Partial<Record<TargetField,
   return sample;
 }
 
-function looksLikeTotpRequired(payload: unknown, status: number) {
-  const text = JSON.stringify(payload ?? {}).toLowerCase();
-  return (
-    status === 401 ||
-    status === 403 ||
-    text.includes("totp") ||
-    text.includes("twofactor") ||
-    text.includes("two-factor") ||
-    text.includes("mfa")
-  );
-}
-
-/** Door gebruiker bevestigde SPA-route (hash). GUID ≠ automatisch dataTypeId. */
-const SCHEPEN_PAGE_GUID = "e339106e-2bc5-4ed9-9295-d722a78eec3f";
-const SCHEPEN_SPA_ROUTE = `#/data/page/${SCHEPEN_PAGE_GUID}`;
-
-type Acceptance = "PASS" | "FAIL" | "NIET GETEST";
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function collectObjects(node: unknown, into: Record<string, unknown>[] = []): Record<string, unknown>[] {
-  if (!node) return into;
-  if (Array.isArray(node)) {
-    for (const item of node) collectObjects(item, into);
-    return into;
+function contentLooksLikeShipPlanning(blob: string) {
+  const low = blob.toLowerCase();
+  let score = 0;
+  for (const token of ["hoofdstraat", "hoogveld", "venlo", "cuijk"]) {
+    if (low.includes(token)) score += 25;
   }
-  if (typeof node === "object") {
-    into.push(node as Record<string, unknown>);
-    for (const nested of Object.values(node as Record<string, unknown>)) {
-      if (nested && typeof nested === "object") collectObjects(nested, into);
-    }
+  for (const token of ["schip", "vessel", "laadplaats", "losplaats", "binnenschip"]) {
+    if (low.includes(token)) score += 8;
   }
-  return into;
+  return score;
 }
 
-function indexFormatters(payload: unknown): Map<string, Record<string, unknown>> {
-  const map = new Map<string, Record<string, unknown>>();
-  for (const row of collectObjects(payload)) {
-    if (typeof row.id === "string" || typeof row.id === "number") {
-      map.set(String(row.id), row);
-    }
-  }
-  return map;
-}
-
-function findSchepenSitemapEntries(payload: unknown): Record<string, unknown>[] {
-  const hits: Record<string, unknown>[] = [];
-  for (const row of collectObjects(payload)) {
-    const pathValue = typeof row.path === "string" ? row.path : "";
-    const label = String(row.label ?? row.menuLabel ?? row.displayName ?? row.name ?? "");
-    const props = asRecord(row.props) ?? {};
-    const formatterId = String(props.formatterId ?? row.formatterId ?? "");
-    const blob = `${pathValue} ${label} ${formatterId}`.toLowerCase();
-    if (
-      pathValue.includes(SCHEPEN_PAGE_GUID) ||
-      formatterId === SCHEPEN_PAGE_GUID ||
-      blob.includes("schepenplanning")
-    ) {
-      hits.push(row);
-    }
-  }
-  return hits;
-}
-
-function safeSitemapEntryView(entry: Record<string, unknown>) {
-  const props = asRecord(entry.props) ?? {};
-  return {
-    label: entry.label ?? entry.menuLabel ?? entry.displayName ?? null,
-    path: entry.path ?? null,
-    type: entry.type ?? null,
-    formatterId: props.formatterId ?? entry.formatterId ?? null,
-    pageName: props.pageName ?? entry.pageName ?? null,
-    menuLabel: entry.menuLabel ?? props.menuLabel ?? null,
-    hasSubroutes: entry.hasSubroutes ?? null,
-    props: {
-      formatterId: props.formatterId ?? null,
-      pageName: props.pageName ?? null,
-      entityTypeId: props.entityTypeId ?? null,
-      menuLabel: props.menuLabel ?? null,
-    },
-  };
-}
-
-function safeFormatterView(fmt: Record<string, unknown>) {
-  const settings = asRecord(fmt.settings) ?? {};
-  const plugin = asRecord(settings.pluginConfig);
-  const attributes = Array.isArray(settings.attributes)
-    ? settings.attributes.slice(0, 80).map((item) => {
-        const row = asRecord(item) ?? {};
-        return {
-          displayName: row.displayName ?? null,
-          attributePath: row.attributePath ?? null,
-          formatterId: row.formatterId ?? null,
-          uniqueId: row.uniqueId ?? null,
-        };
-      })
-    : null;
-  const lists = Array.isArray(settings.lists)
-    ? settings.lists.slice(0, 40).map((item) => {
-        const row = asRecord(item) ?? {};
-        return {
-          title: row.title ?? null,
-          dataType: row.dataType ?? null,
-          dataTypeId: row.dataTypeId ?? null,
-          formatterId: row.formatterId ?? null,
-          filter: row.filter ?? null,
-        };
-      })
-    : null;
-  return {
-    id: fmt.id ?? null,
-    name: fmt.name ?? null,
-    formatterType: fmt.formatterType ?? null,
-    dataTypeId: fmt.dataTypeId ?? null,
-    componentType: fmt.componentType ?? null,
-    path: fmt.path ?? null,
-    settings: {
-      listFormatterId: settings.listFormatterId ?? null,
-      entryFormatterId: settings.entryFormatterId ?? null,
-      globalFilter: settings.globalFilter ?? null,
-      pluginConfig: plugin
-        ? { url: plugin.url ?? null, scope: plugin.scope ?? null, module: plugin.module ?? null }
-        : null,
-      attributes,
-      lists,
-    },
-  };
-}
-
-function findFormatterByIdOrName(
-  byId: Map<string, Record<string, unknown>>,
-  id: string | null,
-  nameHint = "schepenplanning",
-): Record<string, unknown> | null {
-  if (id && byId.has(id)) return byId.get(id) ?? null;
-  const low = nameHint.toLowerCase();
-  for (const row of byId.values()) {
-    if (String(row.name ?? "").toLowerCase() === low) return row;
-  }
-  for (const row of byId.values()) {
-    if (String(row.name ?? "").toLowerCase().includes(low)) return row;
-  }
-  return null;
-}
-
-/** Verzamel bewezen dataTypeIds uit formatter-config (nóóit formatter.id als type-id). */
 function collectDataTypeIdsFromFormatter(
   fmt: Record<string, unknown> | null,
   byId: Map<string, Record<string, unknown>>,
@@ -586,11 +527,7 @@ function collectDataTypeIdsFromFormatter(
   const own = fmt.dataTypeId;
   if (own != null && String(own).trim()) {
     const idStr = String(own);
-    // UUID die identiek is aan formatter.id telt niet als bewezen dataTypeId (page/formatter GUID).
-    const sameAsFormatterId = idStr === String(fmt.id);
-    if (!(sameAsFormatterId && isUuid(idStr))) {
-      into.add(idStr);
-    }
+    if (!(idStr === String(fmt.id) && isUuid(idStr))) into.add(idStr);
   }
   const settings = asRecord(fmt.settings) ?? {};
   for (const key of ["listFormatterId", "entryFormatterId", "subFormatterId"] as const) {
@@ -604,34 +541,14 @@ function collectDataTypeIdsFromFormatter(
       const row = asRecord(item);
       if (!row) continue;
       for (const key of ["dataType", "dataTypeId", "entityTypeId"] as const) {
-        const value = row[key];
-        if (value != null && String(value).trim()) into.add(String(value));
+        if (row[key] != null && String(row[key]).trim()) into.add(String(row[key]));
       }
       if (row.formatterId != null) {
         collectDataTypeIdsFromFormatter(byId.get(String(row.formatterId)) ?? null, byId, into, depth + 1);
       }
     }
   }
-  if (Array.isArray(settings.attributes)) {
-    for (const item of settings.attributes) {
-      const row = asRecord(item);
-      if (row?.formatterId != null) {
-        collectDataTypeIdsFromFormatter(byId.get(String(row.formatterId)) ?? null, byId, into, depth + 1);
-      }
-    }
-  }
-  if (Array.isArray(settings.cards)) {
-    for (const item of settings.cards) {
-      const row = asRecord(item);
-      if (row?.dataType != null) into.add(String(row.dataType));
-      if (row?.dataTypeId != null) into.add(String(row.dataTypeId));
-    }
-  }
   return into;
-}
-
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 async function main() {
@@ -647,6 +564,7 @@ async function main() {
     auth: "FAIL" as "PASS" | "FAIL",
     dataset: "FAIL" as "PASS" | "FAIL",
     dataTypeId: "",
+    queryPath: "",
     tomorrowQuery: false,
     todayQuery: false,
     totpRequired: "unknown" as "yes" | "no" | "unknown",
@@ -658,10 +576,12 @@ async function main() {
   push(`Base URL: \`${BASE}\``);
   push(`Output: \`${outPath}\``);
   push("");
+  push("Focus: uitsluitend Schepenplanning formatter → plugin → datasource.");
+  push("Geen generieke probing van alle formatter-ids als dataTypeId.");
+  push("");
 
   const writeReport = () => {
     mkdirSync(path.dirname(outPath), { recursive: true });
-    // 0640: owner+group read; geen world. Host-ownership regelt ship-planning-discover.sh.
     writeFileSync(outPath, `${report.join("\n")}\n`, { mode: 0o640 });
   };
 
@@ -670,24 +590,12 @@ async function main() {
     push("");
     push("Geen dedicated serviceaccount-secrets in de runtime / `.env`.");
     push("");
-    push("Vereist op TEU-NC-01 in `.env` (niet committen):");
-    push("- `SHIP_PLANNING_USERNAME`");
-    push("- `SHIP_PLANNING_PASSWORD`");
-    push("- optioneel `SHIP_PLANNING_TOTP_SECRET` / `SHIP_PLANNING_API_KEY`");
-    push("");
     push("## Summary");
-    push("");
     push("AUTH: FAIL");
     push("DATASET: FAIL");
-    push("dataTypeId: ");
-    push("tomorrow query: vastgesteld nee");
-    push("today query: vastgesteld nee");
-    push("");
-    push("STOP — geen UI.");
     writeReport();
     console.log(`Wrote ${outPath} (blocked: missing secrets)`);
     console.log("AUTH: FAIL");
-    console.log("DATASET: FAIL");
     process.exitCode = 2;
     return;
   }
@@ -699,16 +607,6 @@ async function main() {
   push(`API-key: ${apiKey ? "[redacted] (aanwezig)" : "ontbreekt"}`);
   push(`TOTP-secret: ${totp ? "[redacted] (aanwezig)" : "ontbreekt"}`);
   push("");
-
-  if (apiKey && !password) {
-    push("API-key-only login is in deze client niet als apart auth-endpoint vastgelegd.");
-    push("AUTH: FAIL — gebruik password(+optioneel TOTP) voor discovery.");
-    summary.auth = "FAIL";
-    writeReport();
-    console.log("AUTH: FAIL");
-    process.exitCode = 1;
-    return;
-  }
 
   const loginBody: Record<string, string> = { username, password };
   if (totp) loginBody.totp = totp;
@@ -724,19 +622,13 @@ async function main() {
   let token = extractToken(auth.json);
   if ((!token || auth.status >= 400) && !totp && looksLikeTotpRequired(auth.json, auth.status)) {
     summary.totpRequired = "yes";
-    push("TOTP lijkt verplicht (response/status wijst op MFA). Zet `SHIP_PLANNING_TOTP_SECRET`.");
   }
 
   if (!token || auth.status >= 400) {
     push("## Status: AUTH MISLUKT");
-    push(`TOTP required: ${summary.totpRequired}`);
-    push("");
     push("## Summary");
     push("AUTH: FAIL");
     push("DATASET: FAIL");
-    push("dataTypeId: ");
-    push("tomorrow query: vastgesteld nee");
-    push("today query: vastgesteld nee");
     writeReport();
     console.log("AUTH: FAIL");
     process.exitCode = 1;
@@ -749,7 +641,7 @@ async function main() {
   push(`TOTP nodig voor deze login: ${summary.totpRequired}`);
   push("");
 
-  const authObj = auth.json && typeof auth.json === "object" ? (auth.json as Record<string, unknown>) : {};
+  const authObj = asRecord(auth.json) ?? {};
   const roleId =
     (authObj.applicationRoleId as string | number | undefined) ??
     ((authObj.currentUser as { applicationRoleId?: string | number } | undefined)?.applicationRoleId);
@@ -761,6 +653,10 @@ async function main() {
     if (refreshed) {
       token = refreshed;
       push(`Refresh OK (fingerprint=${fingerprint(token)})`);
+    } else {
+      push(
+        "Refresh mislukt/geen nieuw token — discovery gaat door met initiële Bearer (auth-flow ongewijzigd).",
+      );
     }
     push("```json");
     push(JSON.stringify(redactDeep(refresh.json), null, 2));
@@ -768,157 +664,40 @@ async function main() {
     push("");
   }
 
-  const tenant = await api("GET", "/api/user-access/application/fromDomain", token);
-  push("## Tenant");
-  push(`fromDomain HTTP: ${tenant.status}`);
-  push("```json");
-  push(JSON.stringify(redactDeep(tenant.json), null, 2));
-  push("```");
+  // ——— SPA call chain (productiebundels) ———
+  push("## SPA call chain (bewijs uit Tarasa bundles)");
+  push("");
+  push("1. Sitemap `type:\"page\"`, path `/data/page/{guid}`, `props.formatterId`");
+  push("2. MainRouter: strip `/data/` → route `page/{guid}` → component `Dn({ formatterId, pageName })`");
+  push("3. `gt(formatterId)` → formatter uit `/api/ui-config/formatters`");
+  push("4. `pn(formatter.settings.pluginConfig)` → `PluginContext.usePluginConfiguration` / `Ye`");
+  push(
+    `5. \`Ye\`: plugin URL \`.js\` → \`.t${TARASA_PLUGIN_RUNTIME_VERSION}.js\`; Module Federation \`loadRemote(scope/module)\``,
+  );
+  push("6. Remote: `default.tarasaConfiguration` + remote `Formatter` component");
+  push("7. `nl`: `formatter.Formatter({ formatter, isRoot, match })`");
+  push("8. Datasource-queries zitten in de **remote plugin-module**, niet in host-MainRouter");
+  push("");
+  push(`Bevestigde route: \`${SCHEPEN_SPA_ROUTE}\``);
+  push(`Page/formatter id: \`${SCHEPEN_PAGE_GUID}\` — **geen** dataTypeId`);
   push("");
 
-  const priorHints = readPriorDiscoveryHints();
-  if (priorHints.length) {
-    push("## Prior discovery hints (lokaal rapport)");
-    push("");
-    for (const hint of priorHints.slice(0, 40)) push(`- ${hint}`);
-    push("");
-    push("Auth-flow ongewijzigd. Uitbreiding richt zich op dataset/sitemap/data-types.");
-    push("");
-  }
-
-  // Endpoints die de Tarasa-SPA na login gebruikt (profiletypedetail / sitemap).
-  const probes: Array<{ method: string; path: string; body?: unknown }> = [
-    { method: "GET", path: "/api/user-access/account-settings" },
-    { method: "GET", path: "/api/config/data-types" },
-    { method: "GET", path: "/api/config/v2/data-types" },
-    { method: "GET", path: "/api/config/profile-data-types" },
-    { method: "GET", path: "/api/ui-config/sitemap" },
-    { method: "GET", path: "/api/ui-config/sitemap/public" },
-    { method: "GET", path: "/api/ui-config/formatters" },
-    { method: "GET", path: "/api/feature-flags/all" },
-    { method: "GET", path: "/api/user-access/roles-visible-with-profile" },
-    { method: "GET", path: "/api/user-access/applications" },
-  ];
-
-  push("## Endpoint probes (dataset-discovery)");
+  // ——— Alleen sitemap + formatters (geen generieke type-scan) ———
+  push("## Config probes (alleen sitemap + formatters)");
   push("");
-  const typeCandidates: Array<{ id: string; name: string; score: number; source: string }> = [];
-  const allListedTypes: Array<{ id: string; name: string; score: number; source: string }> = [];
-  let sitemapJson: unknown = null;
-  let sitemapStatus = 0;
-  let formattersJson: unknown = null;
-  let formattersStatus = 0;
-  const probeStatuses: Record<string, number> = {};
-
-  const walkTypes = (node: unknown, source: string, keepZeroScore: boolean) => {
-    if (!node) return;
-    if (Array.isArray(node)) {
-      for (const item of node) walkTypes(item, source, keepZeroScore);
-      return;
-    }
-    if (typeof node !== "object") return;
-    const row = node as Record<string, unknown>;
-    const fromFormatters = source.includes("formatters");
-    const fromSitemap = source.includes("sitemap");
-    // Formatters: alleen expliciete dataTypeId — nóóit formatter.id (page/plugin GUID).
-    // Sitemap page-links: props.formatterId is page/formatter, geen dataTypeId.
-    // Sitemap list-links: props.entityTypeId is wel een dataset-kandidaat.
-    let id: unknown = null;
-    if (fromFormatters) {
-      id = row.dataTypeId ?? row.entityTypeId ?? null;
-    } else if (fromSitemap) {
-      const props = asRecord(row.props);
-      if (row.type === "page" || row.type === "dashboard") {
-        id = null;
-      } else {
-        id = props?.entityTypeId ?? row.entityTypeId ?? row.dataTypeId ?? null;
-      }
-    } else {
-      id = row.entityTypeId ?? row.dataTypeId ?? row.typeId ?? row.id ?? row.dataTypeName ?? null;
-    }
-    const name = String(
-      row.displayName ??
-        row.menuLabel ??
-        row.label ??
-        row.title ??
-        row.dataTypeName ??
-        row.name ??
-        row.path ??
-        "",
-    );
-    if (id != null && String(id).trim() && name) {
-      const idStr = String(id);
-      // Page-GUID uit route nooit als dataType-kandidaat.
-      if (idStr === SCHEPEN_PAGE_GUID || (isUuid(idStr) && fromFormatters && idStr === String(row.id))) {
-        // skip
-      } else {
-        const score = scoreName(name) + scoreName(idStr);
-        const entry = { id: idStr, name, score, source };
-        if (keepZeroScore) allListedTypes.push(entry);
-        if (score > 0 || keepZeroScore) typeCandidates.push(entry);
-      }
-    }
-    for (const nested of Object.values(row)) {
-      if (nested && typeof nested === "object") walkTypes(nested, source, keepZeroScore);
-    }
-  };
-
-  for (const probe of probes) {
-    const result = await api(probe.method, probe.path, token, probe.body);
-    probeStatuses[probe.path] = result.status;
-    push(`- \`${probe.method} ${probe.path}\` → ${result.status} (${result.bytes} B)`);
-    if (probe.path === "/api/ui-config/sitemap") {
-      sitemapJson = result.json;
-      sitemapStatus = result.status;
-    }
-    if (probe.path === "/api/ui-config/formatters") {
-      formattersJson = result.json;
-      formattersStatus = result.status;
-    }
-    const keepAll =
-      probe.path.includes("/config/data-types") ||
-      probe.path.includes("sitemap") ||
-      probe.path.includes("profile-data-types");
-    // Formatters: walk alleen voor echte dataTypeId-velden (niet keepAll op formatter.id).
-    if (probe.path.includes("formatters")) {
-      walkTypes(result.json, probe.path, false);
-    } else {
-      walkTypes(result.json, probe.path, keepAll);
-    }
-    if (result.status < 400 && result.json != null) {
-      const topKeys = [...collectKeys(result.json)].slice(0, 40);
-      if (topKeys.length) push(`  keys: ${topKeys.join(", ")}`);
-      if (probe.path.includes("data-types")) {
-        push(`  fingerprint=${fingerprint(redactDeep(result.json))} (body niet volledig gelogd)`);
-      }
-      if (result.status === 403) {
-        push("  note: HTTP 403 = autorisatie/config-recht; niet hetzelfde als 404 (verkeerde id/route).");
-      }
-    }
-  }
+  const sitemap = await api("GET", "/api/ui-config/sitemap", token);
+  push(`- GET /api/ui-config/sitemap → ${sitemap.status} (${sitemap.bytes} B)`);
+  const formatters = await api("GET", "/api/ui-config/formatters", token);
+  push(`- GET /api/ui-config/formatters → ${formatters.status} (${formatters.bytes} B)`);
   push("");
 
-  // ——— Schepenplanning route → sitemap → formatter → dataTypeId ———
-  push("## Schepenplanning route-resolutie (SPA-bewijs)");
+  const sitemapHits = sitemap.status < 400 ? findSchepenSitemapEntries(sitemap.json) : [];
+  push("### Sitemap Schepenplanning-entry");
   push("");
-  push("SPA MainRouter (Tarasa bundles):");
-  push("- sitemap `type:\"page\"` → component `Dn({ formatterId, pageName })`");
-  push("- pad `/data/page/{guid}` → route na strip `/data/` → `page/{guid}`");
-  push("- `Yl`: page/dashboard → `plugin-${props.formatterId}`");
-  push("- `Dn` laadt formatter via id en daarna `settings.pluginConfig` (PluginFormatter)");
-  push(`- Bevestigde browserroute: \`${SCHEPEN_SPA_ROUTE}\``);
-  push(`- Path-GUID: \`${SCHEPEN_PAGE_GUID}\` — dit is **niet** automatisch een dataTypeId`);
-  push("");
-
-  const formattersById = indexFormatters(formattersJson);
-  const sitemapHits = sitemapStatus < 400 ? findSchepenSitemapEntries(sitemapJson) : [];
-  push(`### Sitemap Schepenplanning-entry (HTTP ${sitemapStatus})`);
-  push("");
-  if (sitemapHits.length === 0) {
-    push("Geen sitemap-entry met Schepenplanning / path-GUID gevonden (of sitemap niet leesbaar).");
+  if (!sitemapHits.length) {
+    push("Geen sitemap-entry gevonden voor Schepenplanning / path-GUID.");
   } else {
-    for (const hit of sitemapHits.slice(0, 5)) {
-      push("Veilige properties van sitemap-entry:");
+    for (const hit of sitemapHits.slice(0, 3)) {
       push("```json");
       push(JSON.stringify(safeSitemapEntryView(hit), null, 2));
       push("```");
@@ -926,128 +705,97 @@ async function main() {
   }
   push("");
 
-  const sitemapFormatterId = (() => {
-    for (const hit of sitemapHits) {
-      const view = safeSitemapEntryView(hit);
-      if (view.formatterId != null && String(view.formatterId).trim()) return String(view.formatterId);
-    }
-    return null;
-  })();
-
-  const resolvedFormatterId = sitemapFormatterId ?? SCHEPEN_PAGE_GUID;
-  const schepenFormatter = findFormatterByIdOrName(
-    formattersById,
-    resolvedFormatterId,
-    "schepenplanning",
-  );
-
-  push(`### Formatter Schepenplanning (HTTP ${formattersStatus})`);
-  push("");
-  push(`- pageId/path GUID: \`${SCHEPEN_PAGE_GUID}\``);
-  push(`- sitemap props.formatterId: \`${sitemapFormatterId ?? "(niet in sitemap gevonden)"}\``);
-  push(`- resolved formatter lookup id: \`${resolvedFormatterId}\``);
+  const formattersById = indexById(formatters.json);
+  const schepenFormatter = formattersById.get(SCHEPEN_PAGE_GUID) ?? null;
+  let formatterByName: Record<string, unknown> | null = null;
   if (!schepenFormatter) {
-    push("- formatterobject: **niet gevonden** in `/api/ui-config/formatters`");
-  } else {
-    push("- formatterobject (structureel, veilig):");
-    push("```json");
-    push(JSON.stringify(safeFormatterView(schepenFormatter), null, 2));
-    push("```");
-    if (String(schepenFormatter.id) === SCHEPEN_PAGE_GUID) {
-      push("- Bevestigd: path-GUID == formatter.id (page/formatter id, geen query-id).");
-    }
-    if (schepenFormatter.dataTypeId == null || String(schepenFormatter.dataTypeId) === "") {
-      push("- formatter.dataTypeId: **ontbreekt** — query op formatter.id is ongeldig (verwacht 404).");
-    } else if (String(schepenFormatter.dataTypeId) === String(schepenFormatter.id)) {
-      push("- formatter.dataTypeId == formatter.id (UUID): **niet** als dataset-id behandeld.");
-    } else {
-      push(`- formatter.dataTypeId: \`${String(schepenFormatter.dataTypeId)}\` → kandidaat dataset-id`);
-    }
-  }
-  push("");
-
-  const resolvedDataTypeIds = collectDataTypeIdsFromFormatter(schepenFormatter, formattersById);
-  // Ook nested formatters by name-linked listFormatter etc. already covered.
-  push("### Resolved identifiers");
-  push("");
-  push(`- Schepenplanning route: \`${SCHEPEN_SPA_ROUTE}\``);
-  push(`- Page/formatter id: \`${schepenFormatter ? String(schepenFormatter.id) : resolvedFormatterId}\``);
-  push(
-    `- Resolved formatter name: \`${schepenFormatter ? String(schepenFormatter.name ?? "?") : "(niet vastgesteld)"}\``,
-  );
-  push(
-    `- Resolved dataTypeId(s): ${
-      resolvedDataTypeIds.size
-        ? [...resolvedDataTypeIds].map((id) => `\`${id}\``).join(", ")
-        : "*(niet vastgesteld)*"
-    }`,
-  );
-  push(
-    `- Resolved query endpoint: ${
-      resolvedDataTypeIds.size
-        ? [...resolvedDataTypeIds].map((id) => `\`${dataQueryPath(id)}\``).join(", ")
-        : "*(niet vastgesteld — geen dataTypeId)*"
-    }`,
-  );
-  push("");
-  push("403 vs 404:");
-  push(
-    `- \`/api/config/data-types\` → ${probeStatuses["/api/config/data-types"] ?? "?"} (403 = config-autorisatie, niet bewijs van verkeerde dataset-id)`,
-  );
-  push(
-    `- Query op page/formatter GUID \`${SCHEPEN_PAGE_GUID}\` → verwacht 404 als dat geen dataTypeId is (SPA gebruikt formatter.id voor page-plugin, niet als \`/api/data/v2/{id}/query\`)`,
-  );
-  push("");
-
-  // Prior dataTypeId hints — skip page GUID
-  for (const hint of priorHints) {
-    const match = /Prior dataTypeId hint:\s*(.+)$/.exec(hint);
-    if (match) {
-      const id = match[1].trim();
-      if (id && id !== SCHEPEN_PAGE_GUID && !id.includes("(niet")) {
-        typeCandidates.push({ id, name: id, score: scoreName(id) + 20, source: "prior-report" });
+    for (const row of formattersById.values()) {
+      if (String(row.name ?? "").toLowerCase() === "schepenplanning") {
+        formatterByName = row;
+        break;
       }
     }
   }
-  for (const id of resolvedDataTypeIds) {
-    typeCandidates.push({
-      id,
-      name: String(schepenFormatter?.name ?? id),
-      score: 100,
-      source: "schepen-formatter-dataTypeId",
-    });
-  }
+  const fmt = schepenFormatter ?? formatterByName;
 
-  typeCandidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-  const unique = new Map<string, (typeof typeCandidates)[0]>();
-  for (const candidate of typeCandidates) {
-    if (candidate.id === SCHEPEN_PAGE_GUID) continue;
-    const existing = unique.get(candidate.id);
-    if (!existing || candidate.score > existing.score) unique.set(candidate.id, candidate);
-  }
-  const ranked = [...unique.values()].sort((a, b) => b.score - a.score);
-  push("## Candidate data types (geen page/formatter GUIDs)");
+  push("### Formatter object (volledig gesanitiseerd)");
   push("");
-  if (ranked.length === 0) push("Geen dataType-kandidaten uit probes/formatter.dataTypeId.");
-  for (const candidate of ranked.slice(0, 80)) {
-    push(
-      `- id=\`${candidate.id}\` name=\`${candidate.name}\` score=${candidate.score} source=\`${candidate.source}\``,
-    );
+  if (!fmt) {
+    push(`Formatter id=\`${SCHEPEN_PAGE_GUID}\` / name=Schepenplanning **niet gevonden**.`);
+  } else {
+    push("```json");
+    push(JSON.stringify(fullSanitizedFormatter(fmt), null, 2));
+    push("```");
   }
   push("");
 
-  const listedUnique = new Map<string, (typeof allListedTypes)[0]>();
-  for (const row of allListedTypes) {
-    if (row.id === SCHEPEN_PAGE_GUID) continue;
-    if (!listedUnique.has(row.id)) listedUnique.set(row.id, row);
-  }
-  push(`## Volledige data-types / sitemap entityTypeIds (n=${listedUnique.size})`);
+  const settings = asRecord(fmt?.settings) ?? {};
+  const pluginConfig = asRecord(settings.pluginConfig);
+  const componentType = fmt ? String(fmt.componentType ?? "") : "";
+  const formatterType = fmt ? String(fmt.formatterType ?? "") : "";
+  const isPluginFormatter = componentType === "PluginFormatter" || Boolean(pluginConfig);
+
+  push("### Formatter type / plugin");
   push("");
-  const listedSorted = [...listedUnique.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-  for (const row of listedSorted.slice(0, 200)) {
-    push(`- id=\`${row.id}\` name=\`${row.name}\` score=${row.score} source=\`${row.source}\``);
+  push(`- formatterType: \`${formatterType || "(onbekend)"}\``);
+  push(`- componentType: \`${componentType || "(onbekend)"}\``);
+  push(`- PluginFormatter / pluginConfig aanwezig: ${isPluginFormatter ? "ja" : "nee"}`);
+  if (pluginConfig) {
+    push(`- pluginConfig.url: \`${String(pluginConfig.url ?? "")}\``);
+    push(`- pluginConfig.scope: \`${String(pluginConfig.scope ?? "")}\``);
+    push(`- pluginConfig.module: \`${String(pluginConfig.module ?? "")}\``);
+  } else {
+    push("- pluginConfig: *(niet aanwezig op dit formatterobject)*");
   }
-  if (listedSorted.length > 200) push(`- … ${listedSorted.length - 200} meer weggelaten`);
+  push("");
+
+  // ——— Plugin JS ophalen + analyseren ———
+  const pluginAnalyses: Array<{ url: string; status: number; analysis: PluginAnalysis | null }> = [];
+  const resolvedFromPlugin = new Set<string>();
+
+  push("## Plugin module fetch + statische analyse");
+  push("");
+  if (!pluginConfig?.url || typeof pluginConfig.url !== "string") {
+    push("Geen pluginConfig.url — kan geen remote module downloaden.");
+    push("Datasource moet uit formatter.dataTypeId of nested formatters komen, of uit browser network.");
+  } else {
+    const urls = resolvePluginScriptUrls(String(pluginConfig.url));
+    push(`Geprobeerde script-URLs (Tarasa runtime t${TARASA_PLUGIN_RUNTIME_VERSION}):`);
+    for (const url of urls) push(`- ${url}`);
+    push("");
+    for (const url of urls) {
+      const fetched = await fetchText(url, token);
+      push(`- GET \`${url}\` → ${fetched.status} (${fetched.bytes} B, ${fetched.contentType ?? "?"})`);
+      if (fetched.status >= 400 || fetched.bytes < 50) {
+        pluginAnalyses.push({ url, status: fetched.status, analysis: null });
+        continue;
+      }
+      const analysis = analyzePluginSource(fetched.text);
+      pluginAnalyses.push({ url, status: fetched.status, analysis });
+      for (const id of analysis.dataTypeIds) resolvedFromPlugin.add(id);
+      push("  Aangetroffen API-paden:");
+      if (!analysis.apiPaths.length) push("  - *(geen /api/… stringliterals)*");
+      for (const apiPath of analysis.apiPaths.slice(0, 40)) push(`  - \`${apiPath}\``);
+      push(`  dataTypeId/entityTypeId kandidaten: ${analysis.dataTypeIds.join(", ") || "(geen)"}`);
+      push(`  query body keys: ${analysis.queryBodyKeys.join(", ") || "(geen)"}`);
+      push(`  filter snippets: ${analysis.filterSnippets.slice(0, 15).join(" | ") || "(geen)"}`);
+      push(`  veld/label literals: ${analysis.fieldLiterals.join(", ") || "(geen)"}`);
+      push(`  locatie-literals: ${analysis.locationHits.join(", ") || "(geen)"}`);
+      push(`  source fingerprint: ${fingerprint(fetched.text.slice(0, 5000))}`);
+    }
+  }
+  push("");
+
+  const fromFormatterIds = collectDataTypeIdsFromFormatter(fmt, formattersById);
+  const targetIds = [...new Set([...resolvedFromPlugin, ...fromFormatterIds])].filter(
+    (id) => id && id !== SCHEPEN_PAGE_GUID,
+  );
+
+  push("## Resolved datasource kandidaten (alleen bewezen)");
+  push("");
+  push(`- Uit formatter.dataTypeId / nested: ${[...fromFormatterIds].join(", ") || "(geen)"}`);
+  push(`- Uit plugin-source analyse: ${[...resolvedFromPlugin].join(", ") || "(geen)"}`);
+  push(`- Query-targets: ${targetIds.join(", ") || "(geen — geen blind formatter-id probing)"}`);
   push("");
 
   const today = amsterdamYmd(0);
@@ -1056,149 +804,85 @@ async function main() {
   push(`- vandaag: \`${today}\``);
   push(`- morgen: \`${tomorrow}\``);
   push("");
-
-  // Query-targets: eerst resolved dataTypeIds; daarna overige kandidaten — nooit page GUID.
-  const byId = new Map(ranked.map((row) => [row.id, row]));
-  const targetOrdered: string[] = [];
-  const pushTarget = (id: string) => {
-    if (!id || id === SCHEPEN_PAGE_GUID || targetOrdered.includes(id)) return;
-    targetOrdered.push(id);
-  };
-  for (const id of resolvedDataTypeIds) pushTarget(id);
-  for (const row of ranked.filter((entry) => entry.score >= 10)) pushTarget(row.id);
-  for (const row of ranked.filter((entry) => /plan|scheep|schip|laad|ship|vessel|groeve/i.test(entry.name))) {
-    pushTarget(row.id);
-  }
-  for (const row of listedSorted.slice(0, 40)) pushTarget(row.id);
-  for (const row of ranked.slice(0, 20)) pushTarget(row.id);
-  const targetIds = targetOrdered.slice(0, 28);
-
-  push("## Query-targets");
-  push("");
-  push(`Geselecteerd voor query-probes: ${targetIds.length} (v1 voor numerieke ids, v2 voor overige).`);
-  push(`Page/formatter GUID \`${SCHEPEN_PAGE_GUID}\` wordt **niet** gequeried als dataTypeId.`);
-  for (const id of targetIds) {
-    const meta = byId.get(id) ?? listedUnique.get(id);
-    push(
-      `- \`${id}\` name=\`${meta?.name ?? "?"}\` score=${meta?.score ?? "?"} api=${isNumericTypeId(id) ? "v1" : "v2"}`,
-    );
-  }
+  push(
+    "Datumfilters worden **niet** blind geprobeerd. Eerst echte datasourcequery; filters alleen als plugin/source die toont.",
+  );
   push("");
 
-  const locationsWanted = ["Hoofdstraat", "Hoogveld", "Venlo", "Cuijk"];
   const mapping: Partial<Record<TargetField, string>> = {};
   const allColumns = new Set<string>();
   const foundLocations = new Set<string>();
   let bestTypeId = "";
-  let bestTypeName = "";
   let bestContentScore = -1;
-  let tomorrowFilter = "";
-  let todayFilter = "";
   let continuationSeen = false;
   let pageSizeDefault: number | null = null;
+  let queryHttp200 = false;
+  let recordsFound = false;
+  const provenFilterFromPlugin = pluginAnalyses.some(
+    (row) => row.analysis && row.analysis.filterSnippets.length > 0,
+  );
 
-  const considerBest = (typeId: string, entities: unknown[], reason: string) => {
-    const meta = byId.get(typeId) ?? listedUnique.get(typeId);
-    const blob = JSON.stringify(entities);
-    const scored = contentScore(blob) + (meta?.score ?? 0) + (entities.length > 0 ? 5 : 0);
-    if (scored > bestContentScore || (!bestTypeId && entities.length > 0)) {
-      bestContentScore = scored;
-      bestTypeId = typeId;
-      bestTypeName = meta?.name ?? typeId;
-      push(`  → best candidate (${reason}): id=\`${typeId}\` name=\`${bestTypeName}\` contentScore=${scored}`);
-    }
-    for (const location of locationsWanted) {
-      if (blob.toLowerCase().includes(location.toLowerCase())) foundLocations.add(location);
-    }
-  };
-
-  const applyMappingFromEntities = (entities: unknown[]) => {
-    const keys = [...collectKeys(entities.map(flattenAttributes))];
-    for (const key of keys) allColumns.add(key);
-    for (const target of Object.keys(FIELD_SYNONYMS) as TargetField[]) {
-      const hit = matchField(keys, target);
-      if (hit) mapping[target] = hit;
-    }
-    if (mapping.loadingLocation) {
-      for (const entity of entities) {
-        const flat = flattenAttributes(entity);
-        const value = flat[mapping.loadingLocation];
-        if (typeof value === "string" && value.trim()) foundLocations.add(value.trim());
-      }
-    }
-  };
-
-  push("## Queries (fase 1: open + schema)");
+  push("## Queries (alleen resolved dataTypeIds)");
   push("");
+  if (targetIds.length === 0) {
+    push("Geen dataTypeId om te queryen.");
+    push("");
+    push("Volgende stap op TEU: browser network capture na navigatie naar Schepenplanning-route");
+    push(`(\`${SCHEPEN_SPA_ROUTE}\`) om de échte XHR te zien die records laadt.`);
+    push("");
+  }
 
-  type OpenHit = {
-    typeId: string;
-    queryPath: string;
-    schemaAttrNames: string[];
-    openEntities: unknown[];
-    nameScore: number;
-    openContent: number;
-  };
-  const openHits: OpenHit[] = [];
-
-  for (const typeId of targetIds) {
-    const meta = byId.get(typeId) ?? listedUnique.get(typeId);
+  for (const typeId of targetIds.slice(0, 8)) {
     const queryPath = dataQueryPath(typeId);
     const schemaPath = configTypePath(typeId);
-    push(`### dataTypeId \`${typeId}\` (${meta?.name ?? "?"}, ${isNumericTypeId(typeId) ? "v1" : "v2"})`);
-
+    push(`### dataTypeId \`${typeId}\``);
     const schema = await api("GET", schemaPath, token);
-    push(`Schema \`${schemaPath}\` → ${schema.status}`);
-    let schemaAttrNames: string[] = [];
+    push(`- schema \`${schemaPath}\` → ${schema.status}`);
     if (schema.status < 400) {
-      // Schema kan groot zijn — alleen keys + attributeNames, geen volledige dump.
-      const schemaKeys = [...collectKeys(schema.json)].slice(0, 80);
-      push(`Schema keys: ${schemaKeys.join(", ") || "(geen)"}`);
-      for (const key of schemaKeys) allColumns.add(key);
-      walkTypes(schema.json, `schema:${typeId}`, false);
-      schemaAttrNames = collectAttributeNames(schema.json);
-      if (schemaAttrNames.length) {
-        push(`Schema attributeNames (n=${schemaAttrNames.length}): ${schemaAttrNames.slice(0, 60).join(", ")}`);
-      }
-      const flat = await api("GET", `${schemaPath}/flattened`, token);
-      push(`Flattened \`${schemaPath}/flattened\` → ${flat.status}`);
-      if (flat.status < 400) {
-        for (const key of collectKeys(flat.json)) allColumns.add(key);
-        const flatNames = collectAttributeNames(flat.json);
-        schemaAttrNames = [...new Set([...schemaAttrNames, ...flatNames])];
-      }
+      for (const key of collectKeys(schema.json)) allColumns.add(key);
     }
-
     const open = await api("POST", queryPath, token, { pageSize: 20 });
-    push(`Open query \`${queryPath}\` pageSize=20 → ${open.status}`);
+    push(`- open query \`${queryPath}\` → ${open.status} (${open.bytes} B, ${open.contentType ?? "?"})`);
+    push(`  request top-level keys: pageSize`);
+    if (open.status === 200) queryHttp200 = true;
     if (open.status >= 400) {
+      push("```json");
+      push(JSON.stringify(redactDeep(open.json), null, 2));
+      push("```");
       push("");
       continue;
     }
-    const openObj = open.json && typeof open.json === "object" ? (open.json as Record<string, unknown>) : {};
+    const openObj = asRecord(open.json) ?? {};
+    push(`  response top-level keys: ${Object.keys(openObj).join(", ") || "(geen)"}`);
     if ("continuationToken" in openObj || "continuation" in openObj) continuationSeen = true;
     if (typeof openObj.totalCount === "number") pageSizeDefault = 20;
-    const openEntities = extractEntities(open.json);
-    const openContent = contentScore(JSON.stringify(openEntities));
-    push(
-      `Open entities: ${openEntities.length}; totalCount=${String(openObj.totalCount ?? "?")}; contentScore=${openContent}`,
-    );
-    if (openEntities.length > 0) {
-      applyMappingFromEntities(openEntities);
-      considerBest(typeId, openEntities, "open-query");
-      openHits.push({
-        typeId,
-        queryPath,
-        schemaAttrNames,
-        openEntities,
-        nameScore: meta?.score ?? 0,
-        openContent,
-      });
-      push("Sample operationeel (max 2, alleen gemapte velden):");
+    const entities = extractEntities(open.json);
+    const score = contentLooksLikeShipPlanning(JSON.stringify(entities));
+    push(`  entities: ${entities.length}; totalCount=${String(openObj.totalCount ?? "?")}; contentScore=${score}`);
+    if (entities.length > 0) {
+      recordsFound = true;
+      const keys = [...collectKeys(entities.map(flattenAttributes))];
+      for (const key of keys) allColumns.add(key);
+      for (const target of Object.keys(FIELD_SYNONYMS) as TargetField[]) {
+        const hit = matchField(keys, target);
+        if (hit) mapping[target] = hit;
+      }
+      const blob = JSON.stringify(entities);
+      for (const location of ["Hoofdstraat", "Hoogveld", "Venlo", "Cuijk"]) {
+        if (blob.toLowerCase().includes(location.toLowerCase())) foundLocations.add(location);
+      }
+      if (score > bestContentScore) {
+        bestContentScore = score;
+        bestTypeId = typeId;
+        summary.dataTypeId = typeId;
+        summary.queryPath = queryPath;
+        summary.dataset = score >= 25 || Boolean(mapping.vessel) || Boolean(mapping.loadingLocation) ? "PASS" : "FAIL";
+      }
+      push("Sample (max 2, gemapte velden):");
       push("```json");
       push(
         JSON.stringify(
-          openEntities.slice(0, 2).map((entity) => operationalSample(entity, mapping)),
+          entities.slice(0, 2).map((entity) => operationalSample(entity, mapping)),
           null,
           2,
         ),
@@ -1208,165 +892,82 @@ async function main() {
     push("");
   }
 
-  // Fase 2: datumfilters alleen op de sterkste open hits (max 8).
-  openHits.sort((a, b) => b.openContent + b.nameScore - (a.openContent + a.nameScore));
-  const dateTargets = openHits.slice(0, 8);
-  push("## Queries (fase 2: vandaag/morgen filters)");
+  // Filters uit plugin — alleen rapporteren, niet blind uitvoeren tenzij snippet + dataType bekend.
+  push("## Datumfilter (alleen bewijs, geen blinde probes)");
   push("");
-  if (dateTargets.length === 0) {
-    push("Geen open-query hits — geen datumfilters geprobeerd.");
-    push("");
-  }
-
-  for (const hit of dateTargets) {
-    push(`### filters op \`${hit.typeId}\``);
-    const dateFieldCandidates = dateFieldCandidatesFrom(hit.schemaAttrNames, mapping);
-    // Ook velden uit open sample keys meenemen.
-    const sampleKeys = [...collectKeys(hit.openEntities.map(flattenAttributes))]
-      .map((key) => key.split(".").pop() || key)
-      .filter((name) => /datum|date|dag|day|plan|laad/i.test(name));
-    const fields = [...new Set([...dateFieldCandidates, ...sampleKeys])].slice(0, 10);
-    push(`Date-field candidates: ${fields.join(", ") || "(geen)"}`);
-
-    for (const [label, day] of [
-      ["morgen", tomorrow],
-      ["vandaag", today],
-    ] as const) {
-      let hitForDay = false;
-      for (const field of fields) {
-        // Eerst EQ ymd; daarna BETWEEN ms (Tarasa DateTime).
-        for (const filter of dateFilterVariants(field, day).slice(0, 4)) {
-          const queried = await api("POST", hit.queryPath, token, {
-            filter,
-            pageSize: 100,
-          });
-          if (queried.status >= 400) {
-            push(`- ${label} filter=\`${filter}\` → ${queried.status}`);
-            continue;
-          }
-          const entities = extractEntities(queried.json);
-          push(`- ${label} filter=\`${filter}\` → ${queried.status}, n=${entities.length}`);
-          if (entities.length === 0) continue;
-          applyMappingFromEntities(entities);
-          considerBest(hit.typeId, entities, `${label}-filter`);
-          if (label === "morgen") {
-            summary.tomorrowQuery = true;
-            tomorrowFilter = filter;
-          } else {
-            summary.todayQuery = true;
-            todayFilter = filter;
-          }
-          push("Sample operationeel (max 2):");
-          push("```json");
-          push(
-            JSON.stringify(
-              entities.slice(0, 2).map((entity) => operationalSample(entity, mapping)),
-              null,
-              2,
-            ),
-          );
-          push("```");
-          hitForDay = true;
-          break;
-        }
-        if (hitForDay) break;
-      }
+  if (provenFilterFromPlugin) {
+    push("Filter-snippets uit plugin-source (niet automatisch uitgevoerd):");
+    for (const row of pluginAnalyses) {
+      if (!row.analysis?.filterSnippets.length) continue;
+      for (const snippet of row.analysis.filterSnippets.slice(0, 20)) push(`- \`${snippet}\``);
     }
-    push("");
-  }
-
-  summary.dataTypeId = bestTypeId;
-  const datasetSignals =
-    summary.tomorrowQuery ||
-    summary.todayQuery ||
-    bestContentScore >= 25 ||
-    Boolean(mapping.vessel) ||
-    Boolean(mapping.loadingLocation) ||
-    Boolean(mapping.unloadingLocation);
-  summary.dataset = bestTypeId && datasetSignals ? "PASS" : "FAIL";
-
-  if (bestTypeName || bestTypeId) {
-    push("## Best dataset candidate");
-    push("");
-    push(`- dataTypeId: \`${bestTypeId || "(niet vastgesteld)"}\``);
-    push(`- name: \`${bestTypeName || "?"}\``);
-    push(`- contentScore: ${bestContentScore}`);
-    push(
-      `- dataset-signalen: tomorrow=${summary.tomorrowQuery} today=${summary.todayQuery} locations/vessel/mapping=${datasetSignals}`,
-    );
-    push("");
-  }
-
-  push("## Bronvolgorde / paginering");
-  push("");
-  push(`- continuationToken/continuation gezien: ${continuationSeen ? "ja" : "nee/onbekend"}`);
-  push(`- pageSize gebruikt in probes: ${pageSizeDefault ?? 20}`);
-  push("- Bronvolgorde: behoud array-volgorde van `entities`/`resources` zoals geretourneerd (geen herschikking).");
-  push("");
-
-  push("## Laadplaatsen in data");
-  push("");
-  for (const location of locationsWanted) {
-    push(`- ${location}: ${foundLocations.has(location) ? "gevonden" : "niet gezien in samples"}`);
-  }
-  const extras = [...foundLocations].filter(
-    (name) => !locationsWanted.some((wanted) => wanted.toLowerCase() === name.toLowerCase()),
-  );
-  if (extras.length) {
-    push("- Aanvullend:");
-    for (const name of extras) push(`  - ${name}`);
   } else {
-    push("- Aanvullend: geen in samples");
+    push("Geen filter-snippets in plugin-source. today/tomorrow: nog niet bewezen.");
   }
+  push(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}`);
+  push(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}`);
   push("");
 
-  push("## Veldmapping (alleen aangetroffen)");
+  push("## Veldmapping (alleen aangetroffen in echte records)");
   push("");
   push("| Target | Bronveld | Aanwezig |");
   push("| --- | --- | --- |");
   for (const target of Object.keys(FIELD_SYNONYMS) as TargetField[]) {
     const source = mapping[target];
-    push(`| ${target} | ${source ?? "_niet aangetroffen_"} | ${source ? "ja" : "nee"} |`);
+    push(`| ${target} | ${source ?? "_unmapped_"} | ${source ? "ja" : "nee"} |`);
   }
   push("");
 
-  push("## Alle beschikbare kolommen (samples/schema, geredigeerd)");
+  push("## Laadplaatsen in samples");
   push("");
-  push([...allColumns].sort().join(", ") || "(geen)");
+  for (const location of ["Hoofdstraat", "Hoogveld", "Venlo", "Cuijk"]) {
+    push(`- ${location}: ${foundLocations.has(location) ? "gevonden" : "niet gezien"}`);
+  }
   push("");
 
-  const resolvedTypeList = [...resolvedDataTypeIds];
-  const queryEndpointProven = Boolean(bestTypeId);
+  push("## Bronvolgorde / paginering");
+  push("");
+  push(`- continuationToken gezien: ${continuationSeen ? "ja" : "nee/onbekend"}`);
+  push(`- pageSize in open probe: ${pageSizeDefault ?? "n.v.t."}`);
+  push("- Bronvolgorde: array-orde van entities zoals geretourneerd (geen herschikking).");
+  push("");
+
+  if (!bestTypeId && targetIds.length === 0) {
+    push("## Browser network (leidend als plugin geen dataTypeId lekt)");
+    push("");
+    push("Cloud Agent heeft geen interactieve authenticated browser-sessie met dit account.");
+    push("Op TEU-NC-01: na deze run, open planning.teunesen.nl, login met serviceaccount,");
+    push(`navigeer naar \`${SCHEPEN_SPA_ROUTE}\`, DevTools → Network → Fetch/XHR.`);
+    push("Noteer method/path/status/body keys van requests die **nieuw** verschijnen na navigatie.");
+    push("Plak gesanitiseerde request/response (zonder Authorization) terug in discovery-input.");
+    push("");
+  }
+
   const acceptance: Record<string, Acceptance> = {
     S1: summary.auth === "PASS" ? "PASS" : "FAIL",
-    S2: "PASS", // route door gebruiker + SPA MainRouter bevestigd in dit rapport
-    S3: sitemapHits.length > 0 ? "PASS" : sitemapStatus < 400 ? "FAIL" : "NIET GETEST",
-    S4:
-      schepenFormatter && String(schepenFormatter.id)
-        ? "PASS"
-        : formattersStatus < 400
-          ? "FAIL"
-          : "NIET GETEST",
-    S5: schepenFormatter ? "PASS" : formattersStatus < 400 ? "FAIL" : "NIET GETEST",
-    S6: resolvedTypeList.length > 0 || bestTypeId ? "PASS" : "FAIL",
-    S7: queryEndpointProven ? "PASS" : "FAIL",
-    S8: summary.dataset === "PASS" ? "PASS" : "FAIL",
-    S9: bestContentScore >= 25 || Boolean(mapping.vessel) ? "PASS" : "FAIL",
-    S10: summary.tomorrowQuery ? "PASS" : "FAIL",
-    S11: summary.todayQuery ? "PASS" : "FAIL",
-    S12: tomorrowFilter || todayFilter ? "PASS" : "FAIL",
-    S13: mapping.loadingLocation ? "PASS" : "FAIL",
-    S14: mapping.time ? "PASS" : "FAIL",
-    S15: mapping.customer ? "PASS" : "FAIL",
-    S16: mapping.unloadingLocation ? "PASS" : "FAIL",
-    S17: mapping.condition ? "PASS" : "FAIL",
-    S18: mapping.product ? "PASS" : "FAIL",
-    S19: mapping.quantity ? "PASS" : "FAIL",
-    S20: mapping.vessel ? "PASS" : "FAIL",
-    S21: summary.dataset === "PASS" ? "PASS" : "FAIL",
+    S2: "PASS",
+    S3: fmt ? "PASS" : "FAIL",
+    S4: fmt && (formatterType || componentType) ? "PASS" : "FAIL",
+    S5: pluginConfig ? "PASS" : fmt ? "FAIL" : "NIET GETEST",
+    S6: "PASS", // Dn/PluginContext chain gedocumenteerd uit bundles
+    S7: bestTypeId || targetIds.length > 0 ? "PASS" : "FAIL",
+    S8: summary.queryPath ? "PASS" : "FAIL",
+    S9: queryHttp200 ? "PASS" : "FAIL",
+    S10: recordsFound && bestContentScore >= 25 ? "PASS" : recordsFound ? "FAIL" : "FAIL",
+    S11: mapping.loadingLocation ? "PASS" : "FAIL",
+    S12: mapping.time ? "PASS" : "FAIL",
+    S13: mapping.customer ? "PASS" : "FAIL",
+    S14: mapping.unloadingLocation ? "PASS" : "FAIL",
+    S15: mapping.condition ? "PASS" : "FAIL",
+    S16: mapping.product ? "PASS" : "FAIL",
+    S17: mapping.quantity ? "PASS" : "FAIL",
+    S18: mapping.vessel ? "PASS" : "FAIL",
+    S19: summary.todayQuery ? "PASS" : "FAIL",
+    S20: summary.tomorrowQuery ? "PASS" : "FAIL",
+    S21: recordsFound ? "PASS" : "FAIL",
     S22: continuationSeen || pageSizeDefault != null ? "PASS" : "FAIL",
-    S23: "PASS", // rapport schrijft geredigeerd; geen secrets in outputpad
-    S24: "NIET GETEST", // host-leesbaarheid via ship-planning-discover.sh
+    S23: "PASS",
+    S24: "NIET GETEST", // ship-planning-discover.sh host-copy
   };
 
   push("## Summary");
@@ -1374,44 +975,38 @@ async function main() {
   push(`AUTH: ${summary.auth}`);
   push(`DATASET: ${summary.dataset}`);
   push(`Schepenplanning route: ${SCHEPEN_SPA_ROUTE}`);
+  push(`Page/formatter id: ${fmt ? String(fmt.id) : SCHEPEN_PAGE_GUID}`);
+  push(`Resolved formatter: ${fmt ? String(fmt.name ?? fmt.id) : "(niet vastgesteld)"}`);
+  push(`formatterType: ${formatterType || "(niet vastgesteld)"}`);
+  push(`componentType: ${componentType || "(niet vastgesteld)"}`);
   push(
-    `Page/formatter id: ${schepenFormatter ? String(schepenFormatter.id) : SCHEPEN_PAGE_GUID}`,
-  );
-  push(
-    `Resolved formatter: ${schepenFormatter ? String(schepenFormatter.name ?? schepenFormatter.id) : "(niet vastgesteld)"}`,
-  );
-  push(
-    `Resolved dataTypeId: ${bestTypeId || resolvedTypeList[0] || "(niet vastgesteld)"}`,
-  );
-  push(
-    `Resolved query endpoint: ${
-      bestTypeId ? dataQueryPath(bestTypeId) : "(niet vastgesteld)"
+    `pluginConfig: ${
+      pluginConfig
+        ? `url=${String(pluginConfig.url ?? "")}; scope=${String(pluginConfig.scope ?? "")}; module=${String(pluginConfig.module ?? "")}`
+        : "(niet vastgesteld)"
     }`,
   );
-  push(`dataTypeName: ${bestTypeName || "(niet vastgesteld)"}`);
-  push(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}${tomorrowFilter ? ` (\`${tomorrowFilter}\`)` : ""}`);
-  push(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}${todayFilter ? ` (\`${todayFilter}\`)` : ""}`);
+  push(`Resolved dataTypeId: ${summary.dataTypeId || "(niet vastgesteld)"}`);
+  push(`Resolved query endpoint: ${summary.queryPath || "(niet vastgesteld)"}`);
+  push(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}`);
+  push(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}`);
   push(`TOTP required: ${summary.totpRequired}`);
   push("");
   push("## Acceptatie S1–S24");
   push("");
-  for (const [key, value] of Object.entries(acceptance)) {
-    push(`- ${key}: ${value}`);
-  }
+  for (const [key, value] of Object.entries(acceptance)) push(`- ${key}: ${value}`);
   push("");
   push("## STOP");
   push("");
-  push("Geen UI gebouwd. Secrets/tokens niet gelogd. Auth-flow ongewijzigd.");
-  push("Geen widget/Admin credentials UI tot dataset+query+mapping bewezen zijn.");
+  push("Geen UI. Auth-flow ongewijzigd. Secrets/tokens niet gelogd.");
+  push("UI pas na S1–S20 allemaal PASS.");
 
   writeReport();
   console.log(`Wrote ${outPath}`);
   console.log(`AUTH: ${summary.auth}`);
   console.log(`DATASET: ${summary.dataset}`);
-  console.log(`Page/formatter id: ${schepenFormatter ? String(schepenFormatter.id) : SCHEPEN_PAGE_GUID}`);
-  console.log(`Resolved dataTypeId: ${bestTypeId || resolvedTypeList[0] || "(niet vastgesteld)"}`);
-  console.log(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}`);
-  console.log(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}`);
+  console.log(`Resolved dataTypeId: ${summary.dataTypeId || "(niet vastgesteld)"}`);
+  console.log(`pluginConfig.url: ${pluginConfig ? String(pluginConfig.url ?? "") : "(none)"}`);
   if (summary.auth !== "PASS" || summary.dataset !== "PASS") process.exitCode = 1;
 }
 
