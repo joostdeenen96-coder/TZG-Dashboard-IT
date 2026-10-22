@@ -68,11 +68,8 @@ const BASE = (process.env.SHIP_PLANNING_BASE_URL || "https://planning.teunesen.n
 function resolveOutPath() {
   const fromEnv = process.env.SHIP_PLANNING_DISCOVERY_OUT?.trim();
   if (fromEnv) return path.resolve(fromEnv);
-  const docsPath = path.join(appRoot(), "docs", "SCHEPENPLANNING-AUTH.md");
-  // In Docker is docs/ niet gemount; schrijf dan naar data-volume.
-  if (existsSync(path.dirname(docsPath)) && !process.env.SHIP_PLANNING_FORCE_DATA_OUT) {
-    return docsPath;
-  }
+  // Default: data-volume. Voorkomt overschrijven van docs/SCHEPENPLANNING-AUTH.md
+  // bij blocked/missing-secrets runs. Docker mount data/; docs blijft instructie-document.
   return path.join(dataDir(), "ship-planning-discovery.md");
 }
 
@@ -125,6 +122,76 @@ function amsterdamYmd(offsetDays: number) {
   return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
 }
 
+/** Tarasa SPA: numerieke ids → /api/data/{id}/query; overige → /api/data/v2/{id}/query */
+function isNumericTypeId(typeId: string) {
+  return /^\d+$/.test(typeId.trim());
+}
+
+function dataQueryPath(typeId: string) {
+  const id = encodeURIComponent(typeId);
+  return isNumericTypeId(typeId) ? `/api/data/${id}/query` : `/api/data/v2/${id}/query`;
+}
+
+function configTypePath(typeId: string) {
+  const id = encodeURIComponent(typeId);
+  return isNumericTypeId(typeId) ? `/api/config/data-types/${id}` : `/api/config/v2/data-types/${id}`;
+}
+
+/** Daggrenzen als epoch-ms in Europe/Amsterdam (Tarasa dateTimeFilter BETWEEN). */
+function amsterdamDayBoundsMs(ymd: string): [number, number] {
+  const noonParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Amsterdam",
+    timeZoneName: "shortOffset",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(`${ymd}T12:00:00Z`));
+  const tzName = noonParts.find((part) => part.type === "timeZoneName")?.value ?? "GMT+2";
+  const match = /GMT([+-]\d+)(?::(\d+))?/.exec(tzName);
+  const hours = match ? Number(match[1]) : 2;
+  const mins = match?.[2] ? Number(match[2]) : 0;
+  const sign = hours >= 0 ? 1 : -1;
+  const offsetMs = (Math.abs(hours) * 60 + mins) * 60 * 1000 * sign;
+  const dayStart = Date.parse(`${ymd}T00:00:00Z`) - offsetMs;
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
+  return [dayStart, dayEnd];
+}
+
+function nextYmd(ymd: string) {
+  const base = new Date(`${ymd}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + 1);
+  return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+}
+
+function dateFilterVariants(field: string, ymd: string): string[] {
+  const [dayStart, dayEnd] = amsterdamDayBoundsMs(ymd);
+  return [
+    `${field} EQ ${JSON.stringify(ymd)}`,
+    `${field} EQ ${JSON.stringify(dayStart)}`,
+    `${field} BETWEEN ${JSON.stringify([dayStart, dayEnd])}`,
+    `${field} BETWEEN ${JSON.stringify([dayStart - 1, dayEnd])}`,
+    `${field} GEQ ${JSON.stringify(ymd)} AND ${field} LT ${JSON.stringify(nextYmd(ymd))}`,
+  ];
+}
+
+function contentScore(blob: string) {
+  const low = blob.toLowerCase();
+  let score = 0;
+  for (const token of ["hoofdstraat", "hoogveld", "venlo", "cuijk"]) {
+    if (low.includes(token)) score += 25;
+  }
+  for (const token of ["schip", "vessel", "binnenschip", "laadplaats", "losplaats", "groeve"]) {
+    if (low.includes(token)) score += 8;
+  }
+  for (const token of ["ton", "tonnage", "order", "vervoerder"]) {
+    if (low.includes(token)) score += 2;
+  }
+  return score;
+}
+
 async function api(method: string, pathname: string, token: string | null, body?: unknown) {
   const headers: Record<string, string> = { accept: "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
@@ -161,18 +228,106 @@ function collectKeys(value: unknown, prefix = "", into = new Set<string>()) {
 }
 
 function scoreName(name: string) {
-  const low = name.toLowerCase();
+  const low = name.toLowerCase().replace(/\s+/g, "");
   let score = 0;
-  for (const token of ["scheep", "schip", "ship", "vessel", "binnenvaart", "laadplaats", "schepenplanning"]) {
+  for (const token of [
+    "schepenplanning",
+    "scheepsplanning",
+    "shipplanning",
+    "scheepvaartplanning",
+    "binnenvaartplanning",
+  ]) {
+    if (low.includes(token)) score += 40;
+  }
+  for (const token of ["scheep", "schip", "ship", "vessel", "binnenvaart", "laadplaats"]) {
     if (low.includes(token)) score += 12;
   }
-  for (const token of ["planning", "laad", "lossing", "order"]) {
+  for (const token of ["planning", "laad", "lossing", "order", "groeve"]) {
     if (low.includes(token)) score += 4;
   }
   for (const token of ["hoofdstraat", "hoogveld", "venlo", "cuijk"]) {
     if (low.includes(token)) score += 6;
   }
   return score;
+}
+
+function collectAttributeNames(schema: unknown): string[] {
+  const names = new Set<string>();
+  const walk = (node: unknown) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const row = node as Record<string, unknown>;
+    for (const key of ["attributeName", "name", "path", "field", "key", "id"]) {
+      const value = row[key];
+      if (typeof value === "string" && value.trim() && !REDACT_KEY.test(value)) names.add(value.trim());
+    }
+    for (const nested of Object.values(row)) {
+      if (nested && typeof nested === "object") walk(nested);
+    }
+  };
+  walk(schema);
+  return [...names];
+}
+
+function dateFieldCandidatesFrom(names: string[], mapping: Partial<Record<TargetField, string>>) {
+  const preferred = [
+    mapping.unloadingDate,
+    ...names.filter((name) => {
+      const low = name.toLowerCase();
+      return (
+        low.includes("datum") ||
+        low.includes("date") ||
+        low.includes("dag") ||
+        low.includes("day") ||
+        low.includes("laad") ||
+        low.includes("plan")
+      );
+    }),
+    "date",
+    "Datum",
+    "laaddatum",
+    "Laaddatum",
+    "loadingDate",
+    "plannedDate",
+    "planDatum",
+    "PlanDatum",
+    "dag",
+    "Day",
+  ].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index);
+  return preferred;
+}
+
+function readPriorDiscoveryHints(): string[] {
+  const hints: string[] = [];
+  const candidates = [
+    path.join(dataDir(), "ship-planning-discovery.md"),
+    path.join(appRoot(), "data", "ship-planning-discovery.md"),
+    path.join(appRoot(), "docs", "SCHEPENPLANNING-AUTH.md"),
+  ];
+  for (const file of candidates) {
+    if (!existsSync(file)) continue;
+    try {
+      const text = readFileSync(file, "utf8");
+      if (/AUTH:\s*PASS/i.test(text)) hints.push(`Prior report ${file}: AUTH PASS`);
+      if (/DATASET:\s*FAIL/i.test(text)) hints.push(`Prior report ${file}: DATASET FAIL`);
+      for (const match of text.matchAll(/dataTypeId:\s*`?([^`\n]+)`?/gi)) {
+        const id = match[1].trim();
+        if (id && id !== "(niet vastgesteld)" && !id.includes("redacted")) {
+          hints.push(`Prior dataTypeId hint: ${id}`);
+        }
+      }
+      for (const match of text.matchAll(/id=`([^`]+)`\s+name=`([^`]+)`/g)) {
+        hints.push(`Prior candidate: ${match[1]} / ${match[2]}`);
+      }
+    } catch {
+      // ignore unreadable prior report
+    }
+  }
+  return hints;
 }
 
 function extractToken(payload: unknown): string | null {
@@ -424,56 +579,128 @@ async function main() {
   push("```");
   push("");
 
+  const priorHints = readPriorDiscoveryHints();
+  if (priorHints.length) {
+    push("## Prior discovery hints (lokaal rapport)");
+    push("");
+    for (const hint of priorHints.slice(0, 40)) push(`- ${hint}`);
+    push("");
+    push("Auth-flow ongewijzigd. Uitbreiding richt zich op dataset/sitemap/data-types.");
+    push("");
+  }
+
+  // Endpoints die de Tarasa-SPA na login gebruikt (profiletypedetail / sitemap).
   const probes: Array<{ method: string; path: string; body?: unknown }> = [
     { method: "GET", path: "/api/user-access/account-settings" },
-    { method: "GET", path: "/api/config/v2/data-types" },
     { method: "GET", path: "/api/config/data-types" },
+    { method: "GET", path: "/api/config/v2/data-types" },
+    { method: "GET", path: "/api/config/profile-data-types" },
+    { method: "GET", path: "/api/ui-config/sitemap" },
+    { method: "GET", path: "/api/ui-config/sitemap/public" },
+    { method: "GET", path: "/api/ui-config/formatters" },
     { method: "GET", path: "/api/feature-flags/all" },
+    { method: "GET", path: "/api/user-access/roles-visible-with-profile" },
     { method: "GET", path: "/api/user-access/applications" },
   ];
 
-  push("## Endpoint probes");
+  push("## Endpoint probes (dataset-discovery)");
   push("");
-  const typeCandidates: Array<{ id: string; name: string; score: number }> = [];
+  const typeCandidates: Array<{ id: string; name: string; score: number; source: string }> = [];
+  const allListedTypes: Array<{ id: string; name: string; score: number; source: string }> = [];
 
-  const walkTypes = (node: unknown) => {
+  const walkTypes = (node: unknown, source: string, keepZeroScore: boolean) => {
     if (!node) return;
     if (Array.isArray(node)) {
-      for (const item of node) walkTypes(item);
+      for (const item of node) walkTypes(item, source, keepZeroScore);
       return;
     }
     if (typeof node !== "object") return;
     const row = node as Record<string, unknown>;
-    const id = row.id ?? row.entityTypeId ?? row.dataTypeId ?? row.typeId ?? row.name;
-    const name = String(row.displayName ?? row.dataTypeName ?? row.name ?? row.title ?? "");
-    if (id != null && name) {
+    const id =
+      row.entityTypeId ??
+      row.dataTypeId ??
+      row.typeId ??
+      row.id ??
+      row.dataTypeName ??
+      row.name;
+    const name = String(
+      row.displayName ??
+        row.menuLabel ??
+        row.label ??
+        row.title ??
+        row.dataTypeName ??
+        row.name ??
+        row.path ??
+        "",
+    );
+    // Sitemap list-links: props.entityTypeId + menuLabel/name op hetzelfde of parent-object.
+    if (id != null && String(id).trim() && name) {
       const score = scoreName(name) + scoreName(String(id));
-      if (score > 0) typeCandidates.push({ id: String(id), name, score });
+      const entry = { id: String(id), name, score, source };
+      if (keepZeroScore) allListedTypes.push(entry);
+      if (score > 0 || keepZeroScore) typeCandidates.push(entry);
     }
     for (const nested of Object.values(row)) {
-      if (nested && typeof nested === "object") walkTypes(nested);
+      if (nested && typeof nested === "object") walkTypes(nested, source, keepZeroScore);
     }
   };
 
   for (const probe of probes) {
     const result = await api(probe.method, probe.path, token, probe.body);
     push(`- \`${probe.method} ${probe.path}\` → ${result.status} (${result.bytes} B)`);
-    walkTypes(result.json);
+    const keepAll =
+      probe.path.includes("/config/data-types") ||
+      probe.path.includes("sitemap") ||
+      probe.path.includes("formatters") ||
+      probe.path.includes("profile-data-types");
+    walkTypes(result.json, probe.path, keepAll);
+    if (result.status < 400 && result.json != null) {
+      const topKeys = [...collectKeys(result.json)].slice(0, 40);
+      if (topKeys.length) push(`  keys: ${topKeys.join(", ")}`);
+      if (probe.path.includes("sitemap") || probe.path.includes("data-types")) {
+        push(`  fingerprint=${fingerprint(redactDeep(result.json))} (body geredigeerd, niet volledig gelogd)`);
+      }
+    }
   }
   push("");
 
-  typeCandidates.sort((a, b) => b.score - a.score);
+  // Prior dataTypeId hints als expliciete kandidaten
+  for (const hint of priorHints) {
+    const match = /Prior dataTypeId hint:\s*(.+)$/.exec(hint);
+    if (match) {
+      const id = match[1].trim();
+      typeCandidates.push({ id, name: id, score: scoreName(id) + 20, source: "prior-report" });
+    }
+  }
+
+  typeCandidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   const unique = new Map<string, (typeof typeCandidates)[0]>();
   for (const candidate of typeCandidates) {
-    if (!unique.has(candidate.id)) unique.set(candidate.id, candidate);
+    const existing = unique.get(candidate.id);
+    if (!existing || candidate.score > existing.score) unique.set(candidate.id, candidate);
   }
-  const ranked = [...unique.values()];
+  const ranked = [...unique.values()].sort((a, b) => b.score - a.score);
   push("## Candidate data types");
   push("");
   if (ranked.length === 0) push("Geen dataType-kandidaten uit probes.");
-  for (const candidate of ranked.slice(0, 50)) {
-    push(`- id=\`${candidate.id}\` name=\`${candidate.name}\` score=${candidate.score}`);
+  for (const candidate of ranked.slice(0, 80)) {
+    push(
+      `- id=\`${candidate.id}\` name=\`${candidate.name}\` score=${candidate.score} source=\`${candidate.source}\``,
+    );
   }
+  push("");
+
+  const listedUnique = new Map<string, (typeof allListedTypes)[0]>();
+  for (const row of allListedTypes) {
+    if (!listedUnique.has(row.id)) listedUnique.set(row.id, row);
+  }
+  push(`## Volledige data-types / sitemap entries (n=${listedUnique.size})`);
+  push("");
+  const listedSorted = [...listedUnique.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  for (const row of listedSorted.slice(0, 200)) {
+    push(`- id=\`${row.id}\` name=\`${row.name}\` score=${row.score} source=\`${row.source}\``);
+  }
+  if (listedSorted.length > 200) push(`- … ${listedSorted.length - 200} meer weggelaten`);
   push("");
 
   const today = amsterdamYmd(0);
@@ -483,37 +710,119 @@ async function main() {
   push(`- morgen: \`${tomorrow}\``);
   push("");
 
-  let targetIds = ranked.filter((row) => row.score >= 10).map((row) => row.id);
-  if (targetIds.length === 0) targetIds = ranked.slice(0, 5).map((row) => row.id);
+  // Prefer high-score schepenplanning hits; anders planning/schip-namen; anders top van volledige lijst.
+  const byId = new Map(ranked.map((row) => [row.id, row]));
+  const targetOrdered: string[] = [];
+  const pushTarget = (id: string) => {
+    if (!id || targetOrdered.includes(id)) return;
+    targetOrdered.push(id);
+  };
+  for (const row of ranked.filter((entry) => entry.score >= 10)) pushTarget(row.id);
+  for (const row of ranked.filter((entry) => /plan|scheep|schip|laad|ship|vessel|groeve/i.test(entry.name))) {
+    pushTarget(row.id);
+  }
+  // Content-probe fallback: ook lage-score types uit data-types/sitemap (max 40).
+  for (const row of listedSorted.slice(0, 40)) pushTarget(row.id);
+  for (const row of ranked.slice(0, 20)) pushTarget(row.id);
+  const targetIds = targetOrdered.slice(0, 28);
 
-  // Als er geen lijst is: probeer open query niet blind op willekeurige IDs.
+  push("## Query-targets");
+  push("");
+  push(`Geselecteerd voor query-probes: ${targetIds.length} (v1 voor numerieke ids, v2 voor overige).`);
+  for (const id of targetIds) {
+    const meta = byId.get(id) ?? listedUnique.get(id);
+    push(
+      `- \`${id}\` name=\`${meta?.name ?? "?"}\` score=${meta?.score ?? "?"} api=${isNumericTypeId(id) ? "v1" : "v2"}`,
+    );
+  }
+  push("");
+
   const locationsWanted = ["Hoofdstraat", "Hoogveld", "Venlo", "Cuijk"];
   const mapping: Partial<Record<TargetField, string>> = {};
   const allColumns = new Set<string>();
   const foundLocations = new Set<string>();
   let bestTypeId = "";
+  let bestTypeName = "";
+  let bestContentScore = -1;
   let tomorrowFilter = "";
   let todayFilter = "";
   let continuationSeen = false;
   let pageSizeDefault: number | null = null;
 
-  push("## Queries");
+  const considerBest = (typeId: string, entities: unknown[], reason: string) => {
+    const meta = byId.get(typeId) ?? listedUnique.get(typeId);
+    const blob = JSON.stringify(entities);
+    const scored = contentScore(blob) + (meta?.score ?? 0) + (entities.length > 0 ? 5 : 0);
+    if (scored > bestContentScore || (!bestTypeId && entities.length > 0)) {
+      bestContentScore = scored;
+      bestTypeId = typeId;
+      bestTypeName = meta?.name ?? typeId;
+      push(`  → best candidate (${reason}): id=\`${typeId}\` name=\`${bestTypeName}\` contentScore=${scored}`);
+    }
+    for (const location of locationsWanted) {
+      if (blob.toLowerCase().includes(location.toLowerCase())) foundLocations.add(location);
+    }
+  };
+
+  const applyMappingFromEntities = (entities: unknown[]) => {
+    const keys = [...collectKeys(entities.map(flattenAttributes))];
+    for (const key of keys) allColumns.add(key);
+    for (const target of Object.keys(FIELD_SYNONYMS) as TargetField[]) {
+      const hit = matchField(keys, target);
+      if (hit) mapping[target] = hit;
+    }
+    if (mapping.loadingLocation) {
+      for (const entity of entities) {
+        const flat = flattenAttributes(entity);
+        const value = flat[mapping.loadingLocation];
+        if (typeof value === "string" && value.trim()) foundLocations.add(value.trim());
+      }
+    }
+  };
+
+  push("## Queries (fase 1: open + schema)");
   push("");
 
-  for (const typeId of targetIds.slice(0, 12)) {
-    push(`### dataTypeId \`${typeId}\``);
-    const schema = await api("GET", `/api/config/v2/data-types/${encodeURIComponent(typeId)}`, token);
-    push(`Schema v2 → ${schema.status}`);
+  type OpenHit = {
+    typeId: string;
+    queryPath: string;
+    schemaAttrNames: string[];
+    openEntities: unknown[];
+    nameScore: number;
+    openContent: number;
+  };
+  const openHits: OpenHit[] = [];
+
+  for (const typeId of targetIds) {
+    const meta = byId.get(typeId) ?? listedUnique.get(typeId);
+    const queryPath = dataQueryPath(typeId);
+    const schemaPath = configTypePath(typeId);
+    push(`### dataTypeId \`${typeId}\` (${meta?.name ?? "?"}, ${isNumericTypeId(typeId) ? "v1" : "v2"})`);
+
+    const schema = await api("GET", schemaPath, token);
+    push(`Schema \`${schemaPath}\` → ${schema.status}`);
+    let schemaAttrNames: string[] = [];
     if (schema.status < 400) {
-      push("```json");
-      push(JSON.stringify(redactDeep(schema.json), null, 2));
-      push("```");
-      for (const key of collectKeys(schema.json)) allColumns.add(key);
-      walkTypes(schema.json);
+      // Schema kan groot zijn — alleen keys + attributeNames, geen volledige dump.
+      const schemaKeys = [...collectKeys(schema.json)].slice(0, 80);
+      push(`Schema keys: ${schemaKeys.join(", ") || "(geen)"}`);
+      for (const key of schemaKeys) allColumns.add(key);
+      walkTypes(schema.json, `schema:${typeId}`, false);
+      schemaAttrNames = collectAttributeNames(schema.json);
+      if (schemaAttrNames.length) {
+        push(`Schema attributeNames (n=${schemaAttrNames.length}): ${schemaAttrNames.slice(0, 60).join(", ")}`);
+      }
+      const flat = await api("GET", `${schemaPath}/flattened`, token);
+      push(`Flattened \`${schemaPath}/flattened\` → ${flat.status}`);
+      if (flat.status < 400) {
+        for (const key of collectKeys(flat.json)) allColumns.add(key);
+        const flatNames = collectAttributeNames(flat.json);
+        schemaAttrNames = [...new Set([...schemaAttrNames, ...flatNames])];
+      }
     }
 
-    const open = await api("POST", `/api/data/v2/${encodeURIComponent(typeId)}/query`, token, { pageSize: 20 });
-    push(`Open query pageSize=20 → ${open.status}`);
+    const open = await api("POST", queryPath, token, { pageSize: 20 });
+    push(`Open query \`${queryPath}\` pageSize=20 → ${open.status}`);
     if (open.status >= 400) {
       push("");
       continue;
@@ -522,30 +831,21 @@ async function main() {
     if ("continuationToken" in openObj || "continuation" in openObj) continuationSeen = true;
     if (typeof openObj.totalCount === "number") pageSizeDefault = 20;
     const openEntities = extractEntities(open.json);
-    push(`Open entities: ${openEntities.length}; totalCount=${String(openObj.totalCount ?? "?")}`);
+    const openContent = contentScore(JSON.stringify(openEntities));
+    push(
+      `Open entities: ${openEntities.length}; totalCount=${String(openObj.totalCount ?? "?")}; contentScore=${openContent}`,
+    );
     if (openEntities.length > 0) {
-      bestTypeId = bestTypeId || typeId;
-      summary.dataset = "PASS";
-      const keys = [...collectKeys(openEntities.map(flattenAttributes))];
-      for (const key of keys) allColumns.add(key);
-      for (const target of Object.keys(FIELD_SYNONYMS) as TargetField[]) {
-        if (!mapping[target]) {
-          const hit = matchField(keys, target);
-          if (hit) mapping[target] = hit;
-        }
-      }
-      const blob = JSON.stringify(openEntities);
-      for (const location of locationsWanted) {
-        if (blob.toLowerCase().includes(location.toLowerCase())) foundLocations.add(location);
-      }
-      // Extra laadplaatsen via mappingveld
-      if (mapping.loadingLocation) {
-        for (const entity of openEntities) {
-          const flat = flattenAttributes(entity);
-          const value = flat[mapping.loadingLocation];
-          if (typeof value === "string" && value.trim()) foundLocations.add(value.trim());
-        }
-      }
+      applyMappingFromEntities(openEntities);
+      considerBest(typeId, openEntities, "open-query");
+      openHits.push({
+        typeId,
+        queryPath,
+        schemaAttrNames,
+        openEntities,
+        nameScore: meta?.score ?? 0,
+        openContent,
+      });
       push("Sample operationeel (max 2, alleen gemapte velden):");
       push("```json");
       push(
@@ -557,77 +857,97 @@ async function main() {
       );
       push("```");
     }
+    push("");
+  }
 
-    const dateFieldCandidates = [
-      mapping.unloadingDate,
-      "date",
-      "Datum",
-      "laaddatum",
-      "Laaddatum",
-      "loadingDate",
-      "plannedDate",
-      "planDatum",
-      "dag",
-      "Day",
-    ].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index);
+  // Fase 2: datumfilters alleen op de sterkste open hits (max 8).
+  openHits.sort((a, b) => b.openContent + b.nameScore - (a.openContent + a.nameScore));
+  const dateTargets = openHits.slice(0, 8);
+  push("## Queries (fase 2: vandaag/morgen filters)");
+  push("");
+  if (dateTargets.length === 0) {
+    push("Geen open-query hits — geen datumfilters geprobeerd.");
+    push("");
+  }
+
+  for (const hit of dateTargets) {
+    push(`### filters op \`${hit.typeId}\``);
+    const dateFieldCandidates = dateFieldCandidatesFrom(hit.schemaAttrNames, mapping);
+    // Ook velden uit open sample keys meenemen.
+    const sampleKeys = [...collectKeys(hit.openEntities.map(flattenAttributes))]
+      .map((key) => key.split(".").pop() || key)
+      .filter((name) => /datum|date|dag|day|plan|laad/i.test(name));
+    const fields = [...new Set([...dateFieldCandidates, ...sampleKeys])].slice(0, 10);
+    push(`Date-field candidates: ${fields.join(", ") || "(geen)"}`);
 
     for (const [label, day] of [
       ["morgen", tomorrow],
       ["vandaag", today],
     ] as const) {
-      for (const field of dateFieldCandidates) {
-        const filter = `${field} EQ ${JSON.stringify(day)}`;
-        const queried = await api("POST", `/api/data/v2/${encodeURIComponent(typeId)}/query`, token, {
-          filter,
-          pageSize: 100,
-        });
-        if (queried.status >= 400) continue;
-        const entities = extractEntities(queried.json);
-        push(`- ${label} filter=\`${filter}\` → ${queried.status}, n=${entities.length}`);
-        if (entities.length === 0) continue;
-        bestTypeId = typeId;
-        summary.dataset = "PASS";
-        if (label === "morgen") {
-          summary.tomorrowQuery = true;
-          tomorrowFilter = filter;
-        } else {
-          summary.todayQuery = true;
-          todayFilter = filter;
-        }
-        const keys = [...collectKeys(entities.map(flattenAttributes))];
-        for (const key of keys) allColumns.add(key);
-        for (const target of Object.keys(FIELD_SYNONYMS) as TargetField[]) {
-          const hit = matchField(keys, target);
-          if (hit) mapping[target] = hit;
-        }
-        const blob = JSON.stringify(entities);
-        for (const location of locationsWanted) {
-          if (blob.toLowerCase().includes(location.toLowerCase())) foundLocations.add(location);
-        }
-        if (mapping.loadingLocation) {
-          for (const entity of entities) {
-            const flat = flattenAttributes(entity);
-            const value = flat[mapping.loadingLocation];
-            if (typeof value === "string" && value.trim()) foundLocations.add(value.trim());
+      let hitForDay = false;
+      for (const field of fields) {
+        // Eerst EQ ymd; daarna BETWEEN ms (Tarasa DateTime).
+        for (const filter of dateFilterVariants(field, day).slice(0, 4)) {
+          const queried = await api("POST", hit.queryPath, token, {
+            filter,
+            pageSize: 100,
+          });
+          if (queried.status >= 400) {
+            push(`- ${label} filter=\`${filter}\` → ${queried.status}`);
+            continue;
           }
+          const entities = extractEntities(queried.json);
+          push(`- ${label} filter=\`${filter}\` → ${queried.status}, n=${entities.length}`);
+          if (entities.length === 0) continue;
+          applyMappingFromEntities(entities);
+          considerBest(hit.typeId, entities, `${label}-filter`);
+          if (label === "morgen") {
+            summary.tomorrowQuery = true;
+            tomorrowFilter = filter;
+          } else {
+            summary.todayQuery = true;
+            todayFilter = filter;
+          }
+          push("Sample operationeel (max 2):");
+          push("```json");
+          push(
+            JSON.stringify(
+              entities.slice(0, 2).map((entity) => operationalSample(entity, mapping)),
+              null,
+              2,
+            ),
+          );
+          push("```");
+          hitForDay = true;
+          break;
         }
-        push("Sample operationeel (max 2):");
-        push("```json");
-        push(
-          JSON.stringify(
-            entities.slice(0, 2).map((entity) => operationalSample(entity, mapping)),
-            null,
-            2,
-          ),
-        );
-        push("```");
-        break;
+        if (hitForDay) break;
       }
     }
     push("");
   }
 
   summary.dataTypeId = bestTypeId;
+  const datasetSignals =
+    summary.tomorrowQuery ||
+    summary.todayQuery ||
+    bestContentScore >= 25 ||
+    Boolean(mapping.vessel) ||
+    Boolean(mapping.loadingLocation) ||
+    Boolean(mapping.unloadingLocation);
+  summary.dataset = bestTypeId && datasetSignals ? "PASS" : "FAIL";
+
+  if (bestTypeName || bestTypeId) {
+    push("## Best dataset candidate");
+    push("");
+    push(`- dataTypeId: \`${bestTypeId || "(niet vastgesteld)"}\``);
+    push(`- name: \`${bestTypeName || "?"}\``);
+    push(`- contentScore: ${bestContentScore}`);
+    push(
+      `- dataset-signalen: tomorrow=${summary.tomorrowQuery} today=${summary.todayQuery} locations/vessel/mapping=${datasetSignals}`,
+    );
+    push("");
+  }
 
   push("## Bronvolgorde / paginering");
   push("");
@@ -672,19 +992,21 @@ async function main() {
   push(`AUTH: ${summary.auth}`);
   push(`DATASET: ${summary.dataset}`);
   push(`dataTypeId: ${summary.dataTypeId || "(niet vastgesteld)"}`);
+  push(`dataTypeName: ${bestTypeName || "(niet vastgesteld)"}`);
   push(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}${tomorrowFilter ? ` (\`${tomorrowFilter}\`)` : ""}`);
   push(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}${todayFilter ? ` (\`${todayFilter}\`)` : ""}`);
   push(`TOTP required: ${summary.totpRequired}`);
   push("");
   push("## STOP");
   push("");
-  push("Geen UI gebouwd. Secrets/tokens niet gelogd.");
+  push("Geen UI gebouwd. Secrets/tokens niet gelogd. Auth-flow ongewijzigd.");
 
   writeReport();
   console.log(`Wrote ${outPath}`);
   console.log(`AUTH: ${summary.auth}`);
   console.log(`DATASET: ${summary.dataset}`);
   console.log(`dataTypeId: ${summary.dataTypeId || "(niet vastgesteld)"}`);
+  console.log(`dataTypeName: ${bestTypeName || "(niet vastgesteld)"}`);
   console.log(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}`);
   console.log(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}`);
   if (summary.auth !== "PASS" || summary.dataset !== "PASS") process.exitCode = 1;

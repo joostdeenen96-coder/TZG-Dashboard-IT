@@ -2,7 +2,9 @@
 
 Branch: `feature/schepenplanning-dashboard`  
 Bron: https://planning.teunesen.nl/  
-Besluit: **STOP** — fase 1 (publiek) afgerond; fase 2 (authenticated discovery) geblokkeerd tot dedicated secrets in de Cloud Agent-runtime staan.
+Besluit: **STOP** — geen UI.  
+TEU-NC-01 live: **AUTH PASS / DATASET FAIL** (credentials OK; auth niet herontwerpen).  
+Open: `dataTypeId`, vandaag/morgen-query, veldmapping — zie `docs/SCHEPENPLANNING-AUTH.md`.
 
 Authenticated discovery (TEU-NC-01, **geen tsx** op de host):
 
@@ -30,7 +32,7 @@ Rapport: `docs/SCHEPENPLANNING-AUTH.md` of `data/ship-planning-discovery.md`
 | Publieke shell | `GET /` → HTML “Tarasa”; assets op same-origin blob |
 | Tenant | `GET /api/user-access/application/fromDomain` → `applicationId: 9`, `name: "Teunesen"`, `domainName: "planning.teunesen.nl"`, `primaryLocale: "nl-NL"`, `primaryTimeZone: "Europe/Amsterdam"` |
 | Officiële OpenAPI/Swagger | niet publiek (`/swagger`, `/openapi.json` → 404) |
-| Schepenplanning-endpoint | **nog niet vastgesteld** — vereist ingelogde sessie om `dataTypeId` / query te zien |
+| Schepenplanning-endpoint | **nog niet vastgesteld** — TEU AUTH PASS; dataset/sitemap/query-discovery loopt (`discoverAuthenticated`) |
 | Preferentie | JSON/XHR van de pagina zelf (`/api/data` / `/api/data/v2/{id}/query`) — aanwezig in bundles; niet bereikbaar zonder token |
 
 ## 2. Authenticatiemethode
@@ -82,7 +84,7 @@ Lijsten gebruiken o.a. `orderBy.field`, `orderBy.dir`, Redux-achtige acties `sim
 | Aggregate | `POST /api/data/v2/{id}/aggregate`, `POST /api/data/v2/aggregate-batch` |
 | Live | SignalR `/api/live` |
 
-Nog te bepalen na login: welk `entityTypeId` = Schepenplanning; welk filterveld = laad-/plandatum; bronvolgorde; laadplaatsgroepering; echte veldnamen.
+Nog te bepalen na AUTH PASS: welk `entityTypeId` = Schepenplanning; welk filterveld = laad-/plandatum (`EQ` ymd en/of `BETWEEN` ms); bronvolgorde; laadplaatsgroepering; echte veldnamen. Numerieke ids gebruiken `/api/data/{id}/query` (v1), niet v2.
 
 ## 5. Ontbrekende technische toegang
 

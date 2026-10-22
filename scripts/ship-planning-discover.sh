@@ -16,10 +16,13 @@ echo "Schepenplanning discovery (geen secrets in deze output)"
 
 if [ -f dist/server/shipPlanning/discoverAuthenticated.js ]; then
   echo "Modus: lokale node dist (host)"
-  SHIP_PLANNING_DISCOVERY_OUT="$(pwd)/docs/SCHEPENPLANNING-AUTH.md"
+  SHIP_PLANNING_DISCOVERY_OUT="$(pwd)/data/ship-planning-discovery.md"
   export SHIP_PLANNING_DISCOVERY_OUT
   node dist/server/shipPlanning/discoverAuthenticated.js
-  echo "Rapport: docs/SCHEPENPLANNING-AUTH.md"
+  echo "Rapport: data/ship-planning-discovery.md"
+  if grep -q '^AUTH: PASS' "$SHIP_PLANNING_DISCOVERY_OUT" 2>/dev/null; then
+    echo "AUTH PASS — sync samenvatting niet automatisch naar docs/ (beoordeel data-rapport eerst)."
+  fi
   exit 0
 fi
 
