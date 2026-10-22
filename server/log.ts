@@ -27,7 +27,13 @@ export function sanitize(message: string) {
     .replace(/postgres(?:ql)?:\/\/\S+/gi, "postgresql://[redacted]")
     .replace(/DATABASE_URL=\S+/gi, "DATABASE_URL=[redacted]")
     .replace(/tzg_[A-Za-z0-9_-]{8,}/g, "tzg_[redacted]")
-    .replace(/cookie["'\s:=]+[^\s"',}]+/gi, "cookie=[redacted]");
+    .replace(/cookie["'\s:=]+[^\s"',}]+/gi, "cookie=[redacted]")
+    .replace(/SHIP_PLANNING_PASSWORD=\S+/gi, "SHIP_PLANNING_PASSWORD=[redacted]")
+    .replace(/SHIP_PLANNING_USERNAME=\S+/gi, "SHIP_PLANNING_USERNAME=[redacted]")
+    .replace(/SHIP_PLANNING_TOTP_SECRET=\S+/gi, "SHIP_PLANNING_TOTP_SECRET=[redacted]")
+    .replace(/SHIP_PLANNING_API_KEY=\S+/gi, "SHIP_PLANNING_API_KEY=[redacted]")
+    .replace(/(?:\+|00)?31[\s-]?(?:\(0\)[\s-]?)?6[\s-]?\d(?:[\s-]?\d){7}/g, "[telefoon]")
+    .replace(/\b06[\s-]?\d(?:[\s-]?\d){7}\b/g, "[telefoon]");
 }
 
 function levelAllowed(level: string) {

@@ -35,6 +35,7 @@ import { weatherRouter } from "./routes/weather.js";
 import { getDashboardRepository } from "./dashboards/repository.js";
 import { resolveRepositoryMode } from "./db/repositoryMode.js";
 import { playerRouter } from "./routes/player.js";
+import { shipPlanningRouter } from "./routes/shipPlanning.js";
 import { auditRouter, screensRouter } from "./routes/screens.js";
 
 const port = resolveListenPort();
@@ -98,6 +99,7 @@ app.use("/api/wij-agenda", agendaRouter);
 app.use("/api/dieselsurcharge", dieselSurchargeRouter);
 app.use("/api/gasoil-surcharges", gasOilSurchargesRouter);
 app.use("/api/prtg", prtgRouter);
+app.use("/api/ship-planning", shipPlanningRouter);
 
 const repositoryMode = resolveRepositoryMode();
 logInfo(`dashboardopslag ${repositoryMode}`, { event: "repository" });

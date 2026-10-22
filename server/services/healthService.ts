@@ -22,7 +22,7 @@ export type SourceCheck = {
 };
 
 /** Gasoil upstream outages must not mark the whole sources aggregate unhealthy. */
-const NON_FATAL_SOURCE_IDS = new Set(["interrijn-cbrb", "statbel-gasoil"]);
+const NON_FATAL_SOURCE_IDS = new Set(["interrijn-cbrb", "statbel-gasoil", "ship-planning"]);
 
 const PEGELONLINE = "https://www.pegelonline.wsv.de/webservices/rest-api/v2";
 const KAUB = "1d26e504-7f9e-480a-b52c-5932be6549ab";
@@ -225,7 +225,8 @@ export async function getHealthSources() {
   ];
   const checks = await mapLimit(jobs, 2, (job) => job());
   const gasOil = await checkGasOilSources();
-  const all = [...checks, ...gasOil];
+  const { getShipPlanningSourceHealth } = await import("../shipPlanning/service.js");
+  const all = [...checks, ...gasOil, getShipPlanningSourceHealth()];
   const relevant = all.filter(
     (item) => item.status !== "disabled" && item.status !== "unavailable" && item.status !== "stale" && !NON_FATAL_SOURCE_IDS.has(item.id),
   );

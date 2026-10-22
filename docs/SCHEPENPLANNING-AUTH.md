@@ -40,6 +40,8 @@ Beoordeel: volledig formatterobject, `pluginConfig`, plugin-source API-paden, re
 Host-leesbaar rapport: `ship-planning-discovery.md` (mode 640).  
 Data-volume `data/ship-planning-discovery.md` kan uid 10001 blijven — gebruik het host-bestand.
 
-## STOP
+## Productie
 
-Geen widget tot S1–S20 PASS.
+De provider gebruikt deze keten en `POST /api/data/255/query`.  
+Diagnostiek: `npm run ship-planning:test-query`.  
+Geen nieuwe auth. Refresh-401 blijft negeren.

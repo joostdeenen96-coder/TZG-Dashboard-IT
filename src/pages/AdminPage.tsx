@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { AdminDashboardsSection } from "../components/AdminDashboardsSection";
+import { AdminShipPlanningSection } from "../components/AdminShipPlanningSection";
 import { AdminGasOilBootstrapSection } from "../components/AdminGasOilBootstrapSection";
 import { AdminOperationsSection } from "../components/AdminOperationsSection";
 import { AdminScreensSection } from "../components/AdminScreensSection";
@@ -317,6 +318,7 @@ export function AdminPage() {
           </form>
         )}
 
+        {authenticated ? <AdminShipPlanningSection authenticated={authenticated} /> : null}
         {authenticated ? <AdminGasOilBootstrapSection authenticated={authenticated} /> : null}
         {authenticated ? <AdminOperationsSection authenticated={authenticated} /> : null}
         {authenticated ? <AdminDashboardsSection authenticated={authenticated} /> : null}

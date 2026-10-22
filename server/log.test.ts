@@ -15,4 +15,8 @@ test("logsanitization verwijdert secrets en tokens", () => {
   assert.match(clean, /Bearer \[redacted\]/);
   assert.match(clean, /DATABASE_URL=\[redacted\]/);
   assert.match(clean, /tzg_\[redacted\]/);
+  const ship = sanitize("SHIP_PLANNING_PASSWORD=geheimer SHIP_PLANNING_USERNAME=planner bel 06-12345678");
+  assert.equal(ship.includes("geheimer"), false);
+  assert.equal(ship.includes("planner"), false);
+  assert.equal(ship.includes("12345678"), false);
 });

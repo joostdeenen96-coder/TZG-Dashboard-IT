@@ -11,17 +11,16 @@
  * Secrets: SHIP_PLANNING_* uit process.env of `.env` — nooit loggen/committen.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { appRoot, dataDir } from "../appPaths.js";
-
-const SECRET_ENV_KEYS = [
-  "SHIP_PLANNING_USERNAME",
-  "SHIP_PLANNING_PASSWORD",
-  "SHIP_PLANNING_TOTP_SECRET",
-  "SHIP_PLANNING_API_KEY",
-  "SHIP_PLANNING_BASE_URL",
-] as const;
+import { dataDir } from "../appPaths.js";
+import {
+  authenticateShipPlanning,
+  extractToken,
+  loadShipPlanningEnvFile,
+  shipPlanningApi,
+  shipPlanningBaseUrl,
+} from "./client.js";
 
 /** Tarasa PluginContext: Xe = 2 → plugin URL .js wordt .t2.js */
 const TARASA_PLUGIN_RUNTIME_VERSION = 2;
@@ -30,45 +29,9 @@ const TARASA_PLUGIN_RUNTIME_VERSION = 2;
 const SCHEPEN_PAGE_GUID = "e339106e-2bc5-4ed9-9295-d722a78eec3f";
 const SCHEPEN_SPA_ROUTE = `#/data/page/${SCHEPEN_PAGE_GUID}`;
 
-function loadShipPlanningEnvFile() {
-  const candidates = [
-    process.env.SHIP_PLANNING_ENV_FILE?.trim(),
-    path.join(appRoot(), ".env"),
-    path.join(process.cwd(), ".env"),
-  ].filter((value): value is string => Boolean(value));
-
-  for (const file of candidates) {
-    if (!existsSync(file)) continue;
-    let text = "";
-    try {
-      text = readFileSync(file, "utf8");
-    } catch {
-      continue;
-    }
-    for (const line of text.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq <= 0) continue;
-      const key = trimmed.slice(0, eq).trim();
-      if (!SECRET_ENV_KEYS.includes(key as (typeof SECRET_ENV_KEYS)[number])) continue;
-      if (process.env[key]?.trim()) continue;
-      let value = trimmed.slice(eq + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      process.env[key] = value;
-    }
-    break;
-  }
-}
-
 loadShipPlanningEnvFile();
 
-const BASE = (process.env.SHIP_PLANNING_BASE_URL || "https://planning.teunesen.nl").replace(/\/$/, "");
+const BASE = shipPlanningBaseUrl();
 
 function resolveOutPath() {
   const fromEnv = process.env.SHIP_PLANNING_DISCOVERY_OUT?.trim();
@@ -144,23 +107,8 @@ function configTypePath(typeId: string) {
   return isNumericTypeId(typeId) ? `/api/config/data-types/${id}` : `/api/config/v2/data-types/${id}`;
 }
 
-async function api(method: string, pathname: string, token: string | null, body?: unknown) {
-  const headers: Record<string, string> = { accept: "application/json" };
-  if (token) headers.authorization = `Bearer ${token}`;
-  if (body !== undefined) headers["content-type"] = "application/json";
-  const response = await fetch(`${BASE}${pathname}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  let json: unknown = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = { _nonJson: true, _bytes: text.length };
-  }
-  return { status: response.status, json, bytes: text.length, contentType: response.headers.get("content-type") };
+function api(method: string, pathname: string, token: string | null, body?: unknown) {
+  return shipPlanningApi(method, pathname, token, body);
 }
 
 async function fetchText(url: string, token: string | null) {
@@ -174,30 +122,6 @@ async function fetchText(url: string, token: string | null) {
     contentType: response.headers.get("content-type"),
     text,
   };
-}
-
-function extractToken(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const row = payload as Record<string, unknown>;
-  if (typeof row.token === "string" && row.token) return row.token;
-  if (typeof row.accessToken === "string" && row.accessToken) return row.accessToken;
-  if (row.authToken && typeof row.authToken === "object") {
-    const nested = row.authToken as Record<string, unknown>;
-    if (typeof nested.token === "string") return nested.token;
-  }
-  return null;
-}
-
-function looksLikeTotpRequired(payload: unknown, status: number) {
-  const text = JSON.stringify(payload ?? {}).toLowerCase();
-  return (
-    status === 401 ||
-    status === 403 ||
-    text.includes("totp") ||
-    text.includes("twofactor") ||
-    text.includes("two-factor") ||
-    text.includes("mfa")
-  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -608,10 +532,7 @@ async function main() {
   push(`TOTP-secret: ${totp ? "[redacted] (aanwezig)" : "ontbreekt"}`);
   push("");
 
-  const loginBody: Record<string, string> = { username, password };
-  if (totp) loginBody.totp = totp;
-
-  const auth = await api("POST", "/api/user-access/authenticate", null, loginBody);
+  const auth = await authenticateShipPlanning();
   push(`Login HTTP: ${auth.status}`);
   push("Login response (volledig geredigeerd):");
   push("```json");
@@ -619,12 +540,10 @@ async function main() {
   push("```");
   push("");
 
-  let token = extractToken(auth.json);
-  if ((!token || auth.status >= 400) && !totp && looksLikeTotpRequired(auth.json, auth.status)) {
-    summary.totpRequired = "yes";
-  }
+  let token = auth.token;
+  if (!token && auth.totpRequired === "yes") summary.totpRequired = "yes";
 
-  if (!token || auth.status >= 400) {
+  if (!token) {
     push("## Status: AUTH MISLUKT");
     push("## Summary");
     push("AUTH: FAIL");

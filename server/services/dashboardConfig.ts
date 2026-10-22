@@ -25,6 +25,16 @@ export type DashboardConfig = {
     groupId: string;
     tag: string;
   };
+  shipPlanning: ShipPlanningSettings;
+};
+
+export type ShipPlanningDisplayMode = "Tomorrow" | "TodayAndTomorrow" | "Auto";
+
+export type ShipPlanningSettings = {
+  enabled: boolean;
+  displayMode: ShipPlanningDisplayMode;
+  refreshIntervalSeconds: number;
+  maxRows: number;
 };
 
 export type ScreenConfig = Pick<DashboardConfig, "weer" | "dashboard">;
@@ -48,6 +58,12 @@ const DEFAULTS: DashboardConfig = {
   prtg: {
     groupId: "",
     tag: "",
+  },
+  shipPlanning: {
+    enabled: true,
+    displayMode: "Tomorrow",
+    refreshIntervalSeconds: 300,
+    maxRows: 80,
   },
 };
 
@@ -98,6 +114,27 @@ function optionalToken(value: unknown, label: string, max: number) {
   return text;
 }
 
+function shipPlanningSettings(value: unknown): DashboardConfig["shipPlanning"] {
+  if (value === undefined) return { ...DEFAULTS.shipPlanning };
+  const row = asObject(value);
+  const mode = row.displayMode;
+  const displayMode: ShipPlanningDisplayMode =
+    mode === "TodayAndTomorrow" || mode === "Auto" || mode === "Tomorrow" ? mode : "Tomorrow";
+  if (row.displayMode !== undefined && row.displayMode !== displayMode) {
+    throw new Error("Weergave moet Tomorrow, TodayAndTomorrow of Auto zijn.");
+  }
+  return {
+    enabled: typeof row.enabled === "boolean" ? row.enabled : DEFAULTS.shipPlanning.enabled,
+    displayMode,
+    refreshIntervalSeconds:
+      row.refreshIntervalSeconds === undefined
+        ? DEFAULTS.shipPlanning.refreshIntervalSeconds
+        : wholeNumber(row.refreshIntervalSeconds, "Verversing schepenplanning", 60, 3600),
+    maxRows:
+      row.maxRows === undefined ? DEFAULTS.shipPlanning.maxRows : wholeNumber(row.maxRows, "Maximaal aantal regels", 4, 200),
+  };
+}
+
 export function parseDashboardConfig(value: unknown): DashboardConfig {
   const body = asObject(value);
   const diesel = asObject(body.sharepointDiesel);
@@ -125,6 +162,7 @@ export function parseDashboardConfig(value: unknown): DashboardConfig {
       groupId: optionalToken(prtg.groupId, "PRTG-groep", 40),
       tag: optionalToken(prtg.tag, "PRTG-tag", 80),
     },
+    shipPlanning: shipPlanningSettings(body.shipPlanning),
   };
 }
 
@@ -141,6 +179,7 @@ export function getDashboardConfig(): DashboardConfig {
       weer: { ...DEFAULTS.weer },
       dashboard: { ...DEFAULTS.dashboard },
       prtg: { ...DEFAULTS.prtg },
+      shipPlanning: { ...DEFAULTS.shipPlanning },
     };
   }
 }
