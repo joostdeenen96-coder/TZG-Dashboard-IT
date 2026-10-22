@@ -87,8 +87,8 @@ function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasiz
   if (!week) {
     return (
       <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3 py-1">
-        <p className="font-display text-[18px] font-semibold text-gold">Dieseltoeslag</p>
-        <p className="mt-1 text-[20px] text-mist">Geen voorgaande peildatum</p>
+        <p className="font-display text-[18px] font-semibold text-gold" data-diesel-label="">Dieseltoeslag</p>
+        <p className="mt-1 text-[20px] text-mist" data-diesel-meta="">Geen voorgaande peildatum</p>
       </li>
     );
   }
@@ -102,17 +102,17 @@ function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasiz
       }`}
     >
       <div className="min-w-0">
-        <p className="font-display text-[18px] leading-none font-semibold text-gold">{formatWebsiteWeek(week)}</p>
-        <p className="mt-1 font-display text-[40px] leading-none font-semibold tabular-nums">
+        <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">{formatWebsiteWeek(week)}</p>
+        <p className="mt-1 font-display text-[40px] leading-none font-semibold tabular-nums" data-diesel-value="">
           {formatFlooredPercent(week)}
         </p>
-        <p className="mt-1 truncate text-[13px] text-mist">Dieseltoeslag</p>
+        <p className="mt-1 truncate text-[13px] text-mist" data-diesel-meta="">Dieseltoeslag</p>
       </div>
       <div className="min-w-0 text-right">
-        <p className="truncate text-[13px] leading-tight text-mist">Dieselprijs</p>
-        <p className="truncate text-[15px] leading-tight tabular-nums">{formatPricePerLiter(week.dieselPrijs)}</p>
-        <p className="mt-1 truncate text-[13px] leading-tight text-mist">Peildatum</p>
-        <p className="truncate text-[14px] leading-tight tabular-nums">{formatPeildatum(week.peildatum)}</p>
+        <p className="truncate text-[13px] leading-tight text-mist" data-diesel-meta="">Dieselprijs</p>
+        <p className="truncate text-[15px] leading-tight tabular-nums" data-diesel-meta="">{formatPricePerLiter(week.dieselPrijs)}</p>
+        <p className="mt-1 truncate text-[13px] leading-tight text-mist" data-diesel-meta="">Peildatum</p>
+        <p className="truncate text-[14px] leading-tight tabular-nums" data-diesel-meta="">{formatPeildatum(week.peildatum)}</p>
       </div>
     </li>
   );
@@ -146,20 +146,20 @@ function GasOilCell({
           stale ? "border-gold/35 bg-gold/6" : "border-veil/12 bg-veil/[0.06]"
         } ${canOpen ? "cursor-pointer hover:border-gold/40" : "cursor-default"}`}
       >
-        <p className="font-display text-[18px] leading-none font-semibold text-gold">Gasolietoeslag</p>
+        <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
         {unavailable ? (
-          <p className="font-display text-[28px] leading-tight font-semibold text-mist">Niet beschikbaar</p>
+          <p className="font-display text-[28px] leading-tight font-semibold text-mist" data-diesel-value="">Niet beschikbaar</p>
         ) : (
-          <p className="font-display text-[42px] leading-none font-semibold tabular-nums text-paper">
+          <p className="font-display text-[42px] leading-none font-semibold tabular-nums text-paper" data-gas-value="">
             {formatEuro(result!.surchargePerTon!)}
-            <span className="ml-1 text-[18px] font-normal text-mist">/ ton</span>
+            <span className="ml-1 text-[18px] font-normal text-mist" data-diesel-unit="">/ ton</span>
           </p>
         )}
-        <p className="truncate text-[15px] capitalize text-mist">
+        <p className="truncate text-[15px] capitalize text-mist" data-diesel-meta="">
           {countryLabel}
           {result?.applicableMonth ? ` · ${monthName(result.applicableMonth)}` : ""}
         </p>
-        {stale ? <p className="text-[13px] text-gold">verouderd</p> : null}
+        {stale ? <p className="text-[13px] text-gold" data-diesel-meta="">verouderd</p> : null}
       </button>
     </li>
   );
@@ -174,8 +174,8 @@ function DieselStatusCell({
 }) {
   return (
     <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3 py-1">
-      <p className="font-display text-[18px] font-semibold text-gold">{title}</p>
-      <p className="mt-1 text-[16px] leading-snug text-mist">{message}</p>
+      <p className="font-display text-[18px] font-semibold text-gold" data-diesel-label="">{title}</p>
+      <p className="mt-1 text-[16px] leading-snug text-mist" data-diesel-meta="">{message}</p>
     </li>
   );
 }
@@ -196,9 +196,9 @@ export function DieselCard() {
   const cardStatus = dieselReady ? dieselState.status : gasOil ? "ready" : dieselState.status;
 
   return (
-    <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-status={cardStatus}>
+    <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-diesel-card="" data-status={cardStatus}>
       {refreshing ? <span className="absolute inset-x-0 top-0 h-0.5 animate-pulse bg-gold" aria-label="Vernieuwen" /> : null}
-      <ul className="grid min-h-0 flex-1 grid-rows-4 gap-2">
+      <ul className="grid min-h-0 flex-1 grid-rows-4 gap-2" data-diesel-stack="">
         {dieselReady ? (
           <>
             <DieselWeekCell week={dieselWeeks[0] ?? null} emphasize />

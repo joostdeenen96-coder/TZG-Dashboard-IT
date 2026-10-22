@@ -60,7 +60,7 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
   }
 
   return (
-    <article className="tv-card relative flex h-full min-h-0 flex-col overflow-hidden" data-status={state.status}>
+    <article className="tv-card relative flex h-full min-h-0 flex-col overflow-hidden" data-density={density} data-status={state.status}>
       {state.refreshing ? <span className="absolute inset-x-0 top-0 z-10 h-0.5 animate-pulse bg-gold" aria-label="Vernieuwen" /> : null}
       <AnimatePresence mode="sync">
         <motion.div
@@ -71,7 +71,7 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className={density === "compact" ? "flex h-full min-h-0 items-center gap-4 px-5 py-3" : "flex h-full min-h-0 gap-8 px-10 py-6"}>
+          <div className={density === "compact" ? "flex h-full min-h-0 items-center gap-[clamp(8px,0.8vw,16px)] px-[clamp(12px,1vw,22px)] py-[clamp(4px,0.45vh,10px)]" : "flex h-full min-h-0 gap-8 px-10 py-6"}>
             {density === "regular" && active.imagePath && hiddenPhoto !== active.id ? (
               <div className="flex w-[380px] shrink-0 items-center justify-center">
                 <img
@@ -84,18 +84,18 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
             ) : null}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
               <div className="flex items-center justify-between gap-6">
-                <p className="text-[13px] font-semibold tracking-[0.08em] text-gold uppercase">
+                <p className="text-[13px] font-semibold tracking-[0.08em] text-gold uppercase" data-news-kicker="">
                   WijTeunesen
                   {active.category ? <span className="ml-3 font-medium tracking-normal text-mist normal-case">{active.category}</span> : null}
                 </p>
-                <p className="font-display text-[18px] tracking-[0.16em] text-mist tabular-nums">
+                <p className="font-display text-[18px] tracking-[0.16em] text-mist tabular-nums" data-news-count="">
                   {String((shown.indexOf(active) >= 0 ? shown.indexOf(active) : index) + 1).padStart(2, "0")} / {String(shown.length).padStart(2, "0")}
                 </p>
               </div>
-              <h2 className={density === "compact" ? "mt-1 truncate font-display text-[26px] leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
+              <h2 className={density === "compact" ? "mt-0.5 truncate font-display text-[length:clamp(18px,2.2vh,40px)] leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
                 {active.title}
               </h2>
-              <p className={density === "compact" ? "mt-1 truncate text-[17px] text-paper/90" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
+              <p className={density === "compact" ? "mt-0.5 truncate text-[length:clamp(13px,1.5vh,26px)] text-paper/90" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
               {density === "regular" ? (
                 <p className={`mt-3 text-[18px] ${state.status === "fallback" ? "text-gold" : "text-mist"}`}>
                   {state.status === "fallback" ? "Laatste bekende gegevens · " : ""}
@@ -106,7 +106,7 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
           </div>
         </motion.div>
       </AnimatePresence>
-      <div className="absolute right-0 bottom-0 left-0 z-10 h-1.5 bg-veil/15">
+      <div className="absolute right-0 bottom-0 left-0 z-10 h-1.5 bg-veil/15" data-news-progress="">
         <div key={`${active.id}-${index}`} className="progress-bar h-full w-full bg-gold" style={{ animationDuration: `${ROTATE_MS}ms` }} />
       </div>
     </article>

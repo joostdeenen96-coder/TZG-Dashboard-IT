@@ -23,7 +23,7 @@ export function WaterLevelsWidget() {
     );
   }
   return (
-    <div className="grid h-full min-h-[200px] grid-cols-3 gap-4">
+    <div className="grid h-full min-h-0 grid-cols-3 gap-4" data-water-grid="">
       <WidgetBoundary title={levels.maxau.name}>
         <WaterLevelCard station={levels.maxau} refreshing={water.refreshing} stale={water.status === "fallback"} />
       </WidgetBoundary>

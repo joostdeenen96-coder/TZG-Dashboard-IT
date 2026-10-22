@@ -26,8 +26,8 @@ const headings = [
 const columnTrack =
   "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,2.1fr)_minmax(0,1.1fr)_minmax(0,1.4fr)] items-center";
 
-const singleColumnClass = `${columnTrack} gap-x-2 px-1`;
-const splitColumnClass = `${columnTrack} gap-x-1 px-0.5`;
+const singleColumnClass = `${columnTrack} gap-x-[clamp(6px,0.4vw,12px)] px-1`;
+const splitColumnClass = `${columnTrack} gap-x-[clamp(4px,0.28vw,8px)] px-0.5`;
 
 const ROW_HEIGHT = 40;
 
@@ -77,12 +77,23 @@ function BoardTitle({
 }) {
   return (
     <header className="grid shrink-0 grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-3">
-      <h2 className="truncate font-display text-[22px] leading-none font-semibold tracking-[0.06em] uppercase">{title}</h2>
-      {dateLabel ? <p className="truncate text-[16px] leading-none text-mist">{dateLabel}</p> : <span />}
+      <h2
+        className="truncate font-display leading-none font-semibold tracking-[0.06em] uppercase"
+        style={{ fontSize: "var(--ship-title, 22px)" }}
+      >
+        {title}
+      </h2>
+      {dateLabel ? (
+        <p className="truncate leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
+          {dateLabel}
+        </p>
+      ) : (
+        <span />
+      )}
       <div className="flex min-w-0 items-center justify-end gap-3">
         {notices}
         {pageLabel ? (
-          <p className="shrink-0 text-[16px] leading-none text-mist tabular-nums" data-testid="ship-rotation">
+          <p className="shrink-0 leading-none text-mist tabular-nums" style={{ fontSize: "var(--ship-meta, 16px)" }} data-testid="ship-rotation">
             {pageLabel}
           </p>
         ) : null}
@@ -105,23 +116,36 @@ function ShipTable({
   onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
 }) {
   return (
-    <div className="min-w-0">
-      <div className={`${columnClass} h-5 text-[12px] leading-none font-semibold tracking-[0.08em] text-mist uppercase`}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div
+        className={`${columnClass} leading-none font-semibold tracking-[0.08em] text-mist uppercase`}
+        style={{ height: "var(--ship-head, 20px)", fontSize: "var(--ship-head-text, 12px)" }}
+      >
         {headings.map((heading) => (
           <span key={heading.label} className={heading.align === "right" ? "text-right" : undefined}>
             {heading.label}
           </span>
         ))}
       </div>
-      <ul>
-        {entries.map((entry, rowIndex) => {
-          const quantity = formatQuantity(entry);
+      <ul className="flex min-h-0 flex-1 flex-col justify-start">
+        {Array.from({ length: SHIPS_PER_COLUMN }, (_, rowIndex) => {
+          const entry = entries[rowIndex];
+          const quantity = entry ? formatQuantity(entry) : null;
           return (
-            <li key={entry.sourceId ?? `${location}-${rowIndex}`}>
+            <li
+              key={entry?.sourceId ?? `${location}-slot-${rowIndex}`}
+              className="min-h-0"
+              style={{
+                flex: "1 1 0",
+                minHeight: "var(--ship-row, " + ROW_HEIGHT + "px)",
+                maxHeight: "var(--ship-row-max, 96px)",
+              }}
+            >
+              {entry ? (
               <button
                 type="button"
-                className={`${columnClass} w-full overflow-hidden text-left text-[20px] leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold ${rowIndex % 2 === 1 ? "bg-white/[0.04]" : ""}`}
-                style={{ height: ROW_HEIGHT }}
+                className={`${columnClass} h-full w-full overflow-hidden text-left leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold ${rowIndex % 2 === 1 ? "bg-white/[0.04]" : ""}`}
+                style={{ fontSize: "var(--ship-text, 20px)" }}
                 onClick={() => onOpen(entry, location, label)}
               >
                 <span className="min-w-0 truncate font-display font-semibold tabular-nums" title={cellTitle(entry.time)}>
@@ -146,6 +170,7 @@ function ShipTable({
                   {entry.vessel ?? "—"}
                 </span>
               </button>
+              ) : null}
             </li>
           );
         })}
@@ -196,18 +221,19 @@ function LocationSlide({
           {!embedTitle && dateLabel ? <p className="text-[16px] leading-none text-mist">{dateLabel}</p> : null}
           <div className="mt-1 flex shrink-0 items-baseline justify-between gap-3">
             <h3
-              className="truncate font-display text-[20px] leading-none font-semibold tracking-[0.04em] uppercase"
+              className="truncate font-display leading-none font-semibold tracking-[0.04em] uppercase"
+              style={{ fontSize: "var(--ship-title, 20px)" }}
               data-location={page.location}
               data-location-label={page.label}
             >
               {page.label}
               {page.locationPageCount > 1 ? (
-                <span className="ml-3 text-[16px] font-medium tracking-normal text-mist">
+                <span className="ml-3 font-medium tracking-normal text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
                   {page.pageInLocation + 1}/{page.locationPageCount}
                 </span>
               ) : null}
             </h3>
-            <p className="shrink-0 text-[16px] leading-none text-mist" data-ship-count={page.locationCount}>
+            <p className="shrink-0 leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }} data-ship-count={page.locationCount}>
               {page.locationCount === 1 ? "1 schip" : `${page.locationCount} schepen`}
             </p>
           </div>
@@ -226,7 +252,7 @@ function LocationSlide({
                 onOpen={onOpen}
               />
             ) : (
-              <div className="grid grid-cols-2 gap-x-6">
+              <div className="grid h-full grid-cols-2 gap-x-[clamp(12px,1vw,28px)]">
                 <ShipTable
                   entries={page.left}
                   location={page.location}
@@ -292,7 +318,7 @@ export function ShipPlanningBoard() {
 
   return (
     <article
-      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-4 py-2"
+      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-[clamp(12px,0.9vw,22px)] py-[clamp(6px,0.55vh,12px)]"
       data-testid="ship-planning"
       data-displayed-day={data?.displayedDay ?? ""}
       data-switch-reason={data?.switchReason ?? ""}
