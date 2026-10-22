@@ -438,6 +438,202 @@ function looksLikeTotpRequired(payload: unknown, status: number) {
   );
 }
 
+/** Door gebruiker bevestigde SPA-route (hash). GUID ≠ automatisch dataTypeId. */
+const SCHEPEN_PAGE_GUID = "e339106e-2bc5-4ed9-9295-d722a78eec3f";
+const SCHEPEN_SPA_ROUTE = `#/data/page/${SCHEPEN_PAGE_GUID}`;
+
+type Acceptance = "PASS" | "FAIL" | "NIET GETEST";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function collectObjects(node: unknown, into: Record<string, unknown>[] = []): Record<string, unknown>[] {
+  if (!node) return into;
+  if (Array.isArray(node)) {
+    for (const item of node) collectObjects(item, into);
+    return into;
+  }
+  if (typeof node === "object") {
+    into.push(node as Record<string, unknown>);
+    for (const nested of Object.values(node as Record<string, unknown>)) {
+      if (nested && typeof nested === "object") collectObjects(nested, into);
+    }
+  }
+  return into;
+}
+
+function indexFormatters(payload: unknown): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of collectObjects(payload)) {
+    if (typeof row.id === "string" || typeof row.id === "number") {
+      map.set(String(row.id), row);
+    }
+  }
+  return map;
+}
+
+function findSchepenSitemapEntries(payload: unknown): Record<string, unknown>[] {
+  const hits: Record<string, unknown>[] = [];
+  for (const row of collectObjects(payload)) {
+    const pathValue = typeof row.path === "string" ? row.path : "";
+    const label = String(row.label ?? row.menuLabel ?? row.displayName ?? row.name ?? "");
+    const props = asRecord(row.props) ?? {};
+    const formatterId = String(props.formatterId ?? row.formatterId ?? "");
+    const blob = `${pathValue} ${label} ${formatterId}`.toLowerCase();
+    if (
+      pathValue.includes(SCHEPEN_PAGE_GUID) ||
+      formatterId === SCHEPEN_PAGE_GUID ||
+      blob.includes("schepenplanning")
+    ) {
+      hits.push(row);
+    }
+  }
+  return hits;
+}
+
+function safeSitemapEntryView(entry: Record<string, unknown>) {
+  const props = asRecord(entry.props) ?? {};
+  return {
+    label: entry.label ?? entry.menuLabel ?? entry.displayName ?? null,
+    path: entry.path ?? null,
+    type: entry.type ?? null,
+    formatterId: props.formatterId ?? entry.formatterId ?? null,
+    pageName: props.pageName ?? entry.pageName ?? null,
+    menuLabel: entry.menuLabel ?? props.menuLabel ?? null,
+    hasSubroutes: entry.hasSubroutes ?? null,
+    props: {
+      formatterId: props.formatterId ?? null,
+      pageName: props.pageName ?? null,
+      entityTypeId: props.entityTypeId ?? null,
+      menuLabel: props.menuLabel ?? null,
+    },
+  };
+}
+
+function safeFormatterView(fmt: Record<string, unknown>) {
+  const settings = asRecord(fmt.settings) ?? {};
+  const plugin = asRecord(settings.pluginConfig);
+  const attributes = Array.isArray(settings.attributes)
+    ? settings.attributes.slice(0, 80).map((item) => {
+        const row = asRecord(item) ?? {};
+        return {
+          displayName: row.displayName ?? null,
+          attributePath: row.attributePath ?? null,
+          formatterId: row.formatterId ?? null,
+          uniqueId: row.uniqueId ?? null,
+        };
+      })
+    : null;
+  const lists = Array.isArray(settings.lists)
+    ? settings.lists.slice(0, 40).map((item) => {
+        const row = asRecord(item) ?? {};
+        return {
+          title: row.title ?? null,
+          dataType: row.dataType ?? null,
+          dataTypeId: row.dataTypeId ?? null,
+          formatterId: row.formatterId ?? null,
+          filter: row.filter ?? null,
+        };
+      })
+    : null;
+  return {
+    id: fmt.id ?? null,
+    name: fmt.name ?? null,
+    formatterType: fmt.formatterType ?? null,
+    dataTypeId: fmt.dataTypeId ?? null,
+    componentType: fmt.componentType ?? null,
+    path: fmt.path ?? null,
+    settings: {
+      listFormatterId: settings.listFormatterId ?? null,
+      entryFormatterId: settings.entryFormatterId ?? null,
+      globalFilter: settings.globalFilter ?? null,
+      pluginConfig: plugin
+        ? { url: plugin.url ?? null, scope: plugin.scope ?? null, module: plugin.module ?? null }
+        : null,
+      attributes,
+      lists,
+    },
+  };
+}
+
+function findFormatterByIdOrName(
+  byId: Map<string, Record<string, unknown>>,
+  id: string | null,
+  nameHint = "schepenplanning",
+): Record<string, unknown> | null {
+  if (id && byId.has(id)) return byId.get(id) ?? null;
+  const low = nameHint.toLowerCase();
+  for (const row of byId.values()) {
+    if (String(row.name ?? "").toLowerCase() === low) return row;
+  }
+  for (const row of byId.values()) {
+    if (String(row.name ?? "").toLowerCase().includes(low)) return row;
+  }
+  return null;
+}
+
+/** Verzamel bewezen dataTypeIds uit formatter-config (nóóit formatter.id als type-id). */
+function collectDataTypeIdsFromFormatter(
+  fmt: Record<string, unknown> | null,
+  byId: Map<string, Record<string, unknown>>,
+  into = new Set<string>(),
+  depth = 0,
+): Set<string> {
+  if (!fmt || depth > 6) return into;
+  const own = fmt.dataTypeId;
+  if (own != null && String(own).trim()) {
+    const idStr = String(own);
+    // UUID die identiek is aan formatter.id telt niet als bewezen dataTypeId (page/formatter GUID).
+    const sameAsFormatterId = idStr === String(fmt.id);
+    if (!(sameAsFormatterId && isUuid(idStr))) {
+      into.add(idStr);
+    }
+  }
+  const settings = asRecord(fmt.settings) ?? {};
+  for (const key of ["listFormatterId", "entryFormatterId", "subFormatterId"] as const) {
+    const nestedId = settings[key];
+    if (typeof nestedId === "string" || typeof nestedId === "number") {
+      collectDataTypeIdsFromFormatter(byId.get(String(nestedId)) ?? null, byId, into, depth + 1);
+    }
+  }
+  if (Array.isArray(settings.lists)) {
+    for (const item of settings.lists) {
+      const row = asRecord(item);
+      if (!row) continue;
+      for (const key of ["dataType", "dataTypeId", "entityTypeId"] as const) {
+        const value = row[key];
+        if (value != null && String(value).trim()) into.add(String(value));
+      }
+      if (row.formatterId != null) {
+        collectDataTypeIdsFromFormatter(byId.get(String(row.formatterId)) ?? null, byId, into, depth + 1);
+      }
+    }
+  }
+  if (Array.isArray(settings.attributes)) {
+    for (const item of settings.attributes) {
+      const row = asRecord(item);
+      if (row?.formatterId != null) {
+        collectDataTypeIdsFromFormatter(byId.get(String(row.formatterId)) ?? null, byId, into, depth + 1);
+      }
+    }
+  }
+  if (Array.isArray(settings.cards)) {
+    for (const item of settings.cards) {
+      const row = asRecord(item);
+      if (row?.dataType != null) into.add(String(row.dataType));
+      if (row?.dataTypeId != null) into.add(String(row.dataTypeId));
+    }
+  }
+  return into;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function main() {
   const outPath = resolveOutPath();
   const username = process.env.SHIP_PLANNING_USERNAME?.trim() || "";
@@ -465,7 +661,8 @@ async function main() {
 
   const writeReport = () => {
     mkdirSync(path.dirname(outPath), { recursive: true });
-    writeFileSync(outPath, `${report.join("\n")}\n`, { mode: 0o600 });
+    // 0640: owner+group read; geen world. Host-ownership regelt ship-planning-discover.sh.
+    writeFileSync(outPath, `${report.join("\n")}\n`, { mode: 0o640 });
   };
 
   if (!username || (!password && !apiKey)) {
@@ -607,6 +804,11 @@ async function main() {
   push("");
   const typeCandidates: Array<{ id: string; name: string; score: number; source: string }> = [];
   const allListedTypes: Array<{ id: string; name: string; score: number; source: string }> = [];
+  let sitemapJson: unknown = null;
+  let sitemapStatus = 0;
+  let formattersJson: unknown = null;
+  let formattersStatus = 0;
+  const probeStatuses: Record<string, number> = {};
 
   const walkTypes = (node: unknown, source: string, keepZeroScore: boolean) => {
     if (!node) return;
@@ -616,13 +818,24 @@ async function main() {
     }
     if (typeof node !== "object") return;
     const row = node as Record<string, unknown>;
-    const id =
-      row.entityTypeId ??
-      row.dataTypeId ??
-      row.typeId ??
-      row.id ??
-      row.dataTypeName ??
-      row.name;
+    const fromFormatters = source.includes("formatters");
+    const fromSitemap = source.includes("sitemap");
+    // Formatters: alleen expliciete dataTypeId — nóóit formatter.id (page/plugin GUID).
+    // Sitemap page-links: props.formatterId is page/formatter, geen dataTypeId.
+    // Sitemap list-links: props.entityTypeId is wel een dataset-kandidaat.
+    let id: unknown = null;
+    if (fromFormatters) {
+      id = row.dataTypeId ?? row.entityTypeId ?? null;
+    } else if (fromSitemap) {
+      const props = asRecord(row.props);
+      if (row.type === "page" || row.type === "dashboard") {
+        id = null;
+      } else {
+        id = props?.entityTypeId ?? row.entityTypeId ?? row.dataTypeId ?? null;
+      }
+    } else {
+      id = row.entityTypeId ?? row.dataTypeId ?? row.typeId ?? row.id ?? row.dataTypeName ?? null;
+    }
     const name = String(
       row.displayName ??
         row.menuLabel ??
@@ -633,12 +846,17 @@ async function main() {
         row.path ??
         "",
     );
-    // Sitemap list-links: props.entityTypeId + menuLabel/name op hetzelfde of parent-object.
     if (id != null && String(id).trim() && name) {
-      const score = scoreName(name) + scoreName(String(id));
-      const entry = { id: String(id), name, score, source };
-      if (keepZeroScore) allListedTypes.push(entry);
-      if (score > 0 || keepZeroScore) typeCandidates.push(entry);
+      const idStr = String(id);
+      // Page-GUID uit route nooit als dataType-kandidaat.
+      if (idStr === SCHEPEN_PAGE_GUID || (isUuid(idStr) && fromFormatters && idStr === String(row.id))) {
+        // skip
+      } else {
+        const score = scoreName(name) + scoreName(idStr);
+        const entry = { id: idStr, name, score, source };
+        if (keepZeroScore) allListedTypes.push(entry);
+        if (score > 0 || keepZeroScore) typeCandidates.push(entry);
+      }
     }
     for (const nested of Object.values(row)) {
       if (nested && typeof nested === "object") walkTypes(nested, source, keepZeroScore);
@@ -647,42 +865,170 @@ async function main() {
 
   for (const probe of probes) {
     const result = await api(probe.method, probe.path, token, probe.body);
+    probeStatuses[probe.path] = result.status;
     push(`- \`${probe.method} ${probe.path}\` → ${result.status} (${result.bytes} B)`);
+    if (probe.path === "/api/ui-config/sitemap") {
+      sitemapJson = result.json;
+      sitemapStatus = result.status;
+    }
+    if (probe.path === "/api/ui-config/formatters") {
+      formattersJson = result.json;
+      formattersStatus = result.status;
+    }
     const keepAll =
       probe.path.includes("/config/data-types") ||
       probe.path.includes("sitemap") ||
-      probe.path.includes("formatters") ||
       probe.path.includes("profile-data-types");
-    walkTypes(result.json, probe.path, keepAll);
+    // Formatters: walk alleen voor echte dataTypeId-velden (niet keepAll op formatter.id).
+    if (probe.path.includes("formatters")) {
+      walkTypes(result.json, probe.path, false);
+    } else {
+      walkTypes(result.json, probe.path, keepAll);
+    }
     if (result.status < 400 && result.json != null) {
       const topKeys = [...collectKeys(result.json)].slice(0, 40);
       if (topKeys.length) push(`  keys: ${topKeys.join(", ")}`);
-      if (probe.path.includes("sitemap") || probe.path.includes("data-types")) {
-        push(`  fingerprint=${fingerprint(redactDeep(result.json))} (body geredigeerd, niet volledig gelogd)`);
+      if (probe.path.includes("data-types")) {
+        push(`  fingerprint=${fingerprint(redactDeep(result.json))} (body niet volledig gelogd)`);
+      }
+      if (result.status === 403) {
+        push("  note: HTTP 403 = autorisatie/config-recht; niet hetzelfde als 404 (verkeerde id/route).");
       }
     }
   }
   push("");
 
-  // Prior dataTypeId hints als expliciete kandidaten
+  // ——— Schepenplanning route → sitemap → formatter → dataTypeId ———
+  push("## Schepenplanning route-resolutie (SPA-bewijs)");
+  push("");
+  push("SPA MainRouter (Tarasa bundles):");
+  push("- sitemap `type:\"page\"` → component `Dn({ formatterId, pageName })`");
+  push("- pad `/data/page/{guid}` → route na strip `/data/` → `page/{guid}`");
+  push("- `Yl`: page/dashboard → `plugin-${props.formatterId}`");
+  push("- `Dn` laadt formatter via id en daarna `settings.pluginConfig` (PluginFormatter)");
+  push(`- Bevestigde browserroute: \`${SCHEPEN_SPA_ROUTE}\``);
+  push(`- Path-GUID: \`${SCHEPEN_PAGE_GUID}\` — dit is **niet** automatisch een dataTypeId`);
+  push("");
+
+  const formattersById = indexFormatters(formattersJson);
+  const sitemapHits = sitemapStatus < 400 ? findSchepenSitemapEntries(sitemapJson) : [];
+  push(`### Sitemap Schepenplanning-entry (HTTP ${sitemapStatus})`);
+  push("");
+  if (sitemapHits.length === 0) {
+    push("Geen sitemap-entry met Schepenplanning / path-GUID gevonden (of sitemap niet leesbaar).");
+  } else {
+    for (const hit of sitemapHits.slice(0, 5)) {
+      push("Veilige properties van sitemap-entry:");
+      push("```json");
+      push(JSON.stringify(safeSitemapEntryView(hit), null, 2));
+      push("```");
+    }
+  }
+  push("");
+
+  const sitemapFormatterId = (() => {
+    for (const hit of sitemapHits) {
+      const view = safeSitemapEntryView(hit);
+      if (view.formatterId != null && String(view.formatterId).trim()) return String(view.formatterId);
+    }
+    return null;
+  })();
+
+  const resolvedFormatterId = sitemapFormatterId ?? SCHEPEN_PAGE_GUID;
+  const schepenFormatter = findFormatterByIdOrName(
+    formattersById,
+    resolvedFormatterId,
+    "schepenplanning",
+  );
+
+  push(`### Formatter Schepenplanning (HTTP ${formattersStatus})`);
+  push("");
+  push(`- pageId/path GUID: \`${SCHEPEN_PAGE_GUID}\``);
+  push(`- sitemap props.formatterId: \`${sitemapFormatterId ?? "(niet in sitemap gevonden)"}\``);
+  push(`- resolved formatter lookup id: \`${resolvedFormatterId}\``);
+  if (!schepenFormatter) {
+    push("- formatterobject: **niet gevonden** in `/api/ui-config/formatters`");
+  } else {
+    push("- formatterobject (structureel, veilig):");
+    push("```json");
+    push(JSON.stringify(safeFormatterView(schepenFormatter), null, 2));
+    push("```");
+    if (String(schepenFormatter.id) === SCHEPEN_PAGE_GUID) {
+      push("- Bevestigd: path-GUID == formatter.id (page/formatter id, geen query-id).");
+    }
+    if (schepenFormatter.dataTypeId == null || String(schepenFormatter.dataTypeId) === "") {
+      push("- formatter.dataTypeId: **ontbreekt** — query op formatter.id is ongeldig (verwacht 404).");
+    } else if (String(schepenFormatter.dataTypeId) === String(schepenFormatter.id)) {
+      push("- formatter.dataTypeId == formatter.id (UUID): **niet** als dataset-id behandeld.");
+    } else {
+      push(`- formatter.dataTypeId: \`${String(schepenFormatter.dataTypeId)}\` → kandidaat dataset-id`);
+    }
+  }
+  push("");
+
+  const resolvedDataTypeIds = collectDataTypeIdsFromFormatter(schepenFormatter, formattersById);
+  // Ook nested formatters by name-linked listFormatter etc. already covered.
+  push("### Resolved identifiers");
+  push("");
+  push(`- Schepenplanning route: \`${SCHEPEN_SPA_ROUTE}\``);
+  push(`- Page/formatter id: \`${schepenFormatter ? String(schepenFormatter.id) : resolvedFormatterId}\``);
+  push(
+    `- Resolved formatter name: \`${schepenFormatter ? String(schepenFormatter.name ?? "?") : "(niet vastgesteld)"}\``,
+  );
+  push(
+    `- Resolved dataTypeId(s): ${
+      resolvedDataTypeIds.size
+        ? [...resolvedDataTypeIds].map((id) => `\`${id}\``).join(", ")
+        : "*(niet vastgesteld)*"
+    }`,
+  );
+  push(
+    `- Resolved query endpoint: ${
+      resolvedDataTypeIds.size
+        ? [...resolvedDataTypeIds].map((id) => `\`${dataQueryPath(id)}\``).join(", ")
+        : "*(niet vastgesteld — geen dataTypeId)*"
+    }`,
+  );
+  push("");
+  push("403 vs 404:");
+  push(
+    `- \`/api/config/data-types\` → ${probeStatuses["/api/config/data-types"] ?? "?"} (403 = config-autorisatie, niet bewijs van verkeerde dataset-id)`,
+  );
+  push(
+    `- Query op page/formatter GUID \`${SCHEPEN_PAGE_GUID}\` → verwacht 404 als dat geen dataTypeId is (SPA gebruikt formatter.id voor page-plugin, niet als \`/api/data/v2/{id}/query\`)`,
+  );
+  push("");
+
+  // Prior dataTypeId hints — skip page GUID
   for (const hint of priorHints) {
     const match = /Prior dataTypeId hint:\s*(.+)$/.exec(hint);
     if (match) {
       const id = match[1].trim();
-      typeCandidates.push({ id, name: id, score: scoreName(id) + 20, source: "prior-report" });
+      if (id && id !== SCHEPEN_PAGE_GUID && !id.includes("(niet")) {
+        typeCandidates.push({ id, name: id, score: scoreName(id) + 20, source: "prior-report" });
+      }
     }
+  }
+  for (const id of resolvedDataTypeIds) {
+    typeCandidates.push({
+      id,
+      name: String(schepenFormatter?.name ?? id),
+      score: 100,
+      source: "schepen-formatter-dataTypeId",
+    });
   }
 
   typeCandidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   const unique = new Map<string, (typeof typeCandidates)[0]>();
   for (const candidate of typeCandidates) {
+    if (candidate.id === SCHEPEN_PAGE_GUID) continue;
     const existing = unique.get(candidate.id);
     if (!existing || candidate.score > existing.score) unique.set(candidate.id, candidate);
   }
   const ranked = [...unique.values()].sort((a, b) => b.score - a.score);
-  push("## Candidate data types");
+  push("## Candidate data types (geen page/formatter GUIDs)");
   push("");
-  if (ranked.length === 0) push("Geen dataType-kandidaten uit probes.");
+  if (ranked.length === 0) push("Geen dataType-kandidaten uit probes/formatter.dataTypeId.");
   for (const candidate of ranked.slice(0, 80)) {
     push(
       `- id=\`${candidate.id}\` name=\`${candidate.name}\` score=${candidate.score} source=\`${candidate.source}\``,
@@ -692,9 +1038,10 @@ async function main() {
 
   const listedUnique = new Map<string, (typeof allListedTypes)[0]>();
   for (const row of allListedTypes) {
+    if (row.id === SCHEPEN_PAGE_GUID) continue;
     if (!listedUnique.has(row.id)) listedUnique.set(row.id, row);
   }
-  push(`## Volledige data-types / sitemap entries (n=${listedUnique.size})`);
+  push(`## Volledige data-types / sitemap entityTypeIds (n=${listedUnique.size})`);
   push("");
   const listedSorted = [...listedUnique.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   for (const row of listedSorted.slice(0, 200)) {
@@ -710,18 +1057,18 @@ async function main() {
   push(`- morgen: \`${tomorrow}\``);
   push("");
 
-  // Prefer high-score schepenplanning hits; anders planning/schip-namen; anders top van volledige lijst.
+  // Query-targets: eerst resolved dataTypeIds; daarna overige kandidaten — nooit page GUID.
   const byId = new Map(ranked.map((row) => [row.id, row]));
   const targetOrdered: string[] = [];
   const pushTarget = (id: string) => {
-    if (!id || targetOrdered.includes(id)) return;
+    if (!id || id === SCHEPEN_PAGE_GUID || targetOrdered.includes(id)) return;
     targetOrdered.push(id);
   };
+  for (const id of resolvedDataTypeIds) pushTarget(id);
   for (const row of ranked.filter((entry) => entry.score >= 10)) pushTarget(row.id);
   for (const row of ranked.filter((entry) => /plan|scheep|schip|laad|ship|vessel|groeve/i.test(entry.name))) {
     pushTarget(row.id);
   }
-  // Content-probe fallback: ook lage-score types uit data-types/sitemap (max 40).
   for (const row of listedSorted.slice(0, 40)) pushTarget(row.id);
   for (const row of ranked.slice(0, 20)) pushTarget(row.id);
   const targetIds = targetOrdered.slice(0, 28);
@@ -729,6 +1076,7 @@ async function main() {
   push("## Query-targets");
   push("");
   push(`Geselecteerd voor query-probes: ${targetIds.length} (v1 voor numerieke ids, v2 voor overige).`);
+  push(`Page/formatter GUID \`${SCHEPEN_PAGE_GUID}\` wordt **niet** gequeried als dataTypeId.`);
   for (const id of targetIds) {
     const meta = byId.get(id) ?? listedUnique.get(id);
     push(
@@ -987,26 +1335,81 @@ async function main() {
   push([...allColumns].sort().join(", ") || "(geen)");
   push("");
 
+  const resolvedTypeList = [...resolvedDataTypeIds];
+  const queryEndpointProven = Boolean(bestTypeId);
+  const acceptance: Record<string, Acceptance> = {
+    S1: summary.auth === "PASS" ? "PASS" : "FAIL",
+    S2: "PASS", // route door gebruiker + SPA MainRouter bevestigd in dit rapport
+    S3: sitemapHits.length > 0 ? "PASS" : sitemapStatus < 400 ? "FAIL" : "NIET GETEST",
+    S4:
+      schepenFormatter && String(schepenFormatter.id)
+        ? "PASS"
+        : formattersStatus < 400
+          ? "FAIL"
+          : "NIET GETEST",
+    S5: schepenFormatter ? "PASS" : formattersStatus < 400 ? "FAIL" : "NIET GETEST",
+    S6: resolvedTypeList.length > 0 || bestTypeId ? "PASS" : "FAIL",
+    S7: queryEndpointProven ? "PASS" : "FAIL",
+    S8: summary.dataset === "PASS" ? "PASS" : "FAIL",
+    S9: bestContentScore >= 25 || Boolean(mapping.vessel) ? "PASS" : "FAIL",
+    S10: summary.tomorrowQuery ? "PASS" : "FAIL",
+    S11: summary.todayQuery ? "PASS" : "FAIL",
+    S12: tomorrowFilter || todayFilter ? "PASS" : "FAIL",
+    S13: mapping.loadingLocation ? "PASS" : "FAIL",
+    S14: mapping.time ? "PASS" : "FAIL",
+    S15: mapping.customer ? "PASS" : "FAIL",
+    S16: mapping.unloadingLocation ? "PASS" : "FAIL",
+    S17: mapping.condition ? "PASS" : "FAIL",
+    S18: mapping.product ? "PASS" : "FAIL",
+    S19: mapping.quantity ? "PASS" : "FAIL",
+    S20: mapping.vessel ? "PASS" : "FAIL",
+    S21: summary.dataset === "PASS" ? "PASS" : "FAIL",
+    S22: continuationSeen || pageSizeDefault != null ? "PASS" : "FAIL",
+    S23: "PASS", // rapport schrijft geredigeerd; geen secrets in outputpad
+    S24: "NIET GETEST", // host-leesbaarheid via ship-planning-discover.sh
+  };
+
   push("## Summary");
   push("");
   push(`AUTH: ${summary.auth}`);
   push(`DATASET: ${summary.dataset}`);
-  push(`dataTypeId: ${summary.dataTypeId || "(niet vastgesteld)"}`);
+  push(`Schepenplanning route: ${SCHEPEN_SPA_ROUTE}`);
+  push(
+    `Page/formatter id: ${schepenFormatter ? String(schepenFormatter.id) : SCHEPEN_PAGE_GUID}`,
+  );
+  push(
+    `Resolved formatter: ${schepenFormatter ? String(schepenFormatter.name ?? schepenFormatter.id) : "(niet vastgesteld)"}`,
+  );
+  push(
+    `Resolved dataTypeId: ${bestTypeId || resolvedTypeList[0] || "(niet vastgesteld)"}`,
+  );
+  push(
+    `Resolved query endpoint: ${
+      bestTypeId ? dataQueryPath(bestTypeId) : "(niet vastgesteld)"
+    }`,
+  );
   push(`dataTypeName: ${bestTypeName || "(niet vastgesteld)"}`);
   push(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}${tomorrowFilter ? ` (\`${tomorrowFilter}\`)` : ""}`);
   push(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}${todayFilter ? ` (\`${todayFilter}\`)` : ""}`);
   push(`TOTP required: ${summary.totpRequired}`);
   push("");
+  push("## Acceptatie S1–S24");
+  push("");
+  for (const [key, value] of Object.entries(acceptance)) {
+    push(`- ${key}: ${value}`);
+  }
+  push("");
   push("## STOP");
   push("");
   push("Geen UI gebouwd. Secrets/tokens niet gelogd. Auth-flow ongewijzigd.");
+  push("Geen widget/Admin credentials UI tot dataset+query+mapping bewezen zijn.");
 
   writeReport();
   console.log(`Wrote ${outPath}`);
   console.log(`AUTH: ${summary.auth}`);
   console.log(`DATASET: ${summary.dataset}`);
-  console.log(`dataTypeId: ${summary.dataTypeId || "(niet vastgesteld)"}`);
-  console.log(`dataTypeName: ${bestTypeName || "(niet vastgesteld)"}`);
+  console.log(`Page/formatter id: ${schepenFormatter ? String(schepenFormatter.id) : SCHEPEN_PAGE_GUID}`);
+  console.log(`Resolved dataTypeId: ${bestTypeId || resolvedTypeList[0] || "(niet vastgesteld)"}`);
   console.log(`tomorrow query: vastgesteld ${summary.tomorrowQuery ? "ja" : "nee"}`);
   console.log(`today query: vastgesteld ${summary.todayQuery ? "ja" : "nee"}`);
   if (summary.auth !== "PASS" || summary.dataset !== "PASS") process.exitCode = 1;

@@ -10,6 +10,8 @@ if ! docker info >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
 fi
 
 OUT_HOST="data/ship-planning-discovery.md"
+# Host-owned leesbaar rapport (geen world-writable; geen sudo nodig voor lezen).
+OUT_READABLE="ship-planning-discovery.md"
 mkdir -p data docs
 
 echo "Schepenplanning discovery (geen secrets in deze output)"
@@ -20,8 +22,10 @@ if [ -f dist/server/shipPlanning/discoverAuthenticated.js ]; then
   export SHIP_PLANNING_DISCOVERY_OUT
   node dist/server/shipPlanning/discoverAuthenticated.js
   echo "Rapport: data/ship-planning-discovery.md"
-  if grep -q '^AUTH: PASS' "$SHIP_PLANNING_DISCOVERY_OUT" 2>/dev/null; then
-    echo "AUTH PASS — sync samenvatting niet automatisch naar docs/ (beoordeel data-rapport eerst)."
+  if [ -f "$OUT_HOST" ]; then
+    cp "$OUT_HOST" "$OUT_READABLE"
+    chmod 640 "$OUT_READABLE" 2>/dev/null || chmod 600 "$OUT_READABLE" || true
+    echo "Leesbaar rapport (host-owner): $OUT_READABLE"
   fi
   exit 0
 fi
@@ -33,15 +37,31 @@ if ! $DOCKER compose images dashboard 2>/dev/null | grep -q dashboard; then
   $DOCKER compose build dashboard
 fi
 
+# Eén container-run:
+# - schrijft rapport naar data-volume (persistent)
+# - streamt rapportinhoud naar host-stdout → host-owned file (leesbaar zonder sudo)
+# Node console (AUTH/DATASET) gaat naar stderr zodat $OUT_READABLE puur markdown blijft.
+set +e
 $DOCKER compose run --rm --no-deps \
   -e SHIP_PLANNING_DISCOVERY_OUT=/app/data/ship-planning-discovery.md \
   -e SHIP_PLANNING_FORCE_DATA_OUT=1 \
   dashboard \
-  node dist/server/shipPlanning/discoverAuthenticated.js
+  sh -c 'node dist/server/shipPlanning/discoverAuthenticated.js >&2; ec=$?; chmod 640 /app/data/ship-planning-discovery.md 2>/dev/null || true; cat /app/data/ship-planning-discovery.md; exit $ec' \
+  > "${OUT_READABLE}.tmp"
+ec=$?
+set -e
+
+if [ -s "${OUT_READABLE}.tmp" ]; then
+  mv "${OUT_READABLE}.tmp" "$OUT_READABLE"
+  chmod 640 "$OUT_READABLE" 2>/dev/null || chmod 600 "$OUT_READABLE" || true
+  echo "Leesbaar rapport (host-owner): $OUT_READABLE (mode $(stat -c %a "$OUT_READABLE" 2>/dev/null || echo '?'))"
+else
+  rm -f "${OUT_READABLE}.tmp" 2>/dev/null || true
+  echo "WAARSCHUWING: host-leesbaar rapport niet geschreven" >&2
+fi
 
 if [ -f "$OUT_HOST" ]; then
-  cp "$OUT_HOST" docs/SCHEPENPLANNING-AUTH.md
-  echo "Rapport: $OUT_HOST en docs/SCHEPENPLANNING-AUTH.md"
-else
-  echo "Rapport verwacht op $OUT_HOST (data-volume)"
+  echo "Rapport data-volume: $OUT_HOST (mogelijk uid 10001 — gebruik $OUT_READABLE)"
 fi
+
+exit "$ec"

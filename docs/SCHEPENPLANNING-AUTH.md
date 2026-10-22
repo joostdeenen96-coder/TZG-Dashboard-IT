@@ -1,56 +1,44 @@
 # Schepenplanning — authenticated discovery
 
-## TEU-NC-01 LIVE (laatste bekende run)
+## TEU-NC-01 LIVE (bekend)
 
-AUTH: **PASS**  
-DATASET: **FAIL**  
-dataTypeId: *(niet vastgesteld)*  
-tomorrow query: vastgesteld nee  
-today query: vastgesteld nee  
+AUTH: **PASS** (Login HTTP 200, TOTP required: no)  
+DATASET: **FAIL** (page/formatter GUID werd eerder als dataTypeId gequeried → 404)
 
-Credentials/serviceaccount werken. **Authenticatie niet opnieuw ontwerpen.**
+Credentials werken. **Authenticatie niet herontwerpen.**
 
-Blokkade (uitsluitend dataset-discovery):
+## Bevestigde SPA-route
 
-1. Schepenplanning-dataset identificeren (sitemap / data-types / formatters)
-2. `dataTypeId` vaststellen
-3. Query voor vandaag/morgen (DataFilter) vinden
-4. Echte veldmapping vaststellen
+```
+https://planning.teunesen.nl/#/data/page/e339106e-2bc5-4ed9-9295-d722a78eec3f
+```
 
-Gesanitiseerd live-rapport op de host: `data/ship-planning-discovery.md`  
-(niet in Cloud Agent zonder upload; discovery leest dit lokaal als prior hint).
+| Identifier | Rol (SPA MainRouter-bewijs) |
+| --- | --- |
+| `e339106e-2bc5-4ed9-9295-d722a78eec3f` | **page path GUID / formatter.id** — niet automatisch `dataTypeId` |
+| sitemap `type: "page"` | component `Dn({ formatterId, pageName })` |
+| pad `/data/page/{guid}` | strip `/data/` → route `page/{guid}` |
+| `props.formatterId` | laadt formatter; daarna `settings.pluginConfig` (PluginFormatter) |
+
+Query `/api/data/v2/e339106e-…/query` → **404** is consistent met “verkeerde identifier”, niet met auth-falen.  
+`GET /api/config/data-types` → **403** is een apart autorisatieprobleem op config-listing.
 
 ## Cloud Agent / deze checkout (geen secrets)
 
 AUTH: FAIL  
 DATASET: FAIL  
-dataTypeId:  
-tomorrow query: vastgesteld nee  
-today query: vastgesteld nee  
 
 Geen `SHIP_PLANNING_*` in deze runtime. Geen UI gebouwd.
 
-## Discovery-uitbreiding (na AUTH PASS)
+## Discovery-gedrag (na deze update)
 
-Auth-flow ongewijzigd (`POST /api/user-access/authenticate` → Bearer → optioneel refresh).
-
-Toegevoegd voor dataset-finding (SPA Tarasa):
-
-| Probe | Doel |
-| --- | --- |
-| `GET /api/config/data-types` | Volledige typelijst |
-| `GET /api/ui-config/sitemap` | Menu → `entityTypeId` / labels |
-| `GET /api/ui-config/formatters` | `dataTypeId` + `menuLabel` |
-| `GET /api/config/profile-data-types` | Profieltypes |
-| Schema + `/flattened` | Attribuutnamen voor datumvelden |
-| Query **v1** (`/api/data/{id}/query`) bij numerieke id | SPA `data-url-helpers` |
-| Query **v2** bij niet-numerieke id | idem |
-| Open query + contentScore | Hoofdstraat/Hoogveld/Venlo/Cuijk e.d. |
-| Datumfilters | `EQ "yyyy-mm-dd"` en `BETWEEN [ms,ms]` |
+1. Auth-flow ongewijzigd.
+2. Sitemap-entry voor Schepenplanning / path-GUID → veilige props (`label`, `path`, `type`, `formatterId`, `pageName`, `menuLabel`, `hasSubroutes`, `props`).
+3. Formatterobject `id == e339…` of `name == Schepenplanning` → structureel gerapporteerd.
+4. **Alleen** `formatter.dataTypeId` (+ nested list/entry formatters) als query-kandidaten — **nooit** `formatter.id` als dataTypeId.
+5. Rapport default: `data/ship-planning-discovery.md`; host-leesbare kopie: `ship-planning-discovery.md` (mode 640, owner = script-aanroeper).
 
 ## Opnieuw draaien op TEU-NC-01
-
-Secrets staan lokaal in `.env` en mogen niet gelogd, gecommit of naar de frontend.
 
 ```sh
 git fetch origin feature/schepenplanning-dashboard
@@ -58,40 +46,21 @@ git checkout feature/schepenplanning-dashboard
 git pull origin feature/schepenplanning-dashboard
 
 docker compose build dashboard
-# of: npm run build
-
 ./scripts/ship-planning-discover.sh
+
+# Lees het host-owned rapport (niet het eventuele uid-10001 data-volume bestand):
+less ship-planning-discovery.md
 ```
 
-Alternatieven:
+Beoordeel in het rapport:
 
-```sh
-npm run ship-planning:discover
-node dist/server/shipPlanning/discoverAuthenticated.js
-```
+- Schepenplanning route / Page/formatter id / Resolved dataTypeId / Resolved query endpoint
+- Acceptatie S1–S24
+- tomorrow/today filter + veldmapping
 
-Docker-only (script doet dit automatisch als host-`dist` ontbreekt):
-
-```sh
-docker compose run --rm --no-deps \
-  -e SHIP_PLANNING_DISCOVERY_OUT=/app/data/ship-planning-discovery.md \
-  -e SHIP_PLANNING_FORCE_DATA_OUT=1 \
-  dashboard \
-  node dist/server/shipPlanning/discoverAuthenticated.js
-```
-
-Na een geslaagde run: beoordeel `data/ship-planning-discovery.md` (of kopie naar `docs/SCHEPENPLANNING-AUTH.md`) op:
-
-- AUTH / DATASET
-- dataTypeId + dataTypeName
-- tomorrow/today query (exacte filterstring)
-- veldmapping + laadplaatsen
-- volledige data-types/sitemap-lijst (als DATASET nog FAIL: welke namen/scores)
-
-Commit **alleen** het gesanitizeerde rapport; nooit `.env`. Geen credentials/tokens/username in logs of rapport.
-
-**Let op:** `ship-planning-discover.sh` schrijft bij lokale `dist` naar `docs/SCHEPENPLANNING-AUTH.md`. Bewaar eerst het TEU-live-rapport uit `data/ship-planning-discovery.md` voordat je die docs overschrijft, of zet `SHIP_PLANNING_DISCOVERY_OUT` expliciet.
+Commit **alleen** een gesanitizeerd uittreksel indien nodig; nooit `.env`.  
+`ship-planning-discovery.md` staat in `.gitignore`.
 
 ## STOP
 
-Geen UI tot DATASET PASS met vast `dataTypeId` en werkende dagquery.
+Geen widget / Admin credentials UI tot S6–S20 PASS (echt dataTypeId + query + mapping).

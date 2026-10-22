@@ -3,8 +3,9 @@
 Branch: `feature/schepenplanning-dashboard`  
 Bron: https://planning.teunesen.nl/  
 Besluit: **STOP** — geen UI.  
-TEU-NC-01 live: **AUTH PASS / DATASET FAIL** (credentials OK; auth niet herontwerpen).  
-Open: `dataTypeId`, vandaag/morgen-query, veldmapping — zie `docs/SCHEPENPLANNING-AUTH.md`.
+TEU-NC-01 live: **AUTH PASS / DATASET FAIL**.  
+Route bevestigd: `#/data/page/e339106e-2bc5-4ed9-9295-d722a78eec3f` = **page/formatter id**, niet dataTypeId.  
+Open: echte `dataTypeId` uit formatter-config, query, veldmapping — zie `docs/SCHEPENPLANNING-AUTH.md`.
 
 Authenticated discovery (TEU-NC-01, **geen tsx** op de host):
 

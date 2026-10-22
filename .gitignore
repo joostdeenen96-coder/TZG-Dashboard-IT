@@ -17,6 +17,9 @@ dist-ssr
 .env.production
 !.env.production.example
 backups
+# Schepenplanning discovery output (kan operationele data bevatten; nooit secrets, wel niet committen)
+ship-planning-discovery.md
+ship-planning-discovery.md.tmp
 
 # Editor directories and files
 .vscode/*
