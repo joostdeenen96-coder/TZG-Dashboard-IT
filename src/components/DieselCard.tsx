@@ -4,7 +4,6 @@ import { useGasOilSurcharges } from "../services/gasOilService";
 import type { DieselWeek } from "../types";
 import type { GasOilSurchargeResult } from "../types/gasoil";
 import { formatEuro } from "../lib/format";
-import { CardState } from "./CardState";
 import { GasOilDetailDialog } from "./GasOilDetailDialog";
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -132,7 +131,7 @@ function GasOilCell({
   const stale = result?.status === "stale";
   const canOpen =
     !!result &&
-    (result.status === "ready" || result.status === "stale") &&
+    (result.status === "ok" || result.status === "stale") &&
     typeof result.surchargePerTon === "number";
 
   return (
@@ -166,36 +165,61 @@ function GasOilCell({
   );
 }
 
+function DieselStatusCell({
+  title,
+  message,
+}: {
+  title: string;
+  message: string;
+}) {
+  return (
+    <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3 py-1">
+      <p className="font-display text-[18px] font-semibold text-gold">{title}</p>
+      <p className="mt-1 text-[16px] leading-snug text-mist">{message}</p>
+    </li>
+  );
+}
+
 export function DieselCard() {
   const dieselState = useDieselSurcharge();
   const gasOilState = useGasOilSurcharges();
   const [detail, setDetail] = useState<GasOilSurchargeResult | null>(null);
 
-  if (dieselState.status === "error") {
-    return <CardState status="error" title="Dieseltoeslag" message={dieselState.message} />;
-  }
-  if (dieselState.status === "empty") {
-    return <CardState status="empty" title="Dieseltoeslag" message="Geen toeslag beschikbaar." />;
-  }
-  if (dieselState.status !== "ready" && dieselState.status !== "fallback") {
-    return <CardState status="loading" title="Dieseltoeslag" message="Toeslag laden." />;
-  }
-
-  const dieselWeeks = planningWeeks(
-    dieselState.data.weken?.length ? dieselState.data.weken : [dieselState.data],
-    2,
-  );
+  const dieselReady = dieselState.status === "ready" || dieselState.status === "fallback";
+  const dieselWeeks = dieselReady
+    ? planningWeeks(dieselState.data.weken?.length ? dieselState.data.weken : [dieselState.data], 2)
+    : [];
 
   const gasOil =
     gasOilState.status === "ready" || gasOilState.status === "fallback" ? gasOilState.data : null;
   const refreshing = dieselState.refreshing || gasOilState.refreshing;
+  const cardStatus = dieselReady ? dieselState.status : gasOil ? "ready" : dieselState.status;
 
   return (
-    <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-status={dieselState.status}>
+    <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-status={cardStatus}>
       {refreshing ? <span className="absolute inset-x-0 top-0 h-0.5 animate-pulse bg-gold" aria-label="Vernieuwen" /> : null}
       <ul className="grid min-h-0 flex-1 grid-rows-4 gap-2">
-        <DieselWeekCell week={dieselWeeks[0] ?? null} emphasize />
-        <DieselWeekCell week={dieselWeeks[1] ?? null} emphasize={false} />
+        {dieselReady ? (
+          <>
+            <DieselWeekCell week={dieselWeeks[0] ?? null} emphasize />
+            <DieselWeekCell week={dieselWeeks[1] ?? null} emphasize={false} />
+          </>
+        ) : dieselState.status === "error" ? (
+          <>
+            <DieselStatusCell title="Dieseltoeslag" message={dieselState.message} />
+            <DieselStatusCell title="Dieseltoeslag" message="Vorige week niet beschikbaar" />
+          </>
+        ) : dieselState.status === "empty" ? (
+          <>
+            <DieselStatusCell title="Dieseltoeslag" message="Geen toeslag beschikbaar." />
+            <DieselStatusCell title="Dieseltoeslag" message="Geen voorgaande peildatum" />
+          </>
+        ) : (
+          <>
+            <DieselStatusCell title="Dieseltoeslag" message="Toeslag laden." />
+            <DieselStatusCell title="Dieseltoeslag" message="Toeslag laden." />
+          </>
+        )}
         <GasOilCell
           result={gasOil?.nl ?? null}
           countryLabel="Nederland"
@@ -214,7 +238,7 @@ export function DieselCard() {
       {dieselState.status === "fallback" ? (
         <p className="mt-1 truncate text-center text-[13px] text-gold">Laatste bekende dieselgegevens</p>
       ) : null}
-      {detail && (detail.status === "ready" || detail.status === "stale") ? (
+      {detail && (detail.status === "ok" || detail.status === "stale") ? (
         <GasOilDetailDialog result={detail} onClose={() => setDetail(null)} />
       ) : null}
     </article>

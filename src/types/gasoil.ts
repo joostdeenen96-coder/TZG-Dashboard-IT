@@ -1,6 +1,6 @@
 export type GasOilCountry = "NL" | "BE";
 
-export type GasOilAvailability = "ready" | "stale" | "unavailable";
+export type GasOilAvailability = "ok" | "stale" | "unavailable";
 
 export type StaffelRange = {
   from: number;
@@ -21,6 +21,7 @@ export type GasOilSurchargeResult = {
   product: string | null;
   productLabel: string | null;
   rawPricePer100LitersCbrb: number | null;
+  sourcePricePer100Liters: number | null;
   message: string | null;
 };
 

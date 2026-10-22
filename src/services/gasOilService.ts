@@ -8,15 +8,23 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
   if (row.country !== country) return null;
-  if (row.status !== "ready" && row.status !== "stale" && row.status !== "unavailable") return null;
+  // Accept legacy "ready" from older caches during rollout.
+  const statusRaw = row.status === "ready" ? "ok" : row.status;
+  if (statusRaw !== "ok" && statusRaw !== "stale" && statusRaw !== "unavailable") return null;
   if (typeof row.source !== "string" || typeof row.sourceLabel !== "string") return null;
   const staffel =
     row.staffelRange && typeof row.staffelRange === "object" && !Array.isArray(row.staffelRange)
       ? (row.staffelRange as Record<string, unknown>)
       : null;
+  const sourcePrice =
+    typeof row.sourcePricePer100Liters === "number"
+      ? row.sourcePricePer100Liters
+      : typeof row.rawPricePer100LitersCbrb === "number"
+        ? row.rawPricePer100LitersCbrb
+        : null;
   return {
     country,
-    status: row.status,
+    status: statusRaw,
     applicableMonth: typeof row.applicableMonth === "string" ? row.applicableMonth : null,
     referenceDate: typeof row.referenceDate === "string" ? row.referenceDate : null,
     priceExVatPer1000Liters: typeof row.priceExVatPer1000Liters === "number" ? row.priceExVatPer1000Liters : null,
@@ -40,8 +48,8 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
         : typeof row.product === "string"
           ? row.product
           : null,
-    rawPricePer100LitersCbrb:
-      typeof row.rawPricePer100LitersCbrb === "number" ? row.rawPricePer100LitersCbrb : null,
+    rawPricePer100LitersCbrb: sourcePrice,
+    sourcePricePer100Liters: sourcePrice,
     message: typeof row.message === "string" ? row.message : null,
   };
 }
@@ -86,7 +94,7 @@ function acceptGasOil(value: unknown): GasOilSurchargesPayload | null {
 
 const gasOilFeed = createPollingFeed<GasOilSurchargesPayload>({
   name: "gasolietoeslag",
-  storageKey: "teunesen.tv.gasoil.v1",
+  storageKey: "teunesen.tv.gasoil.v2",
   unavailable: "Gasolietoeslag niet bereikbaar.",
   load: loadGasOil,
   accept: acceptGasOil,

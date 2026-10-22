@@ -17,7 +17,8 @@ export type GasOilPriceObservation = {
   conversionNote?: string;
 };
 
-export type GasOilAvailability = "ready" | "stale" | "unavailable";
+/** API/runtime status: ok = geldige maandobservatie, stale = cache bij bronstoring, unavailable = geen waarde. */
+export type GasOilAvailability = "ok" | "stale" | "unavailable";
 
 export type StaffelRange = {
   from: number;
@@ -38,8 +39,10 @@ export type GasOilSurchargeResult = {
   /** API-veld uit specificatie; gelijk aan productLabel. */
   product: string | null;
   productLabel: string | null;
-  /** NL: oorspronkelijke CBRB-waarde €/100L. */
+  /** NL: oorspronkelijke CBRB-waarde €/100L (alias sourcePricePer100Liters). */
   rawPricePer100LitersCbrb: number | null;
+  /** NL API-contract: bronprijs €/100L CBRB. */
+  sourcePricePer100Liters: number | null;
   message: string | null;
 };
 
