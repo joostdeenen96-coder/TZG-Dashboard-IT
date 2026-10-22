@@ -1,29 +1,30 @@
+import {
+  mapSharePointFieldsToRecord,
+  resolveDieselFieldNames,
+  selectLatestTwoByPeildatum,
+  type DieselSurchargeRecord,
+} from "../diesel/selection.js";
 import { getDashboardConfig } from "../services/dashboardConfig.js";
 import { graphGet, graphUrl, resetGraphCache } from "../services/graphClient.js";
 import { sharePointGraphPath } from "../services/settingsService.js";
 import type { DieselSurcharge, DieselSurchargeProvider, DieselWeek } from "./dieselSurchargeProvider.js";
 
 export { resetGraphCache };
+export {
+  mapSharePointFieldsToRecord,
+  resolveDieselFieldNames,
+  selectLatestTwoByPeildatum,
+} from "../diesel/selection.js";
+export { isoWeekFromCalendarDate, isoWeekFromPeildatumIso, peildatumToCalendarIso } from "../diesel/peildatum.js";
 
 type GraphColumn = {
   name: string;
   displayName: string;
 };
 
-type FieldNames = {
-  actief: string;
-  peildatum: string;
-  dieselPrijs: string;
-  toeslagPercentage: string;
-};
-
 function asObject(value: unknown, message: string) {
   if (!value || typeof value !== "object") throw new Error(message);
   return value as Record<string, unknown>;
-}
-
-function normalizeName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 async function graphList(url: URL) {
@@ -41,60 +42,26 @@ async function graphList(url: URL) {
   return rows;
 }
 
-function columnName(columns: GraphColumn[], keys: string[]) {
-  for (const key of keys) {
-    const found = columns.find(
-      (column) => normalizeName(column.displayName) === key || normalizeName(column.name) === key,
-    );
-    if (found) return found.name;
-  }
-  throw new Error(`Kolom ${keys[0]} ontbreekt in de lijst.`);
-}
-
-function readNumber(value: unknown, label: string) {
-  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(",", ".")) : Number.NaN;
-  if (!Number.isFinite(number)) throw new Error(`${label} is geen getal.`);
-  return number;
-}
-
-function readBoolean(value: unknown) {
-  if (typeof value === "boolean") return value;
-  if (value === 1 || value === "1" || value === "true" || value === "Ja") return true;
-  if (value === 0 || value === "0" || value === "false" || value === "Nee") return false;
-  throw new Error("Actief is ongeldig.");
-}
-
-function readPeildatum(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) throw new Error("Peildatum ontbreekt.");
-  return value;
-}
-
-function toSurcharge(fields: Record<string, unknown>, names: FieldNames): DieselWeek {
+function recordToWeek(record: DieselSurchargeRecord): DieselWeek {
   return {
-    peildatum: readPeildatum(fields[names.peildatum]),
-    dieselPrijs: readNumber(fields[names.dieselPrijs], "Dieselprijs"),
-    toeslagPercentage: readNumber(fields[names.toeslagPercentage], "Toeslagpercentage"),
-    actief: readBoolean(fields[names.actief]),
+    itemId: record.itemId,
+    peildatum: record.referenceDate,
+    isoWeek: record.isoWeek,
+    dieselPrijs: record.dieselPricePerLiter,
+    toeslagPercentage: record.surchargePercentage,
+    actief: record.actief,
   };
 }
 
-function isoWeekKey(peildatum: string) {
-  const time = Date.parse(peildatum);
-  if (!Number.isFinite(time)) return peildatum;
-  const date = new Date(time);
-  const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const weekday = utc.getUTCDay() || 7;
-  utc.setUTCDate(utc.getUTCDate() + 4 - weekday);
-  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
-  return `${utc.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-function mapRecords(items: Record<string, unknown>[], names: FieldNames) {
-  const records: DieselWeek[] = [];
+function mapItemsToRecords(items: Record<string, unknown>[], names: ReturnType<typeof resolveDieselFieldNames>) {
+  const records: DieselSurchargeRecord[] = [];
   for (const item of items) {
     try {
-      records.push(toSurcharge(asObject(item.fields, "Velden van het dieselrecord ontbreken."), names));
+      const itemId = typeof item.id === "string" || typeof item.id === "number" ? String(item.id) : "";
+      if (!itemId) throw new Error("itemId ontbreekt.");
+      records.push(
+        mapSharePointFieldsToRecord(itemId, asObject(item.fields, "Velden van het dieselrecord ontbreken."), names),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "record overgeslagen";
       console.error(`Dieselrecord overgeslagen (${message}).`);
@@ -103,29 +70,15 @@ function mapRecords(items: Record<string, unknown>[], names: FieldNames) {
   return records;
 }
 
-function pickActive(records: DieselWeek[]) {
-  const active = records.filter((record) => record.actief);
-  if (active.length === 0) throw new Error("Geen record met Actief = true.");
-  active.sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum));
-  return active[0];
-}
-
-function latestFourWeeks(records: DieselWeek[]) {
-  const byWeek = new Map<string, DieselWeek>();
-  const chronological = [...records].sort((left, right) => Date.parse(left.peildatum) - Date.parse(right.peildatum));
-  for (const record of chronological) {
-    if (!Number.isFinite(Date.parse(record.peildatum))) continue;
-    byWeek.set(isoWeekKey(record.peildatum), record);
-  }
-  return [...byWeek.values()]
-    .sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum))
-    .slice(0, 4)
-    .sort((left, right) => Date.parse(left.peildatum) - Date.parse(right.peildatum));
-}
-
-function withWeeks(active: DieselWeek, records: DieselWeek[]): DieselSurcharge {
-  const weken = latestFourWeeks(records);
-  return { ...active, weken: weken.length > 0 ? weken : [{ ...active }] };
+/** Bouw API-payload: weken[0]=nieuwste peildatum, weken[1]=een-na-nieuwste. */
+export function buildDieselSurchargeFromRecords(records: DieselSurchargeRecord[]): DieselSurcharge {
+  const { latest, previous } = selectLatestTwoByPeildatum(records);
+  if (!latest) throw new Error("Geen geldige SharePoint-dieselrecords met peildatum en toeslag.");
+  const weken = previous ? [recordToWeek(latest), recordToWeek(previous)] : [recordToWeek(latest)];
+  return {
+    ...recordToWeek(latest),
+    weken,
+  };
 }
 
 function odataText(value: string) {
@@ -157,34 +110,38 @@ export async function testSharePointConnection(siteUrl?: string, listName?: stri
 export class SharePointDieselProvider implements DieselSurchargeProvider {
   async getCurrentData(): Promise<DieselSurcharge> {
     const { siteId, listId, listName } = await openActiveList();
-    const site = { id: siteId };
-    const list = { id: listId };
 
-    const columns = (await graphList(
-      graphUrl(`/sites/${site.id}/lists/${list.id}/columns`, { $select: "name,displayName", $top: "200" }),
-    ))
-      .filter((column): column is GraphColumn => typeof column.name === "string" && typeof column.displayName === "string");
-    const names: FieldNames = {
-      actief: columnName(columns, ["actief"]),
-      peildatum: columnName(columns, ["peildatum"]),
-      dieselPrijs: columnName(columns, ["dieselprijsperliter", "dieselprijs", "gasolieprijs"]),
-      toeslagPercentage: columnName(columns, ["toeslagpercentage", "toeslag"]),
-    };
+    const columns = (
+      await graphList(
+        graphUrl(`/sites/${siteId}/lists/${listId}/columns`, { $select: "name,displayName", $top: "200" }),
+      )
+    ).filter(
+      (column): column is GraphColumn => typeof column.name === "string" && typeof column.displayName === "string",
+    );
+
+    const names = resolveDieselFieldNames(columns);
+    console.info(
+      `SharePoint diesel kolommen: Peildatum=${names.peildatum}, DieselprijsPerLiter=${names.dieselPrijs}, Toeslag=${names.toeslagPercentage}` +
+        (names.actief ? `, Actief=${names.actief} (niet gebruikt voor selectie)` : " (geen Actief-kolom)"),
+    );
 
     const items = await graphList(
-      graphUrl(`/sites/${site.id}/lists/${list.id}/items`, {
+      graphUrl(`/sites/${siteId}/lists/${listId}/items`, {
         $expand: "fields",
-        $top: "100",
+        $top: "200",
       }),
     );
 
-    const records = mapRecords(items, names);
-    const activeCount = records.filter((record) => record.actief).length;
-    console.info(`Actief = true gezocht in ${listName}: ${activeCount} van ${records.length} rijen.`);
-    const record = withWeeks(pickActive(records), records);
+    const records = mapItemsToRecords(items, names);
+    const payload = buildDieselSurchargeFromRecords(records);
+    const previous = payload.weken[1];
     console.info(
-      `Actief dieselrecord uit SharePoint, peildatum ${record.peildatum}, ${record.weken.length} weekregels.`,
+      `SharePoint diesel (${listName}): nieuwste peildatum ${payload.peildatum} (week ${payload.isoWeek}), ` +
+        (previous
+          ? `een-na-nieuwste ${previous.peildatum} (week ${previous.isoWeek}), `
+          : "geen een-na-nieuwste, ") +
+        `${records.length} geldige rijen.`,
     );
-    return record;
+    return payload;
   }
 }

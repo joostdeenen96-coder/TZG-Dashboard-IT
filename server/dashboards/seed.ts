@@ -52,7 +52,7 @@ export function createDefaultDashboards(now = new Date().toISOString()): Dashboa
     }),
     widget({
       type: "diesel",
-      title: "Dieseltoeslag",
+      title: "Brandstoftoeslag",
       enabled: true,
       position: { order: 40, row: 1, span: 1 },
       layout: { area: "main", width: "third" },

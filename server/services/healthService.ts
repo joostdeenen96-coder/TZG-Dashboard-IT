@@ -11,7 +11,7 @@ import { logWarn } from "../log.js";
 import { versionInfo } from "../version.js";
 import { getIntegrationSettings, sharePointGraphPath } from "./settingsService.js";
 
-export type HealthStatus = "healthy" | "degraded" | "unhealthy" | "disabled";
+export type HealthStatus = "healthy" | "degraded" | "unhealthy" | "disabled" | "stale" | "unavailable";
 
 export type SourceCheck = {
   id: string;
@@ -20,6 +20,9 @@ export type SourceCheck = {
   detail: string;
   lastChecked: string;
 };
+
+/** Gasoil upstream outages must not mark the whole sources aggregate unhealthy. */
+const NON_FATAL_SOURCE_IDS = new Set(["interrijn-cbrb", "statbel-gasoil"]);
 
 const PEGELONLINE = "https://www.pegelonline.wsv.de/webservices/rest-api/v2";
 const KAUB = "1d26e504-7f9e-480a-b52c-5932be6549ab";
@@ -199,6 +202,18 @@ export async function getHealthScreens() {
   return new PostgresScreenRepository().counts();
 }
 
+async function checkGasOilSources(): Promise<SourceCheck[]> {
+  const { getGasOilProviderHealth } = await import("../gasoil/gasOilSurchargeService.js");
+  const rows = await getGasOilProviderHealth();
+  return rows.map((row) => ({
+    id: row.id === "interrijnCbrb" ? "interrijn-cbrb" : "statbel-gasoil",
+    name: row.name,
+    status: row.status,
+    detail: row.detail,
+    lastChecked: row.lastChecked,
+  }));
+}
+
 export async function getHealthSources() {
   const jobs = [
     () => checkPegelonline(KAUB, "PEGELONLINE Kaub", "pegelonline-kaub"),
@@ -209,14 +224,18 @@ export async function getHealthSources() {
     () => checkSharePointDiesel(),
   ];
   const checks = await mapLimit(jobs, 2, (job) => job());
-  const relevant = checks.filter((item) => item.status !== "disabled");
+  const gasOil = await checkGasOilSources();
+  const all = [...checks, ...gasOil];
+  const relevant = all.filter(
+    (item) => item.status !== "disabled" && item.status !== "unavailable" && item.status !== "stale" && !NON_FATAL_SOURCE_IDS.has(item.id),
+  );
   const unhealthy = relevant.filter((item) => item.status === "unhealthy").length;
   const status: HealthStatus =
     relevant.length === 0 ? "healthy" : unhealthy === 0 ? "healthy" : unhealthy === relevant.length ? "unhealthy" : "degraded";
   return {
     status,
     version: readAppVersion(),
-    sources: checks,
+    sources: all,
   };
 }
 

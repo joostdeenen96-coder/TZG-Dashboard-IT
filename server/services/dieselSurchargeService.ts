@@ -57,7 +57,9 @@ function isWeek(value: unknown): value is DieselWeek {
     typeof row.peildatum === "string" &&
     typeof row.dieselPrijs === "number" &&
     typeof row.toeslagPercentage === "number" &&
-    typeof row.actief === "boolean"
+    typeof row.actief === "boolean" &&
+    (row.itemId === undefined || typeof row.itemId === "string") &&
+    (row.isoWeek === undefined || typeof row.isoWeek === "number")
   );
 }
 
@@ -101,7 +103,7 @@ export async function getDieselSurcharge(): Promise<DieselSurcharge> {
   try {
     const record = await dieselProviders[activeDieselSource].getCurrentData();
     console.info(
-      `Dieseltoeslag via SharePointDieselProvider: peildatum ${record.peildatum}, toeslag ${record.toeslagPercentage}%, actief ${record.actief}.`,
+      `Dieseltoeslag via SharePointDieselProvider: peildatum ${record.peildatum}, week ${record.isoWeek ?? "?"}, toeslag ${record.toeslagPercentage}%, ${record.weken.length} tegels.`,
     );
     writeCache({ periodKey, data: record });
     console.info(`Dieseltoeslag bewaard voor ochtend ${periodKey}. Volgende lijstcontrole na 07:00.`);
@@ -112,8 +114,12 @@ export async function getDieselSurcharge(): Promise<DieselSurcharge> {
       console.error(`Dieseltoeslag via ${activeDieselSource} mislukt (${message}). Laatste ochtendcache blijft staan.`);
       return cached.data;
     }
-    console.error(`Dieseltoeslag via ${activeDieselSource} mislukt (${message}). Terugval op MockDieselProvider.`);
-    if (activeDieselSource === "mock") throw error;
+    const production = (process.env.NODE_ENV || "development") === "production";
+    if (production || activeDieselSource === "mock") {
+      console.error(`Dieseltoeslag via ${activeDieselSource} mislukt (${message}). Geen mock in productie.`);
+      throw error;
+    }
+    console.error(`Dieseltoeslag via ${activeDieselSource} mislukt (${message}). Terugval op MockDieselProvider (development).`);
     return dieselProviders.mock.getCurrentData();
   }
 }

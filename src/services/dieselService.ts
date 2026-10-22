@@ -17,7 +17,9 @@ function mapWeek(value: unknown): DieselWeek | null {
     return null;
   }
   return {
+    itemId: typeof row.itemId === "string" ? row.itemId : undefined,
     peildatum: row.peildatum,
+    isoWeek: typeof row.isoWeek === "number" ? row.isoWeek : undefined,
     dieselPrijs: row.dieselPrijs,
     toeslagPercentage: row.toeslagPercentage,
     actief: row.actief,
@@ -38,7 +40,7 @@ function mapPayload(payload: unknown): DieselSurcharge | "empty" {
     ...current,
     weken: (parsedWeeks.length > 0 ? parsedWeeks : [current])
       .sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum))
-      .slice(0, 4),
+      .slice(0, 2),
   };
 }
 
