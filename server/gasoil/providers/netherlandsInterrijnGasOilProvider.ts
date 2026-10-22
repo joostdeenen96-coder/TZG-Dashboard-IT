@@ -423,8 +423,13 @@ export async function captureInterrijnDayPrice(options: {
     country: "NL" as const,
     publishedDate: parsed.parsed.publishedAtIso,
     pricePer100Liters: parsed.parsed.pricePer100Liters,
+    priceExVatPer1000Liters: cbrbPer100ToPer1000(parsed.parsed.pricePer100Liters),
     source: INTERRIJN_SOURCE_ID,
     publishedAtLabel: parsed.parsed.publishedAtLabel,
+    observedAt: options.retrievedAt,
+    sourceUrl: INTERRIJN_URL,
+    sourceIdentifier: INTERRIJN_PRODUCT,
+    validationStatus: "valid" as const,
     retrievedAt: options.retrievedAt,
   };
   writeGasOilDayPrice(entry);

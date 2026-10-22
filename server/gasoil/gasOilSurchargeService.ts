@@ -118,6 +118,8 @@ function unavailableResult(
     productLabel: null,
     rawPricePer100LitersCbrb: null,
     sourcePricePer100Liters: null,
+    sourceType: null,
+    sourceNote: null,
     message,
   };
 }
@@ -126,6 +128,7 @@ function resultFromObservation(
   observation: GasOilPriceObservation,
   status: Exclude<GasOilAvailability, "unavailable">,
   message: string | null,
+  sourceTypeOverride?: GasOilMonthCacheEntry["sourceType"],
 ): GasOilSurchargeResult {
   const surchargePerTon = calculateSurcharge(observation.country, observation.priceExVatPer1000Liters);
   const product = observation.productLabel ?? null;
@@ -145,6 +148,8 @@ function resultFromObservation(
     productLabel: product,
     rawPricePer100LitersCbrb: sourcePrice,
     sourcePricePer100Liters: sourcePrice,
+    sourceType: sourceTypeOverride ?? observation.sourceType ?? "automatic",
+    sourceNote: observation.sourceNote ?? null,
     message,
   };
 }
@@ -186,6 +191,8 @@ async function persistMonthObservation(
     rawSourceValue: number;
     vatStatus: "excl" | "incl-converted";
     productIdentifier: string;
+    sourceType?: GasOilMonthCacheEntry["sourceType"];
+    sourceNote?: string;
   },
 ): Promise<GasOilMonthCacheEntry> {
   const surchargePerTon = calculateSurcharge(observation.country, observation.priceExVatPer1000Liters);
@@ -220,6 +227,7 @@ async function fetchAndCacheNetherlandsMonth(
             monthEntryToObservation(monthCached),
             "stale",
             "Laatste gevalideerde maandwaarde (nieuwe fetch ongeldig).",
+            monthCached.sourceType,
           ),
           reason: "Ongeldige bronobservation.",
         };
@@ -231,9 +239,14 @@ async function fetchAndCacheNetherlandsMonth(
     }
 
     if (monthCached) {
-      // NL15: dagelijkse/nieuwe peiling overschrijft vastgestelde maand niet.
+      // Dagelijkse/nieuwe peiling overschrijft vastgestelde maand niet.
       return {
-        result: resultFromObservation(monthEntryToObservation(monthCached), "ok", null),
+        result: resultFromObservation(
+          monthEntryToObservation(monthCached),
+          "ok",
+          null,
+          monthCached.sourceType,
+        ),
         reason: null,
       };
     }
@@ -242,10 +255,11 @@ async function fetchAndCacheNetherlandsMonth(
       rawSourceValue,
       vatStatus: "excl",
       productIdentifier: observation.productLabel ?? "GASOLIEPRIJS (€/100L CBRB)",
+      sourceType: "automatic",
     });
     writeGasOilCache(monthEntryToObservation(stored));
     return {
-      result: resultFromObservation(monthEntryToObservation(stored), "ok", null),
+      result: resultFromObservation(monthEntryToObservation(stored), "ok", null, stored.sourceType),
       reason: null,
     };
   }
@@ -256,6 +270,7 @@ async function fetchAndCacheNetherlandsMonth(
         monthEntryToObservation(monthCached),
         "stale",
         `Maandcache ${applicableMonth}. ${outcome.reason}`,
+        monthCached.sourceType,
       ),
       reason: outcome.reason,
     };
@@ -274,7 +289,12 @@ async function resolveNetherlands(
 
   const monthCached = await loadMonthEntry("NL", applicableMonth);
   if (monthCached && !options.forceRefresh) {
-    return resultFromObservation(monthEntryToObservation(monthCached), "ok", null);
+    return resultFromObservation(
+      monthEntryToObservation(monthCached),
+      "ok",
+      null,
+      monthCached.sourceType,
+    );
   }
 
   if (isNetherlandsProvider(provider)) {
@@ -310,15 +330,21 @@ async function resolveNetherlands(
       return unavailableResult("NL", source, sourceLabel, "Ongeldige bronobservation.");
     }
     if (monthCached) {
-      return resultFromObservation(monthEntryToObservation(monthCached), "ok", null);
+      return resultFromObservation(
+        monthEntryToObservation(monthCached),
+        "ok",
+        null,
+        monthCached.sourceType,
+      );
     }
     const stored = await persistMonthObservation(observation, {
       rawSourceValue: observation.rawPricePer100LitersCbrb ?? observation.priceExVatPer1000Liters / 10,
       vatStatus: "excl",
       productIdentifier: observation.productLabel ?? "GASOLIEPRIJS (€/100L CBRB)",
+      sourceType: "automatic",
     });
     writeGasOilCache(monthEntryToObservation(stored));
-    return resultFromObservation(monthEntryToObservation(stored), "ok", null);
+    return resultFromObservation(monthEntryToObservation(stored), "ok", null, stored.sourceType);
   }
 
   if (monthCached) {
@@ -326,6 +352,7 @@ async function resolveNetherlands(
       monthEntryToObservation(monthCached),
       "stale",
       `Maandcache. ${outcome.reason}`,
+      monthCached.sourceType,
     );
   }
   if (cached) {

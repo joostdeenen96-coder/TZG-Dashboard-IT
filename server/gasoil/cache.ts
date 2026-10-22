@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { dataDir } from "../appPaths.js";
-import type { GasOilCountry, GasOilPriceObservation, GasOilSourceId } from "./model.js";
+import type { GasOilCountry, GasOilPriceObservation, GasOilSourceId, GasOilSourceType } from "./model.js";
 
 export type GasOilMonthCacheEntry = {
   country: GasOilCountry;
@@ -16,14 +16,21 @@ export type GasOilMonthCacheEntry = {
   vatStatus: "excl" | "incl-converted";
   conversionNote?: string;
   surchargePerTon?: number;
+  sourceType?: GasOilSourceType;
+  sourceNote?: string;
 };
 
 export type GasOilDayPriceEntry = {
   country: GasOilCountry;
   publishedDate: string;
   pricePer100Liters: number;
+  priceExVatPer1000Liters?: number;
   source: GasOilSourceId;
   publishedAtLabel?: string | null;
+  observedAt?: string;
+  sourceUrl?: string;
+  sourceIdentifier?: string;
+  validationStatus?: "valid" | "invalid";
   retrievedAt: string;
 };
 
@@ -73,6 +80,10 @@ function isObservation(value: unknown): value is GasOilPriceObservation {
 function isMonthEntry(value: unknown): value is GasOilMonthCacheEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
+  const sourceTypeOk =
+    row.sourceType === undefined ||
+    row.sourceType === "automatic" ||
+    row.sourceType === "manual-bootstrap";
   return (
     (row.country === "NL" || row.country === "BE") &&
     typeof row.referenceDate === "string" &&
@@ -83,7 +94,8 @@ function isMonthEntry(value: unknown): value is GasOilMonthCacheEntry {
     typeof row.source === "string" &&
     typeof row.retrievedAt === "string" &&
     typeof row.sourceLabel === "string" &&
-    (row.vatStatus === "excl" || row.vatStatus === "incl-converted")
+    (row.vatStatus === "excl" || row.vatStatus === "incl-converted") &&
+    sourceTypeOk
   );
 }
 
@@ -108,7 +120,10 @@ function readMonthCacheFile(country: GasOilCountry): MonthCacheFile {
     const clean: Record<string, GasOilMonthCacheEntry> = {};
     for (const [key, value] of Object.entries(months)) {
       if (isMonthEntry(value) && value.country === country && value.applicableMonth === key) {
-        clean[key] = value;
+        clean[key] = {
+          ...value,
+          sourceType: value.sourceType ?? "automatic",
+        };
       }
     }
     return { months: clean };
@@ -144,7 +159,7 @@ export function readGasOilMonthCache(
 
 /**
  * Persist a validated month price. Immutable once written: existing valid months
- * are never overwritten by a later daily Interrijn price.
+ * are never overwritten by a later daily Interrijn price or bootstrap.
  */
 export function writeGasOilMonthCache(entry: GasOilMonthCacheEntry): boolean {
   if (entry.country !== "NL" && entry.country !== "BE") {
@@ -156,10 +171,12 @@ export function writeGasOilMonthCache(entry: GasOilMonthCacheEntry): boolean {
   const file = readMonthCacheFile(entry.country);
   const existing = file.months[entry.applicableMonth];
   if (existing && isFinitePositive(existing.priceExVatPer1000Liters)) {
-    // Locked month observation — daily refreshes must not change it.
     return false;
   }
-  file.months[entry.applicableMonth] = entry;
+  file.months[entry.applicableMonth] = {
+    ...entry,
+    sourceType: entry.sourceType ?? "automatic",
+  };
   const target = monthCachePath(entry.country);
   try {
     mkdirSync(path.dirname(target), { recursive: true });
@@ -178,15 +195,24 @@ export function readGasOilDayPrice(
 }
 
 /**
- * Persist a daily Interrijn/CBRB observation. Same publishedDate may refresh
- * with a newer retrievedAt (homepage republishes), but never invents dates.
+ * Persist a daily Interrijn/CBRB observation (idempotent per publishedDate+source).
+ * Failed fetches must not call this — existing history is never deleted here.
  */
 export function writeGasOilDayPrice(entry: GasOilDayPriceEntry): boolean {
   if (entry.country !== "NL" && entry.country !== "BE") return false;
   if (!isFinitePositive(entry.pricePer100Liters)) return false;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.publishedDate)) return false;
   const file = readDayCacheFile(entry.country);
-  file.days[entry.publishedDate] = entry;
+  const priceExVat =
+    typeof entry.priceExVatPer1000Liters === "number" && isFinitePositive(entry.priceExVatPer1000Liters)
+      ? entry.priceExVatPer1000Liters
+      : Math.round(entry.pricePer100Liters * 10 * 100) / 100;
+  file.days[entry.publishedDate] = {
+    ...entry,
+    priceExVatPer1000Liters: priceExVat,
+    validationStatus: entry.validationStatus ?? "valid",
+    observedAt: entry.observedAt ?? entry.retrievedAt,
+  };
   const target = dayCachePath(entry.country);
   try {
     mkdirSync(path.dirname(target), { recursive: true });
@@ -210,6 +236,8 @@ export function monthEntryToObservation(entry: GasOilMonthCacheEntry): GasOilPri
     rawPriceInclPerLiter: entry.vatStatus === "incl-converted" ? entry.rawSourceValue : undefined,
     rawPricePer100LitersCbrb: entry.country === "NL" ? entry.rawSourceValue : undefined,
     conversionNote: entry.conversionNote,
+    sourceType: entry.sourceType ?? "automatic",
+    sourceNote: entry.sourceNote,
   };
 }
 
@@ -220,6 +248,8 @@ export function observationToMonthEntry(
     vatStatus: "excl" | "incl-converted";
     productIdentifier: string;
     surchargePerTon?: number;
+    sourceType?: GasOilSourceType;
+    sourceNote?: string;
   },
 ): GasOilMonthCacheEntry {
   return {
@@ -235,6 +265,8 @@ export function observationToMonthEntry(
     vatStatus: extras.vatStatus,
     conversionNote: observation.conversionNote,
     surchargePerTon: extras.surchargePerTon,
+    sourceType: extras.sourceType ?? observation.sourceType ?? "automatic",
+    sourceNote: extras.sourceNote ?? observation.sourceNote,
   };
 }
 

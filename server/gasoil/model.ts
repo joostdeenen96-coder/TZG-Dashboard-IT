@@ -2,6 +2,8 @@ export type GasOilCountry = "NL" | "BE";
 
 export type GasOilSourceId = "interrijn-cbrb-kbn" | "bestat-statbel";
 
+export type GasOilSourceType = "automatic" | "manual-bootstrap";
+
 export type GasOilPriceObservation = {
   country: GasOilCountry;
   referenceDate: string;
@@ -15,6 +17,8 @@ export type GasOilPriceObservation = {
   /** NL CBRB bronwaarde in €/100L (vóór ×10). */
   rawPricePer100LitersCbrb?: number;
   conversionNote?: string;
+  sourceType?: GasOilSourceType;
+  sourceNote?: string;
 };
 
 /** API/runtime status: ok = geldige maandobservatie, stale = cache bij bronstoring, unavailable = geen waarde. */
@@ -43,6 +47,9 @@ export type GasOilSurchargeResult = {
   rawPricePer100LitersCbrb: number | null;
   /** NL API-contract: bronprijs €/100L CBRB. */
   sourcePricePer100Liters: number | null;
+  /** automatic = Interrijn peildatumcapture; manual-bootstrap = admin historische aanvulling. */
+  sourceType: GasOilSourceType | null;
+  sourceNote: string | null;
   message: string | null;
 };
 

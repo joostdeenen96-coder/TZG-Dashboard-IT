@@ -39,16 +39,22 @@ Interrijn toont voortdurend actuele dagprijzen. Het dashboard moet een hele maan
 
 Daarom:
 
-1. Elke succesvolle homepage-parse schrijft een **dagobservatie** (`gasoil-days-nl.json` + optioneel PostgreSQL `gasoil_day_prices`) met `publishedDate` uit de bron.
-2. Zodra er een geldige prijs voor peildatum 15e beschikbaar is (archief of day-history of exacte homepage-match), wordt een **immutable maandobservatie** geschreven (`gasoil-months-nl.json` + PostgreSQL `gasoil_month_observations`).
+1. **Dagelijkse capture** (in-process scheduler in de dashboardcontainer, elke 6u + bij start) haalt Interrijn server-side op en schrijft een **dagobservatie** (`gasoil-days-nl.json` + PostgreSQL `gasoil_day_prices`). Idempotent per `publishedDate`+source. Mislukte fetch verwijdert historie niet.
+2. Wanneer de publicatiedatum de **15e** is, wordt automatisch een **immutable maandobservatie** vastgelegd (`sourceType=automatic`).
 3. Latere dagelijkse Interrijn-prijzen mogen een vastgezette maand **niet** overschrijven.
-4. De volgende peildatum (volgende 15e) maakt een nieuwe `applicableMonth`.
+4. Geen stille fallback op 14e/16e/dichtstbijzijnde/huidige prijs.
+5. Ontbrekende historische peildatums (bijv. november 2026 na late go-live): **manual bootstrap** via Beheer (`sourceType=manual-bootstrap`), met preview + audit `gasoil.monthly_observation_manual_created`. Admin voert alleen peildatum + CBRB €/100L + bronnotitie in — toeslag altijd via ×10 + staffel.
 
-Migratie: `server/db/migrations/002_gasoil_months.sql`.
+Migraties: `002_gasoil_months.sql`, `003_gasoil_capture.sql`.
+
+Env (optioneel):
+
+- `GASOIL_CAPTURE_ENABLED=0` schakelt de scheduler uit
+- `GASOIL_CAPTURE_INTERVAL_MS` (default 6 uur)
 
 ### Archief
 
-Het publieke archief vereist registratie/login. Zonder credentials worden **geen** historische prijzen verzonnen. Oktober 2026 business-acceptance blijft dan **NIET GETEST** tot er een echte peildatumobservatie is vastgelegd.
+Het publieke archief vereist registratie/login. Zonder credentials worden **geen** historische prijzen verzonnen.
 
 ## Business acceptance fixtures (tests only)
 

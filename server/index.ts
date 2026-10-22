@@ -143,6 +143,12 @@ const server = app.listen(port, "0.0.0.0", () => {
   if (existsSync(path.join(clientDir, "index.html"))) {
     logInfo(`frontend: http://127.0.0.1:${port}/`, { event: "startup" });
   }
+  // Dagelijkse Interrijn CBRB-capture (in-process; geen aparte browser/container).
+  void import("./gasoil/dailyCapture.js")
+    .then(({ startGasOilDailyCaptureScheduler }) => startGasOilDailyCaptureScheduler())
+    .catch(() => {
+      logWarn("gasoil capture scheduler niet gestart", { event: "gasoil.capture.failed" });
+    });
 });
 
 async function shutdown(signal: string) {

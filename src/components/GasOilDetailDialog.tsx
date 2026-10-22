@@ -132,12 +132,22 @@ export function GasOilDetailDialog({ result, onClose }: Props) {
             <dt className="text-mist">Status</dt>
             <dd className="font-semibold text-paper">{statusLabel}</dd>
           </div>
-          <div className="col-span-2">
+          <div>
             <dt className="text-mist">Bron</dt>
             <dd className="font-semibold text-paper">{result.sourceLabel}</dd>
           </div>
+          <div>
+            <dt className="text-mist">Vastlegging</dt>
+            <dd className="font-semibold text-paper">
+              {result.sourceType === "manual-bootstrap"
+                ? "Handmatige bootstrap"
+                : result.sourceType === "automatic"
+                  ? "Automatisch"
+                  : "—"}
+            </dd>
+          </div>
           <div className="col-span-2">
-            <dt className="text-mist">Laatst opgehaald</dt>
+            <dt className="text-mist">Laatst bijgewerkt</dt>
             <dd className="font-semibold text-paper">
               {result.retrievedAt ? formatAmsterdamTime(result.retrievedAt) : "—"}
             </dd>

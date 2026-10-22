@@ -22,6 +22,8 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
       : typeof row.rawPricePer100LitersCbrb === "number"
         ? row.rawPricePer100LitersCbrb
         : null;
+  const sourceType =
+    row.sourceType === "automatic" || row.sourceType === "manual-bootstrap" ? row.sourceType : null;
   return {
     country,
     status: statusRaw,
@@ -50,6 +52,8 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
           : null,
     rawPricePer100LitersCbrb: sourcePrice,
     sourcePricePer100Liters: sourcePrice,
+    sourceType,
+    sourceNote: typeof row.sourceNote === "string" ? row.sourceNote : null,
     message: typeof row.message === "string" ? row.message : null,
   };
 }
@@ -94,7 +98,7 @@ function acceptGasOil(value: unknown): GasOilSurchargesPayload | null {
 
 const gasOilFeed = createPollingFeed<GasOilSurchargesPayload>({
   name: "gasolietoeslag",
-  storageKey: "teunesen.tv.gasoil.v2",
+  storageKey: "teunesen.tv.gasoil.v3",
   unavailable: "Gasolietoeslag niet bereikbaar.",
   load: loadGasOil,
   accept: acceptGasOil,

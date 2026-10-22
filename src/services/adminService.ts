@@ -236,6 +236,58 @@ export async function testAdminConnection() {
   return payload.message;
 }
 
+export type GasOilBootstrapPreview = {
+  country: "NL";
+  referenceDate: string;
+  applicableMonth: string;
+  applicableMonthLabel: string;
+  sourcePricePer100Liters: number;
+  priceExVatPer1000Liters: number;
+  staffelRange: { from: number; to: number } | null;
+  surchargePerTon: number;
+  sourceNote: string;
+  alreadyExists: boolean;
+};
+
+export async function previewGasOilBootstrap(input: {
+  country: string;
+  referenceDate: string;
+  pricePer100Liters: string;
+  sourceNote: string;
+}): Promise<GasOilBootstrapPreview> {
+  const response = await fetch("/api/admin/gasoil/bootstrap/preview", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as GasOilBootstrapPreview;
+}
+
+export async function commitGasOilBootstrap(input: {
+  country: string;
+  referenceDate: string;
+  pricePer100Liters: string;
+  sourceNote: string;
+}) {
+  const response = await fetch("/api/admin/gasoil/bootstrap", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
+export async function runGasOilCaptureNow() {
+  const response = await fetch("/api/admin/gasoil/capture-now", {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
 export function useAdminSession() {
   return useSyncExternalStore(
     (onStoreChange) => {
