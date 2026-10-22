@@ -26,11 +26,6 @@ const priceFormatter = new Intl.NumberFormat("nl-NL", {
   maximumFractionDigits: 4,
 });
 
-const percentFormatter = new Intl.NumberFormat("nl-NL", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 function amsterdamDate(iso: string) {
   const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
   if (ymd) {
@@ -47,36 +42,28 @@ function amsterdamDate(iso: string) {
   return { year, month, day };
 }
 
-/** ISO-week uitsluitend afgeleid uit peildatum (weergave). */
-function isoWeekNumber(year: number, month: number, day: number) {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const weekday = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - weekday);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
-}
-
 function formatPeildatum(iso: string) {
   const date = amsterdamDate(iso);
   if (!date) return iso;
   return `${String(date.day).padStart(2, "0")}-${String(date.month).padStart(2, "0")}-${date.year}`;
 }
 
-function formatWeekNumber(week: DieselWeek) {
-  if (typeof week.isoWeek === "number" && Number.isFinite(week.isoWeek)) {
-    return `Week ${week.isoWeek}`;
-  }
-  const date = amsterdamDate(week.peildatum);
-  if (!date) return "Week";
-  return `Week ${isoWeekNumber(date.year, date.month, date.day)}`;
+/** Zichtbaar weeknummer uitsluitend uit SharePoint WebsiteWeek. */
+function formatWebsiteWeek(week: DieselWeek) {
+  return `Week ${week.websiteWeek}`;
 }
 
-function formatExactPercent(value: number) {
-  return `${percentFormatter.format(value)}%`;
+/** Weergave: Math.floor(raw) → geheel percentage, geen decimalen. */
+function formatFlooredPercent(week: DieselWeek) {
+  const display =
+    typeof week.toeslagPercentageDisplay === "number"
+      ? week.toeslagPercentageDisplay
+      : week.toeslagPercentage;
+  return `${display}%`;
 }
 
-function formatPricePerLiter(value: number) {
-  if (value <= 0) return "geen dieselprijs";
+function formatPricePerLiter(value: number | null) {
+  if (value == null || value <= 0) return "geen dieselprijs";
   return `${priceFormatter.format(value)} / liter`;
 }
 
@@ -108,16 +95,17 @@ function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasiz
   }
   return (
     <li
-      data-week={formatWeekNumber(week)}
+      data-week={formatWebsiteWeek(week)}
       data-item-id={week.itemId ?? undefined}
+      data-raw-toeslag={week.toeslagPercentageRaw}
       className={`grid min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] items-center gap-2 rounded-[20px] border px-3 py-1 ${
         emphasize ? "border-gold/45 bg-gold/8" : "border-veil/12 bg-veil/[0.06]"
       }`}
     >
       <div className="min-w-0">
-        <p className="font-display text-[18px] leading-none font-semibold text-gold">{formatWeekNumber(week)}</p>
-        <p className="mt-1 font-display text-[36px] leading-none font-semibold tabular-nums">
-          {formatExactPercent(week.toeslagPercentage)}
+        <p className="font-display text-[18px] leading-none font-semibold text-gold">{formatWebsiteWeek(week)}</p>
+        <p className="mt-1 font-display text-[40px] leading-none font-semibold tabular-nums">
+          {formatFlooredPercent(week)}
         </p>
         <p className="mt-1 truncate text-[13px] text-mist">Dieseltoeslag</p>
       </div>

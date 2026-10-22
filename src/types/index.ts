@@ -78,9 +78,13 @@ export type QueryState<T> =
 export type DieselWeek = {
   itemId?: string;
   peildatum: string;
-  isoWeek?: number;
-  dieselPrijs: number;
+  /** SharePoint WebsiteWeek — zichtbaar weeknummer. */
+  websiteWeek: number;
+  dieselPrijs: number | null;
+  /** Weergave: Math.floor(raw). */
   toeslagPercentage: number;
+  toeslagPercentageRaw: number;
+  toeslagPercentageDisplay: number;
   /** Informatief; niet gebruikt voor Planning-selectie. */
   actief: boolean;
 };
