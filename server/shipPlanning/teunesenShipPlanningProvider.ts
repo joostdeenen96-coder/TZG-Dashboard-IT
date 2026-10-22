@@ -20,9 +20,23 @@ export type ShipPlanningDayQuery = {
   queryPath: string;
   recordCount: number;
   totalCount: number | null;
+  /** False wanneer een continuation overblijft of totalCount hoger is dan de ontvangen rijen. */
+  complete: boolean;
   entries: ShipPlanningEntry[];
   entities: unknown[];
 };
+
+export function isCancelledEntity(entity: unknown) {
+  if (!entity || typeof entity !== "object") return false;
+  const row = entity as Record<string, unknown>;
+  const attributes = row.attributes;
+  const nested =
+    attributes && typeof attributes === "object" && !Array.isArray(attributes)
+      ? (attributes as Record<string, unknown>).status
+      : undefined;
+  const status = row.status ?? nested;
+  return typeof status === "string" && status.trim().toLowerCase() === "geannuleerd";
+}
 
 type TokenCache = { token: string; at: number };
 
@@ -121,15 +135,19 @@ export class TeunesenShipPlanningProvider {
       continuation = continuationOf(next.json);
       pages += 1;
     }
-    const entries = orderEntries(entities.map((entity) => mapShipPlanningEntry(entity)));
+    const totalCount = totalCountOf(first.json);
+    const activeEntities = entities.filter((entity) => !isCancelledEntity(entity));
+    const entries = orderEntries(activeEntities.map((entity) => mapShipPlanningEntry(entity)));
+    const complete = continuation == null && (totalCount == null || entities.length >= totalCount);
     return {
       date: ymd,
       entityTypeId: SHIP_PLANNING_ENTITY_TYPE_ID,
       queryPath: SHIP_PLANNING_QUERY_PATH,
-      recordCount: entities.length,
-      totalCount: totalCountOf(first.json),
+      recordCount: activeEntities.length,
+      totalCount,
+      complete,
       entries,
-      entities,
+      entities: activeEntities,
     };
   }
 

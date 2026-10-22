@@ -28,7 +28,7 @@ export type DashboardConfig = {
   shipPlanning: ShipPlanningSettings;
 };
 
-export type ShipPlanningDisplayMode = "Tomorrow" | "TodayAndTomorrow" | "Auto";
+export type ShipPlanningDisplayMode = "Auto" | "Today" | "Tomorrow" | "TodayAndTomorrow";
 
 export type ShipPlanningSettings = {
   enabled: boolean;
@@ -61,7 +61,7 @@ const DEFAULTS: DashboardConfig = {
   },
   shipPlanning: {
     enabled: true,
-    displayMode: "Tomorrow",
+    displayMode: "Auto",
     refreshIntervalSeconds: 300,
     maxRows: 80,
   },
@@ -119,9 +119,9 @@ function shipPlanningSettings(value: unknown): DashboardConfig["shipPlanning"] {
   const row = asObject(value);
   const mode = row.displayMode;
   const displayMode: ShipPlanningDisplayMode =
-    mode === "TodayAndTomorrow" || mode === "Auto" || mode === "Tomorrow" ? mode : "Tomorrow";
+    mode === "Auto" || mode === "Today" || mode === "Tomorrow" || mode === "TodayAndTomorrow" ? mode : "Auto";
   if (row.displayMode !== undefined && row.displayMode !== displayMode) {
-    throw new Error("Weergave moet Tomorrow, TodayAndTomorrow of Auto zijn.");
+    throw new Error("Weergave moet Auto, Today, Tomorrow of TodayAndTomorrow zijn.");
   }
   return {
     enabled: typeof row.enabled === "boolean" ? row.enabled : DEFAULTS.shipPlanning.enabled,

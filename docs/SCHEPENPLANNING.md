@@ -52,10 +52,14 @@ Datumgrenzen zijn Europe/Amsterdam, 00:00:00.000 t/m 23:59:59.000, als epoch-mil
 
 ## API
 
+`GET /api/ship-planning?scope=auto`  
 `GET /api/ship-planning?scope=tomorrow`  
-`GET /api/ship-planning?scope=today-and-tomorrow`
+`GET /api/ship-planning?scope=today-and-tomorrow`  
+`GET /api/ship-planning?scope=today`
 
-Antwoord: `{ scope, status, days, retrievedAt }`.  
+Antwoord: `{ scope, displayedDay, switchReason, status, todayRecordCount, tomorrowRecordCount, todayEmptyConfirmed, days, retrievedAt }`.  
+`displayedDay`: `today` | `tomorrow`.  
+`switchReason`: `today-active` | `today-empty-confirmed` | `manual-override` | `stale-today` | `source-unavailable`.  
 `status`: `ok` | `stale` | `unavailable` | `disabled`.  
 Geen token, refreshToken, wachtwoord, Authorization of sessioncookie.
 
@@ -80,6 +84,10 @@ Rapporteert recordcount, veldnamen, types en of operationele paden aanwezig zijn
 
 ## Scherm
 
-Alleen het Planning-dashboard. Waterstanden, diesel, gasolie NL/BE, weer (header) en agenda blijven. Wij Teunesen is compacter. Schepenplanning is het brede blok, gegroepeerd per laadplaats in bronvolgorde. Een regel opent een detailpopup.
+Alleen het Planning-dashboard. Waterstanden, diesel, gasolie NL/BE, weer (header) en agenda blijven. Wij Teunesen is compacter.
 
-Weergave: Tomorrow (standaard), TodayAndTomorrow, of Auto. Auto toont vandaag én morgen alleen als beide dagen leesbaar in het 2560×1440-podium passen (schaalt naar 1920×1080, zonder pagina-scroll).
+Standaardweergave is Auto: één laadplaats tegelijk, 12 seconden per pagina. Zolang de succesvolle query van vandaag minimaal één rit heeft, is de titel Schepenplanning vandaag. Twee opeenvolgende geldige lege vandaag-responses (`totalCount` 0, volledige pagination, HTTP 200) schakelen naar morgen. Fouten, timeouts, stale cache en afgekapte pagination schakelen niet; de laatste geldige planning blijft staan met “Gegevens tijdelijk niet vernieuwd”.
+
+`SHIP_PLANNING_EMPTY_CONFIRMATION_COUNT` staat standaard op 2 en hoort niet in Admin. Admin-modi: Auto, Today, Tomorrow, TodayAndTomorrow. TodayAndTomorrow is niet de smallecastingstandaard.
+
+Prioriteit op de actieve dag: Hoofdstraat, Hoogveld, Venlo, Cuijk, daarna overige laadplaatsen in bronvolgorde. Lege laadplaatsen verdwijnen uit de rotatie. Binnen een laadplaats blijft de bronvolgorde.

@@ -7,6 +7,7 @@ import type { ShipPlanningEntry } from "../types/shipPlanning";
 type ShipPlanningDetailDialogProps = {
   entry: ShipPlanningEntry;
   location: string;
+  planningDate: string;
   onClose: () => void;
 };
 
@@ -20,7 +21,7 @@ function Row({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export function ShipPlanningDetailDialog({ entry, location, onClose }: ShipPlanningDetailDialogProps) {
+export function ShipPlanningDetailDialog({ entry, location, planningDate, onClose }: ShipPlanningDetailDialogProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const openedAtRef = useRef(Date.now());
@@ -79,12 +80,15 @@ export function ShipPlanningDetailDialog({ entry, location, onClose }: ShipPlann
         </h2>
         <p className="mt-2 text-[18px] text-mist">{location}</p>
         <dl className="mt-5">
+          <Row label="Planningdatum" value={planningDate} />
+          <Row label="Laadplaats" value={location} />
           <Row label="Tijd" value={entry.time} />
           <Row label="Klant" value={entry.customer} />
           <Row label="Losplaats" value={entry.unloadingLocation} />
           <Row label="Conditie" value={entry.condition} />
           <Row label="Product" value={entry.product} />
           <Row label="Hoeveelheid" value={formatQuantity(entry)} />
+          <Row label="Schip" value={entry.vessel} />
           <Row label="Order" value={entry.orderNumber} />
           <Row label="Vervoerder" value={entry.carrier} />
           <Row label="Telnr" value={entry.phoneNumber} />

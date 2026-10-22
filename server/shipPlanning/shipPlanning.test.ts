@@ -11,7 +11,7 @@ import { SHIP_PLANNING_ENTITY_TYPE_ID, SHIP_PLANNING_QUERY_PATH, shipPlanningDay
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider } from "./teunesenShipPlanningProvider.js";
 import { groupEntries } from "../../src/shipPlanning/groupEntries.ts";
-import { resolvePlanningPresentation } from "../../src/shipPlanning/layoutDensity.ts";
+import { orderLocationGroups } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -79,6 +79,7 @@ function queryResult(date: string, locations: string[]) {
     queryPath: SHIP_PLANNING_QUERY_PATH,
     recordCount: entities.length,
     totalCount: entities.length,
+    complete: true,
     entries,
     entities,
   };
@@ -341,20 +342,15 @@ test("SP20 SP21 geen secrets in frontend of logs", () => {
 });
 
 test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
-  const todayGroups = [3, 4, 2, 5, 3, 3, 3];
-  const tomorrowGroups = [4, 3, 2, 5, 3, 4, 2, 3, 3];
-  const input = { todayGroups, tomorrowGroups, news: true, agenda: true };
-  assert.equal(resolvePlanningPresentation({ ...input, mode: "Tomorrow" }).presentation, "tomorrow");
-  assert.equal(resolvePlanningPresentation({ ...input, mode: "TodayAndTomorrow" }).presentation, "today-and-tomorrow");
-  assert.equal(resolvePlanningPresentation({ ...input, mode: "Auto" }).presentation, "tomorrow");
-  const small = resolvePlanningPresentation({
-    mode: "Auto",
-    todayGroups: [1],
-    tomorrowGroups: [1],
-    news: true,
-    agenda: true,
-  });
-  assert.equal(small.presentation, "today-and-tomorrow");
+  const ordered = orderLocationGroups([
+    { location: "KAMPERGEUL (DEKKER)", entries: [entry({ loadingLocation: "KAMPERGEUL (DEKKER)", sourceOrder: 3 })] },
+    { location: "GVI CUIJK", entries: [entry({ loadingLocation: "GVI CUIJK", sourceOrder: 2 })] },
+    { location: "HOOFDSTRAAT", entries: [entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 0 })] },
+  ]);
+  assert.deepEqual(
+    ordered.map((group) => group.label),
+    ["Hoofdstraat", "Cuijk", "KAMPERGEUL (DEKKER)"],
+  );
   const display = read("src/pages/DisplayPage.tsx");
   const planning = display.slice(display.indexOf("function PlanningLayout"), display.indexOf("function IctLayout"));
   assert.match(planning, /overflow-hidden/);
@@ -366,9 +362,14 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   assert.match(read("src/pages/DisplayPage.tsx"), /overflow-hidden bg-ink/);
   assert.match(read("server/dashboards/seed.ts"), /stageWidth: 2560, stageHeight: 1440/);
   const dialog = read("src/components/ShipPlanningDetailDialog.tsx");
-  for (const label of ["Order", "Vervoerder", "Telnr", "Losdatum", "Opmerking planning"]) {
+  for (const label of ["Order", "Vervoerder", "Telnr", "Losdatum", "Opmerking planning", "Planningdatum", "Laadplaats", "Schip"]) {
     assert.match(dialog, new RegExp(label));
   }
+  const board = read("src/components/ShipPlanningBoard.tsx");
+  assert.match(board, /Schepenplanning vandaag/);
+  assert.match(board, /Schepenplanning morgen/);
+  assert.match(board, /Gegevens tijdelijk niet vernieuwd/);
+  assert.match(board, /ROTATION_MS/);
   assert.match(dialog, /data-testid="ship-planning-detail"/);
   assert.match(dialog, /createPortal/);
 });

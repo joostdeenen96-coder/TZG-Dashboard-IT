@@ -1,13 +1,33 @@
 import { useEffect, useState } from "react";
 import { adminAuthHeaders } from "./adminService";
-import type { ShipPlanningAdminSettings, ShipPlanningResponse, ShipPlanningSettings } from "../types/shipPlanning";
+import { amsterdamToday } from "../shipPlanning/amsterdamDate";
+import type {
+  ShipPlanningAdminSettings,
+  ShipPlanningDisplayMode,
+  ShipPlanningResponse,
+  ShipPlanningScope,
+  ShipPlanningSettings,
+} from "../types/shipPlanning";
+
+const modes: ShipPlanningDisplayMode[] = ["Auto", "Today", "Tomorrow", "TodayAndTomorrow"];
 
 const defaultSettings: ShipPlanningSettings = {
   enabled: true,
-  displayMode: "Tomorrow",
+  displayMode: "Auto",
   refreshIntervalSeconds: 300,
   maxRows: 80,
 };
+
+function isMode(value: unknown): value is ShipPlanningDisplayMode {
+  return typeof value === "string" && modes.includes(value as ShipPlanningDisplayMode);
+}
+
+export function scopeForDisplayMode(mode: ShipPlanningDisplayMode): ShipPlanningScope {
+  if (mode === "Today") return "today";
+  if (mode === "Tomorrow") return "tomorrow";
+  if (mode === "TodayAndTomorrow") return "today-and-tomorrow";
+  return "auto";
+}
 
 async function readJson(response: Response) {
   const payload: unknown = await response.json().catch(() => null);
@@ -28,17 +48,14 @@ export async function fetchShipPlanningSettings() {
   const row = payload as Partial<ShipPlanningSettings>;
   return {
     enabled: row.enabled !== false,
-    displayMode:
-      row.displayMode === "TodayAndTomorrow" || row.displayMode === "Auto" || row.displayMode === "Tomorrow"
-        ? row.displayMode
-        : "Tomorrow",
+    displayMode: isMode(row.displayMode) ? row.displayMode : "Auto",
     refreshIntervalSeconds:
       typeof row.refreshIntervalSeconds === "number" ? row.refreshIntervalSeconds : defaultSettings.refreshIntervalSeconds,
     maxRows: typeof row.maxRows === "number" ? row.maxRows : defaultSettings.maxRows,
   } satisfies ShipPlanningSettings;
 }
 
-export async function fetchShipPlanning(scope: "tomorrow" | "today-and-tomorrow") {
+export async function fetchShipPlanning(scope: ShipPlanningScope) {
   const response = await fetch(`/api/ship-planning?scope=${scope}`);
   return (await readJson(response)) as ShipPlanningResponse;
 }
@@ -47,6 +64,15 @@ export function useShipPlanning() {
   const [settings, setSettings] = useState<ShipPlanningSettings>(defaultSettings);
   const [data, setData] = useState<ShipPlanningResponse | null>(null);
   const [error, setError] = useState(false);
+  const [ymd, setYmd] = useState(amsterdamToday);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = amsterdamToday();
+      setYmd((current) => (current === next ? current : next));
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -57,16 +83,20 @@ export function useShipPlanning() {
         setSettings(nextSettings);
         if (!nextSettings.enabled) {
           setData({
-            scope: "tomorrow",
+            scope: "auto",
+            displayedDay: "today",
+            switchReason: "manual-override",
             status: "disabled",
+            todayRecordCount: null,
+            tomorrowRecordCount: null,
+            todayEmptyConfirmed: false,
             days: [],
             retrievedAt: new Date().toISOString(),
           });
           setError(false);
           return;
         }
-        const scope = nextSettings.displayMode === "Tomorrow" ? "tomorrow" : "today-and-tomorrow";
-        const payload = await fetchShipPlanning(scope);
+        const payload = await fetchShipPlanning(scopeForDisplayMode(nextSettings.displayMode));
         if (!active) return;
         setData(payload);
         setError(false);
@@ -81,7 +111,7 @@ export function useShipPlanning() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [settings.refreshIntervalSeconds]);
+  }, [settings.refreshIntervalSeconds, ymd]);
 
   return { settings, data, error };
 }

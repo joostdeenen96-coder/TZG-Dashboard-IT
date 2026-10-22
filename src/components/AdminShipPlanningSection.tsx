@@ -10,7 +10,7 @@ const fieldClass =
 
 const empty: ShipPlanningAdminSettings = {
   enabled: true,
-  displayMode: "Tomorrow",
+  displayMode: "Auto",
   refreshIntervalSeconds: 300,
   maxRows: 80,
   credentialStatus: "not-configured",
@@ -91,11 +91,16 @@ export function AdminShipPlanningSection({ authenticated }: { authenticated: boo
             }))
           }
         >
+          <option value="Auto">Auto</option>
+          <option value="Today">Today</option>
           <option value="Tomorrow">Tomorrow</option>
           <option value="TodayAndTomorrow">TodayAndTomorrow</option>
-          <option value="Auto">Auto</option>
         </select>
       </label>
+      <p className="mt-2 text-[14px] text-mist">
+        Auto toont vandaag zolang de bron ritten heeft en schakelt daarna naar morgen. TodayAndTomorrow toont beide
+        dagen en is bij veel ritten minder leesbaar.
+      </p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <label className="block text-[14px] tracking-wide text-mist uppercase">
           Refresh interval

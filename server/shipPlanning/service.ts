@@ -1,7 +1,21 @@
 import { shipPlanningCredentialsConfigured } from "./client.js";
 import { amsterdamYmd } from "./dates.js";
+import {
+  activePlanningDay,
+  emptyConfirmationCountFromEnv,
+  observeTodayQuery,
+  resetTodayEmptyConfirmation,
+  verdictForDay,
+} from "./daySelection.js";
 import { entityDataRoot } from "./mapRecord.js";
-import type { ShipPlanningDay, ShipPlanningResponse, ShipPlanningScope, ShipPlanningStatus } from "./model.js";
+import type {
+  ShipPlanningDay,
+  ShipPlanningDisplayedDay,
+  ShipPlanningResponse,
+  ShipPlanningScope,
+  ShipPlanningStatus,
+  ShipPlanningSwitchReason,
+} from "./model.js";
 import { getShipPlanningSettings, type ShipPlanningSettings } from "./settings.js";
 import { TeunesenShipPlanningProvider, type ShipPlanningDayQuery } from "./teunesenShipPlanningProvider.js";
 import { logWarn } from "../log.js";
@@ -22,6 +36,7 @@ export type ShipPlanningServiceDeps = {
   settings: () => ShipPlanningSettings;
   credentialsConfigured: () => boolean;
   refreshMs?: number;
+  emptyConfirmationCount?: number;
 };
 
 const cache = new Map<string, CacheHit>();
@@ -32,6 +47,7 @@ export function resetShipPlanningCache() {
   cache.clear();
   inflight.clear();
   lastStatus = null;
+  resetTodayEmptyConfirmation();
 }
 
 export function shipPlanningLastStatus() {
@@ -66,48 +82,193 @@ function unavailableDay(date: string, retrievedAt: string): ShipPlanningDay {
   return { date, entries: [], retrievedAt, sourceUpdatedAt: null, status: "unavailable" };
 }
 
+function envelope(input: {
+  scope: ShipPlanningScope;
+  displayedDay: ShipPlanningDisplayedDay;
+  switchReason: ShipPlanningSwitchReason;
+  status: ShipPlanningResponse["status"];
+  todayRecordCount: number | null;
+  tomorrowRecordCount: number | null;
+  todayEmptyConfirmed: boolean;
+  days: ShipPlanningDay[];
+  retrievedAt: string;
+}): ShipPlanningResponse {
+  return input;
+}
+
 function asStale(response: ShipPlanningResponse): ShipPlanningResponse {
   return {
     ...response,
     status: "stale",
+    switchReason: response.displayedDay === "today" ? "stale-today" : response.switchReason,
     days: response.days.map((day) => ({ ...day, status: day.entries.length ? "stale" : day.status })),
   };
 }
 
-async function loadScope(scope: ShipPlanningScope, deps: ShipPlanningServiceDeps): Promise<ShipPlanningResponse> {
+function capQuery(query: ShipPlanningDayQuery, limit: number): ShipPlanningDayQuery {
+  return { ...query, entries: query.entries.slice(0, limit) };
+}
+
+function confirmationCount(deps: ShipPlanningServiceDeps) {
+  return deps.emptyConfirmationCount ?? emptyConfirmationCountFromEnv();
+}
+
+async function loadManual(scope: Exclude<ShipPlanningScope, "auto">, deps: ShipPlanningServiceDeps): Promise<ShipPlanningResponse> {
   const now = deps.now();
   const retrievedAt = now.toISOString();
   const settings = deps.settings();
-  const limit = settings.maxRows;
+  const today = amsterdamYmd(now, 0);
+  const tomorrow = amsterdamYmd(now, 1);
   if (!deps.credentialsConfigured()) {
-    const today = amsterdamYmd(now, 0);
-    const tomorrow = amsterdamYmd(now, 1);
     const days =
       scope === "today-and-tomorrow"
         ? [unavailableDay(today, retrievedAt), unavailableDay(tomorrow, retrievedAt)]
-        : [unavailableDay(tomorrow, retrievedAt)];
-    return { scope, status: "unavailable", days, retrievedAt };
-  }
-  const cap = (query: ShipPlanningDayQuery) => ({
-    ...query,
-    entries: query.entries.slice(0, limit),
-  });
-  if (scope === "today-and-tomorrow") {
-    const [today, tomorrow] = await Promise.all([deps.reader.queryToday(now), deps.reader.queryTomorrow(now)]);
-    return {
+        : [unavailableDay(scope === "today" ? today : tomorrow, retrievedAt)];
+    return envelope({
       scope,
-      status: "ok",
+      displayedDay: scope === "tomorrow" ? "tomorrow" : "today",
+      switchReason: "source-unavailable",
+      status: "unavailable",
+      todayRecordCount: null,
+      tomorrowRecordCount: null,
+      todayEmptyConfirmed: false,
+      days,
       retrievedAt,
-      days: [dayFromQuery(cap(today), retrievedAt, "ok"), dayFromQuery(cap(tomorrow), retrievedAt, "ok")],
-    };
+    });
   }
-  const tomorrow = await deps.reader.queryTomorrow(now);
-  return {
+  const limit = settings.maxRows;
+  if (scope === "today") {
+    const query = capQuery(await deps.reader.queryToday(now), limit);
+    return envelope({
+      scope,
+      displayedDay: "today",
+      switchReason: "manual-override",
+      status: "ok",
+      todayRecordCount: query.entries.length,
+      tomorrowRecordCount: null,
+      todayEmptyConfirmed: false,
+      days: [dayFromQuery(query, retrievedAt, "ok")],
+      retrievedAt,
+    });
+  }
+  if (scope === "today-and-tomorrow") {
+    const [todayQuery, tomorrowQuery] = await Promise.all([
+      deps.reader.queryToday(now),
+      deps.reader.queryTomorrow(now),
+    ]);
+    const todayCapped = capQuery(todayQuery, limit);
+    const tomorrowCapped = capQuery(tomorrowQuery, limit);
+    return envelope({
+      scope,
+      displayedDay: "today",
+      switchReason: "manual-override",
+      status: "ok",
+      todayRecordCount: todayCapped.entries.length,
+      tomorrowRecordCount: tomorrowCapped.entries.length,
+      todayEmptyConfirmed: false,
+      days: [dayFromQuery(todayCapped, retrievedAt, "ok"), dayFromQuery(tomorrowCapped, retrievedAt, "ok")],
+      retrievedAt,
+    });
+  }
+  const query = capQuery(await deps.reader.queryTomorrow(now), limit);
+  return envelope({
     scope,
+    displayedDay: "tomorrow",
+    switchReason: "manual-override",
     status: "ok",
+    todayRecordCount: null,
+    tomorrowRecordCount: query.entries.length,
+    todayEmptyConfirmed: false,
+    days: [dayFromQuery(query, retrievedAt, "ok")],
     retrievedAt,
-    days: [dayFromQuery(cap(tomorrow), retrievedAt, "ok")],
-  };
+  });
+}
+
+async function loadAuto(deps: ShipPlanningServiceDeps): Promise<ShipPlanningResponse> {
+  const now = deps.now();
+  const retrievedAt = now.toISOString();
+  const todayDate = amsterdamYmd(now, 0);
+  const tomorrowDate = amsterdamYmd(now, 1);
+  const limit = deps.settings().maxRows;
+  if (!deps.credentialsConfigured()) {
+    return envelope({
+      scope: "auto",
+      displayedDay: "today",
+      switchReason: "source-unavailable",
+      status: "unavailable",
+      todayRecordCount: null,
+      tomorrowRecordCount: null,
+      todayEmptyConfirmed: false,
+      days: [unavailableDay(todayDate, retrievedAt)],
+      retrievedAt,
+    });
+  }
+  const todayQuery = await deps.reader.queryToday(now);
+  const verdict = verdictForDay(todayQuery, todayDate);
+  if (verdict === "invalid") {
+    throw Object.assign(new Error("onvolledige of ongeldige vandaagquery"), { status: 0 });
+  }
+  const observed = observeTodayQuery({ date: todayDate, verdict, confirmationCount: confirmationCount(deps) });
+  const todayCapped = capQuery(todayQuery, limit);
+  const displayed = activePlanningDay({
+    todayHasActiveEntries: verdict === "active",
+    todayConfirmedEmpty: observed.confirmed,
+  });
+  if (displayed === "today") {
+    return envelope({
+      scope: "auto",
+      displayedDay: "today",
+      switchReason: "today-active",
+      status: "ok",
+      todayRecordCount: todayCapped.entries.length,
+      tomorrowRecordCount: null,
+      todayEmptyConfirmed: false,
+      days: [dayFromQuery(todayCapped, retrievedAt, "ok")],
+      retrievedAt,
+    });
+  }
+  const tomorrowQuery = await deps.reader.queryTomorrow(now);
+  const tomorrowVerdict = verdictForDay(tomorrowQuery, tomorrowDate);
+  if (tomorrowVerdict === "invalid") {
+    throw Object.assign(new Error("onvolledige of ongeldige morgenquery"), { status: 0 });
+  }
+  const tomorrowCapped = capQuery(tomorrowQuery, limit);
+  const bothEmpty = tomorrowVerdict === "empty";
+  return envelope({
+    scope: "auto",
+    displayedDay: bothEmpty ? "today" : "tomorrow",
+    switchReason: "today-empty-confirmed",
+    status: "ok",
+    todayRecordCount: 0,
+    tomorrowRecordCount: tomorrowCapped.entries.length,
+    todayEmptyConfirmed: true,
+    days: bothEmpty
+      ? [dayFromQuery(todayCapped, retrievedAt, "ok"), dayFromQuery(tomorrowCapped, retrievedAt, "ok")]
+      : [dayFromQuery(tomorrowCapped, retrievedAt, "ok")],
+  retrievedAt,
+  });
+}
+
+function unavailableResponse(scope: ShipPlanningScope, deps: ShipPlanningServiceDeps): ShipPlanningResponse {
+  const now = deps.now();
+  const retrievedAt = now.toISOString();
+  const today = amsterdamYmd(now, 0);
+  const tomorrow = amsterdamYmd(now, 1);
+  const days =
+    scope === "today-and-tomorrow"
+      ? [unavailableDay(today, retrievedAt), unavailableDay(tomorrow, retrievedAt)]
+      : [unavailableDay(scope === "tomorrow" ? tomorrow : today, retrievedAt)];
+  return envelope({
+    scope,
+    displayedDay: scope === "tomorrow" ? "tomorrow" : "today",
+    switchReason: "source-unavailable",
+    status: "unavailable",
+    todayRecordCount: null,
+    tomorrowRecordCount: null,
+    todayEmptyConfirmed: false,
+    days,
+    retrievedAt,
+  });
 }
 
 export async function getShipPlanning(
@@ -118,7 +279,17 @@ export async function getShipPlanning(
   const now = deps.now();
   if (!settings.enabled) {
     lastStatus = "disabled";
-    return { scope, status: "disabled", days: [], retrievedAt: now.toISOString() };
+    return envelope({
+      scope,
+      displayedDay: scope === "tomorrow" ? "tomorrow" : "today",
+      switchReason: "manual-override",
+      status: "disabled",
+      todayRecordCount: null,
+      tomorrowRecordCount: null,
+      todayEmptyConfirmed: false,
+      days: [],
+      retrievedAt: now.toISOString(),
+    });
   }
   const refreshMs = deps.refreshMs ?? settings.refreshIntervalSeconds * 1000;
   const key = cacheKey(scope, now);
@@ -129,7 +300,7 @@ export async function getShipPlanning(
   }
   const pending = inflight.get(key);
   if (pending) return pending;
-  const job = loadScope(scope, deps)
+  const job = (scope === "auto" ? loadAuto(deps) : loadManual(scope, deps))
     .then((response) => {
       cache.set(key, { at: deps.now().getTime(), response });
       lastStatus = "ok";
@@ -146,14 +317,7 @@ export async function getShipPlanning(
         return stale;
       }
       lastStatus = "unavailable";
-      const retrievedAt = deps.now().toISOString();
-      const today = amsterdamYmd(deps.now(), 0);
-      const tomorrow = amsterdamYmd(deps.now(), 1);
-      const days =
-        scope === "today-and-tomorrow"
-          ? [unavailableDay(today, retrievedAt), unavailableDay(tomorrow, retrievedAt)]
-          : [unavailableDay(tomorrow, retrievedAt)];
-      return { scope, status: "unavailable" as const, days, retrievedAt };
+      return unavailableResponse(scope, deps);
     })
     .finally(() => {
       inflight.delete(key);

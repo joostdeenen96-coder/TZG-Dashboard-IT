@@ -1,5 +1,16 @@
 export type ShipPlanningStatus = "ok" | "stale" | "unavailable" | "disabled";
 
+export type ShipPlanningScope = "auto" | "today" | "tomorrow" | "today-and-tomorrow";
+
+export type ShipPlanningDisplayedDay = "today" | "tomorrow";
+
+export type ShipPlanningSwitchReason =
+  | "today-active"
+  | "today-empty-confirmed"
+  | "manual-override"
+  | "stale-today"
+  | "source-unavailable";
+
 export type ShipPlanningEntry = {
   sourceId: string | null;
   sourceOrder: number | null;
@@ -28,15 +39,22 @@ export type ShipPlanningDay = {
 };
 
 export type ShipPlanningResponse = {
-  scope: "tomorrow" | "today-and-tomorrow";
+  scope: ShipPlanningScope;
+  displayedDay: ShipPlanningDisplayedDay;
+  switchReason: ShipPlanningSwitchReason;
   status: ShipPlanningStatus;
+  todayRecordCount: number | null;
+  tomorrowRecordCount: number | null;
+  todayEmptyConfirmed: boolean;
   days: ShipPlanningDay[];
   retrievedAt: string;
 };
 
+export type ShipPlanningDisplayMode = "Auto" | "Today" | "Tomorrow" | "TodayAndTomorrow";
+
 export type ShipPlanningSettings = {
   enabled: boolean;
-  displayMode: "Tomorrow" | "TodayAndTomorrow" | "Auto";
+  displayMode: ShipPlanningDisplayMode;
   refreshIntervalSeconds: number;
   maxRows: number;
 };
