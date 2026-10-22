@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatPlanningDate } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
   ROTATION_MS,
+  SHIPS_PER_COLUMN,
   buildLocationPages,
   nextRotationIndex,
-  rowsPerColumn,
   type LocationPage,
 } from "../shipPlanning/rotation";
 import { useShipPlanning } from "../services/shipPlanningService";
@@ -23,11 +23,13 @@ const headings = [
   { label: "Schip", align: "left" },
 ] as const;
 
-const columnClass =
-  "grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.9fr)_minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,1.3fr)] items-center gap-x-1.5 px-1";
+const columnTrack =
+  "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,2.1fr)_minmax(0,1.1fr)_minmax(0,1.4fr)] items-center";
+
+const singleColumnClass = `${columnTrack} gap-x-[clamp(6px,0.4vw,12px)] px-1`;
+const splitColumnClass = `${columnTrack} gap-x-[clamp(4px,0.28vw,8px)] px-0.5`;
 
 const ROW_HEIGHT = 40;
-const COLUMN_HEAD = 20;
 
 function cellTitle(value: string | null | undefined) {
   const text = value?.trim();
@@ -75,12 +77,23 @@ function BoardTitle({
 }) {
   return (
     <header className="grid shrink-0 grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-3">
-      <h2 className="truncate font-display text-[22px] leading-none font-semibold tracking-[0.06em] uppercase">{title}</h2>
-      {dateLabel ? <p className="truncate text-[16px] leading-none text-mist">{dateLabel}</p> : <span />}
+      <h2
+        className="truncate font-display leading-none font-semibold tracking-[0.06em] uppercase"
+        style={{ fontSize: "var(--ship-title, 22px)" }}
+      >
+        {title}
+      </h2>
+      {dateLabel ? (
+        <p className="truncate leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
+          {dateLabel}
+        </p>
+      ) : (
+        <span />
+      )}
       <div className="flex min-w-0 items-center justify-end gap-3">
         {notices}
         {pageLabel ? (
-          <p className="shrink-0 text-[16px] leading-none text-mist tabular-nums" data-testid="ship-rotation">
+          <p className="shrink-0 leading-none text-mist tabular-nums" style={{ fontSize: "var(--ship-meta, 16px)" }} data-testid="ship-rotation">
             {pageLabel}
           </p>
         ) : null}
@@ -93,31 +106,46 @@ function ShipTable({
   entries,
   location,
   label,
+  columnClass,
   onOpen,
 }: {
   entries: ShipPlanningEntry[];
   location: string;
   label: string;
+  columnClass: string;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
 }) {
   return (
-    <div className="min-w-0">
-      <div className={`${columnClass} h-5 text-[12px] leading-none font-semibold tracking-[0.08em] text-mist uppercase`}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div
+        className={`${columnClass} leading-none font-semibold tracking-[0.08em] text-mist uppercase`}
+        style={{ height: "var(--ship-head, 20px)", fontSize: "var(--ship-head-text, 12px)" }}
+      >
         {headings.map((heading) => (
           <span key={heading.label} className={heading.align === "right" ? "text-right" : undefined}>
             {heading.label}
           </span>
         ))}
       </div>
-      <ul>
-        {entries.map((entry, rowIndex) => {
-          const quantity = formatQuantity(entry);
+      <ul className="flex min-h-0 flex-1 flex-col justify-start">
+        {Array.from({ length: SHIPS_PER_COLUMN }, (_, rowIndex) => {
+          const entry = entries[rowIndex];
+          const quantity = entry ? formatQuantity(entry) : null;
           return (
-            <li key={entry.sourceId ?? `${location}-${rowIndex}`}>
+            <li
+              key={entry?.sourceId ?? `${location}-slot-${rowIndex}`}
+              className="min-h-0"
+              style={{
+                flex: "1 1 0",
+                minHeight: "var(--ship-row, " + ROW_HEIGHT + "px)",
+                maxHeight: "var(--ship-row-max, 96px)",
+              }}
+            >
+              {entry ? (
               <button
                 type="button"
-                className={`${columnClass} w-full overflow-hidden text-left text-[20px] leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold ${rowIndex % 2 === 1 ? "bg-white/[0.04]" : ""}`}
-                style={{ height: ROW_HEIGHT }}
+                className={`${columnClass} h-full w-full overflow-hidden text-left leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold ${rowIndex % 2 === 1 ? "bg-white/[0.04]" : ""}`}
+                style={{ fontSize: "var(--ship-text, 20px)" }}
                 onClick={() => onOpen(entry, location, label)}
               >
                 <span className="min-w-0 truncate font-display font-semibold tabular-nums" title={cellTitle(entry.time)}>
@@ -142,6 +170,7 @@ function ShipTable({
                   {entry.vessel ?? "—"}
                 </span>
               </button>
+              ) : null}
             </li>
           );
         })}
@@ -159,6 +188,7 @@ function LocationSlide({
   dateLabel,
   notices,
   onOpen,
+  onProgress,
 }: {
   day: ShipPlanningDay;
   resetKey: string;
@@ -168,30 +198,18 @@ function LocationSlide({
   dateLabel: string | null;
   notices: ReactNode;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
+  onProgress: (state: { key: string; active: boolean }) => void;
 }) {
-  const listRef = useRef<HTMLDivElement>(null);
-  const [perColumn, setPerColumn] = useState(8);
   const groups = useMemo(() => groupEntries(day.entries), [day.entries]);
-  const pages = useMemo(() => buildLocationPages(groups, perColumn), [groups, perColumn]);
+  const pages = useMemo(() => buildLocationPages(groups, SHIPS_PER_COLUMN), [groups]);
   const rotation = useRotation(pages, resetKey, paused);
-
-  useEffect(() => {
-    const element = listRef.current;
-    if (!element) return;
-    const measure = () => {
-      const available = element.clientHeight - COLUMN_HEAD;
-      if (available < ROW_HEIGHT) return;
-      const next = rowsPerColumn(available, ROW_HEIGHT);
-      setPerColumn((current) => (current === next ? current : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   const page = rotation.page;
   const pageLabel = rotation.count > 1 ? `${rotation.index + 1} / ${rotation.count}` : null;
+  const progressKey = page ? `${resetKey}:${page.location}:${page.pageInLocation}` : resetKey;
+
+  useEffect(() => {
+    onProgress({ key: progressKey, active: rotation.count > 1 && page != null });
+  }, [onProgress, page, progressKey, rotation.count]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -203,40 +221,53 @@ function LocationSlide({
           {!embedTitle && dateLabel ? <p className="text-[16px] leading-none text-mist">{dateLabel}</p> : null}
           <div className="mt-1 flex shrink-0 items-baseline justify-between gap-3">
             <h3
-              className="truncate font-display text-[20px] leading-none font-semibold tracking-[0.04em] uppercase"
+              className="truncate font-display leading-none font-semibold tracking-[0.04em] uppercase"
+              style={{ fontSize: "var(--ship-title, 20px)" }}
               data-location={page.location}
               data-location-label={page.label}
             >
               {page.label}
               {page.locationPageCount > 1 ? (
-                <span className="ml-3 text-[16px] font-medium tracking-normal text-mist">
+                <span className="ml-3 font-medium tracking-normal text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
                   {page.pageInLocation + 1}/{page.locationPageCount}
                 </span>
               ) : null}
             </h3>
-            <p className="shrink-0 text-[16px] leading-none text-mist" data-ship-count={page.locationCount}>
+            <p className="shrink-0 leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }} data-ship-count={page.locationCount}>
               {page.locationCount === 1 ? "1 schip" : `${page.locationCount} schepen`}
             </p>
           </div>
           <div
-            ref={listRef}
             className="relative mt-2 min-h-0 flex-1 overflow-hidden"
-            data-rows-per-column={perColumn}
+            data-ships-per-column={SHIPS_PER_COLUMN}
             data-columns={page.columns}
             data-layout={page.columns === 1 ? "single" : "split"}
           >
             {page.columns === 1 ? (
-              <div className="max-w-[1240px]">
-                <ShipTable entries={page.left} location={page.location} label={page.label} onOpen={onOpen} />
-              </div>
+              <ShipTable
+                entries={page.left}
+                location={page.location}
+                label={page.label}
+                columnClass={singleColumnClass}
+                onOpen={onOpen}
+              />
             ) : (
-              <>
-                <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10" />
-                <div className="grid grid-cols-2 gap-x-6">
-                  <ShipTable entries={page.left} location={page.location} label={page.label} onOpen={onOpen} />
-                  <ShipTable entries={page.right} location={page.location} label={page.label} onOpen={onOpen} />
-                </div>
-              </>
+              <div className="grid h-full grid-cols-2 gap-x-[clamp(12px,1vw,28px)]">
+                <ShipTable
+                  entries={page.left}
+                  location={page.location}
+                  label={page.label}
+                  columnClass={splitColumnClass}
+                  onOpen={onOpen}
+                />
+                <ShipTable
+                  entries={page.right}
+                  location={page.location}
+                  label={page.label}
+                  columnClass={splitColumnClass}
+                  onOpen={onOpen}
+                />
+              </div>
             )}
           </div>
         </>
@@ -273,6 +304,10 @@ export function ShipPlanningBoard() {
   const finished = data?.switchReason === "today-empty-confirmed" && data.displayedDay === "tomorrow";
   const title = data ? planningTitle(data, bothEmpty) : "Schepenplanning";
   const dateLabel = shownDays.length === 1 && shownDays[0] && !bothEmpty ? formatPlanningDate(shownDays[0].date) : null;
+  const [progress, setProgress] = useState<{ key: string; active: boolean } | null>(null);
+  const onProgress = useCallback((next: { key: string; active: boolean }) => {
+    setProgress((current) => (current?.key === next.key && current.active === next.active ? current : next));
+  }, []);
   const notices = (
     <>
       {status === "stale" ? <p className="truncate text-[14px] leading-none text-gold">Gegevens tijdelijk niet vernieuwd</p> : null}
@@ -283,7 +318,7 @@ export function ShipPlanningBoard() {
 
   return (
     <article
-      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-4 py-2"
+      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-[clamp(12px,0.9vw,22px)] py-[clamp(6px,0.55vh,12px)]"
       data-testid="ship-planning"
       data-displayed-day={data?.displayedDay ?? ""}
       data-switch-reason={data?.switchReason ?? ""}
@@ -333,11 +368,23 @@ export function ShipPlanningBoard() {
                           : "Vandaag",
                   })
                 }
+                onProgress={onProgress}
               />
             ))}
           </div>
         </div>
       )}
+      {progress?.active ? (
+        <div className="dashboard-progress-track" data-testid="ship-rotation-track">
+          <div
+            key={progress.key}
+            data-testid="ship-rotation-progress"
+            data-paused={selected != null ? "true" : "false"}
+            className="ship-rotation-progress dashboard-progress-bar"
+            style={{ animationDuration: `${ROTATION_MS}ms` }}
+          />
+        </div>
+      ) : null}
       {selected ? (
         <ShipPlanningDetailDialog
           entry={selected.entry}

@@ -23,7 +23,7 @@ function DisplayToggles() {
   const button =
     "grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 ease-out hover:bg-veil/12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold";
   return (
-    <div className="flex items-center gap-0.5 rounded-full border border-veil/12 bg-veil/[0.05] p-0.5" aria-label="Weergave">
+    <div className="flex items-center gap-0.5 rounded-full border border-veil/12 bg-veil/[0.05] p-0.5" aria-label="Weergave" data-display-toggles>
       <button
         type="button"
         className={`${button} ${prefs.glass ? "text-gold" : "text-mist"}`}
@@ -60,23 +60,24 @@ export function Header({ now, fetchedAt, refreshing, stale, adminLabel, onAdmin,
       : `Laatste update ${updatedClock}`;
 
   return (
-    <header className="glass-pill flex h-[78px] shrink-0 items-center justify-between pr-3 pl-[7px]">
-      <span className="logo-plate flex h-[64px] items-center rounded-full px-6">
+    <header className="glass-pill flex h-[78px] shrink-0 items-center justify-between pr-3 pl-[7px]" data-planning-header>
+      <span className="logo-plate flex h-[64px] items-center rounded-full px-6" data-planning-logo>
         <img src="/teunesen-logo.png" alt="Teunesen" className="h-[46px] w-auto" />
       </span>
       <div className="flex items-center gap-5">
         <HeaderWeather settings={weatherSettings} />
         <div className="text-right">
           <p className="leading-none text-paper" data-clock={stamp}>
-            <span className="text-[22px]">{date}</span>
+            <span className="text-[22px]" data-clock-date>{date}</span>
             <span className="mx-3 text-gold">·</span>
-            <span className="font-display text-[40px] font-semibold tabular-nums tracking-[-0.01em]">{time}</span>
+            <span className="font-display text-[40px] font-semibold tabular-nums tracking-[-0.01em]" data-clock-time>{time}</span>
           </p>
           <p
             className="mt-1.5 flex items-center justify-end gap-2 text-[16px] tracking-wide text-mist"
             data-refreshing={refreshing ? "true" : "false"}
             data-stale={stale ? "true" : "false"}
             data-updated={fetchedAt ?? ""}
+            data-clock-updated=""
           >
             {refreshing ? <LoaderCircle className="h-4 w-4 animate-spin text-gold" aria-label="Vernieuwen" /> : null}
             <span>{updatedLabel}</span>
@@ -86,6 +87,7 @@ export function Header({ now, fetchedAt, refreshing, stale, adminLabel, onAdmin,
         <button
           type="button"
           className="rounded-full border border-veil/20 bg-veil/10 px-5 py-2.5 text-[15px] font-bold tracking-[0.02em] text-paper uppercase"
+          data-admin-button=""
           onClick={onAdmin}
         >
           {adminLabel}

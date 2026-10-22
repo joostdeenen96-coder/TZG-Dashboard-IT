@@ -83,12 +83,19 @@ function monthName(applicableMonth: string | null) {
   return monthFormatter.format(new Date(stamp));
 }
 
+const tileFrame = "relative h-full min-h-0 overflow-hidden rounded-[20px] border";
+const tileBody = "flex h-full min-h-0 flex-col justify-between gap-1 px-3 py-2";
+
 function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasize: boolean }) {
+  const frame = `${tileFrame} ${emphasize ? "border-gold/45 bg-gold/8" : "border-veil/12 bg-veil/[0.06]"}`;
   if (!week) {
     return (
-      <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3 py-1">
-        <p className="font-display text-[18px] font-semibold text-gold">Dieseltoeslag</p>
-        <p className="mt-1 text-[20px] text-mist">Geen voorgaande peildatum</p>
+      <li className={frame} data-surcharge-tile="" data-surcharge="diesel-empty">
+        <div className={tileBody} data-surcharge-body="">
+          <p className="font-display text-[18px] font-semibold text-gold" data-diesel-label="">Dieseltoeslag</p>
+          <p className="text-[20px] text-mist" data-diesel-meta="">Geen voorgaande peildatum</p>
+          <span />
+        </div>
       </li>
     );
   }
@@ -97,22 +104,24 @@ function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasiz
       data-week={formatWebsiteWeek(week)}
       data-item-id={week.itemId ?? undefined}
       data-raw-toeslag={week.toeslagPercentageRaw}
-      className={`grid min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] items-center gap-2 rounded-[20px] border px-3 py-1 ${
-        emphasize ? "border-gold/45 bg-gold/8" : "border-veil/12 bg-veil/[0.06]"
-      }`}
+      data-surcharge-tile=""
+      data-surcharge={emphasize ? "diesel-current" : "diesel-previous"}
+      className={frame}
     >
-      <div className="min-w-0">
-        <p className="font-display text-[18px] leading-none font-semibold text-gold">{formatWebsiteWeek(week)}</p>
-        <p className="mt-1 font-display text-[40px] leading-none font-semibold tabular-nums">
-          {formatFlooredPercent(week)}
-        </p>
-        <p className="mt-1 truncate text-[13px] text-mist">Dieseltoeslag</p>
-      </div>
-      <div className="min-w-0 text-right">
-        <p className="truncate text-[13px] leading-tight text-mist">Dieselprijs</p>
-        <p className="truncate text-[15px] leading-tight tabular-nums">{formatPricePerLiter(week.dieselPrijs)}</p>
-        <p className="mt-1 truncate text-[13px] leading-tight text-mist">Peildatum</p>
-        <p className="truncate text-[14px] leading-tight tabular-nums">{formatPeildatum(week.peildatum)}</p>
+      <div className={tileBody} data-surcharge-body="">
+        <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">{formatWebsiteWeek(week)}</p>
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] items-center gap-2">
+          <p className="font-display text-[40px] leading-none font-semibold tabular-nums" data-diesel-value="">
+            {formatFlooredPercent(week)}
+          </p>
+          <div className="min-w-0 text-right">
+            <p className="truncate text-[13px] leading-tight text-mist" data-diesel-meta="">Dieselprijs</p>
+            <p className="truncate text-[15px] leading-tight tabular-nums" data-diesel-meta="">{formatPricePerLiter(week.dieselPrijs)}</p>
+            <p className="mt-1 truncate text-[13px] leading-tight text-mist" data-diesel-meta="">Peildatum</p>
+            <p className="truncate text-[14px] leading-tight tabular-nums" data-diesel-meta="">{formatPeildatum(week.peildatum)}</p>
+          </div>
+        </div>
+        <p className="truncate text-[13px] text-mist" data-diesel-meta="">Dieseltoeslag</p>
       </div>
     </li>
   );
@@ -134,32 +143,38 @@ function GasOilCell({
     (result.status === "ok" || result.status === "stale") &&
     typeof result.surchargePerTon === "number";
 
+  const key = countryLabel === "België" ? "gas-be" : "gas-nl";
   return (
-    <li className="min-h-0">
+    <li
+      className={`${tileFrame} ${stale ? "border-gold/35 bg-gold/6" : "border-veil/12 bg-veil/[0.06]"}`}
+      data-surcharge-tile=""
+      data-surcharge={key}
+    >
       <button
         type="button"
         onClick={() => {
           if (canOpen) onOpen();
         }}
         disabled={!canOpen}
-        className={`grid h-full min-h-0 w-full grid-cols-1 content-center gap-1 rounded-[20px] border px-3 py-2 text-left ${
-          stale ? "border-gold/35 bg-gold/6" : "border-veil/12 bg-veil/[0.06]"
-        } ${canOpen ? "cursor-pointer hover:border-gold/40" : "cursor-default"}`}
+        data-surcharge-body=""
+        className={`${tileBody} absolute inset-0 w-full text-left disabled:opacity-100 ${canOpen ? "cursor-pointer" : "cursor-default"}`}
       >
-        <p className="font-display text-[18px] leading-none font-semibold text-gold">Gasolietoeslag</p>
-        {unavailable ? (
-          <p className="font-display text-[28px] leading-tight font-semibold text-mist">Niet beschikbaar</p>
-        ) : (
-          <p className="font-display text-[42px] leading-none font-semibold tabular-nums text-paper">
-            {formatEuro(result!.surchargePerTon!)}
-            <span className="ml-1 text-[18px] font-normal text-mist">/ ton</span>
-          </p>
-        )}
-        <p className="truncate text-[15px] capitalize text-mist">
+        <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
+        <div className="flex min-h-0 flex-1 items-center">
+          {unavailable ? (
+            <p className="font-display text-[28px] leading-tight font-semibold text-mist" data-diesel-value="">Niet beschikbaar</p>
+          ) : (
+            <p className="font-display text-[42px] leading-none font-semibold tabular-nums text-paper" data-gas-value="">
+              {formatEuro(result!.surchargePerTon!)}
+              <span className="ml-1 text-[18px] font-normal text-mist" data-diesel-unit="">/ ton</span>
+            </p>
+          )}
+        </div>
+        <p className="truncate text-[15px] capitalize text-mist" data-diesel-meta="">
           {countryLabel}
           {result?.applicableMonth ? ` · ${monthName(result.applicableMonth)}` : ""}
+          {stale ? " · verouderd" : ""}
         </p>
-        {stale ? <p className="text-[13px] text-gold">verouderd</p> : null}
       </button>
     </li>
   );
@@ -173,9 +188,12 @@ function DieselStatusCell({
   message: string;
 }) {
   return (
-    <li className="grid min-h-0 content-center rounded-[20px] border border-veil/12 bg-veil/[0.06] px-3 py-1">
-      <p className="font-display text-[18px] font-semibold text-gold">{title}</p>
-      <p className="mt-1 text-[16px] leading-snug text-mist">{message}</p>
+    <li className={`${tileFrame} border-veil/12 bg-veil/[0.06]`} data-surcharge-tile="" data-surcharge="diesel-status">
+      <div className={tileBody} data-surcharge-body="">
+        <p className="font-display text-[18px] font-semibold text-gold" data-diesel-label="">{title}</p>
+        <p className="text-[16px] leading-snug text-mist" data-diesel-meta="">{message}</p>
+        <span />
+      </div>
     </li>
   );
 }
@@ -196,9 +214,13 @@ export function DieselCard() {
   const cardStatus = dieselReady ? dieselState.status : gasOil ? "ready" : dieselState.status;
 
   return (
-    <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-status={cardStatus}>
+    <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-diesel-card="" data-status={cardStatus}>
       {refreshing ? <span className="absolute inset-x-0 top-0 h-0.5 animate-pulse bg-gold" aria-label="Vernieuwen" /> : null}
-      <ul className="grid min-h-0 flex-1 grid-rows-4 gap-2">
+      <ul
+        className="grid h-full min-h-0 flex-1 gap-2"
+        data-diesel-stack=""
+        style={{ gridTemplateRows: "repeat(4, minmax(0, 1fr))" }}
+      >
         {dieselReady ? (
           <>
             <DieselWeekCell week={dieselWeeks[0] ?? null} emphasize />

@@ -9,6 +9,7 @@ import { useIctTvStatus } from "../services/ictTvStatus";
 import { useTvStatus } from "../services/tvStatus";
 import type { DashboardDefinition, DashboardWidget, DashboardWidgetType } from "../types/dashboard";
 import { ShipPlanningBoard } from "../components/ShipPlanningBoard";
+import { PlanningFluidProvider, planningGridRows, planningGridRowsTall } from "../display/planningFluid";
 import { RenderWidget } from "../widgets/WidgetRegistry";
 import { NewsWidget } from "../widgets/NewsWidget";
 
@@ -105,47 +106,64 @@ function PlanningLayout({ dashboard }: { dashboard: DashboardDefinition }) {
   const news = active.get("news");
   const agenda = active.get("agenda");
   const weather = active.get("weather");
+  const hasOperations = Boolean(water || diesel);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => clearScreenReloadGuard(), 20_000);
+    return () => window.clearTimeout(id);
+  }, []);
 
   return (
-    <StageShell stageWidth={dashboard.layout.stageWidth} stageHeight={dashboard.layout.stageHeight}>
-      <Header
-        now={now}
-        fetchedAt={tv.fetchedAt}
-        refreshing={tv.refreshing}
-        stale={tv.stale}
-        adminLabel={authenticated ? "Instellingen" : "Inloggen"}
-        onAdmin={() => setAdminOpen(true)}
-        weatherSettings={weather?.settings}
-      />
-      {(water || diesel) && (
-        <section className="grid min-h-0 flex-1 grid-cols-4 gap-4" data-testid="planning-operations">
-          {water ? (
-            <div className={diesel ? "col-span-3 h-full min-h-0" : "col-span-4 h-full min-h-0"}>
-              <RenderWidget widget={water} />
-            </div>
+    <PlanningFluidProvider>
+      <div className="planning-display" data-testid="planning-viewport" data-layout="fluid">
+        <div className="glass-backdrop pointer-events-none absolute inset-0" />
+        <div
+          className="planning-frame"
+          style={{
+            ["--planning-rows" as string]: planningGridRows(hasOperations, Boolean(news), Boolean(agenda)),
+            ["--planning-rows-tall" as string]: planningGridRowsTall(hasOperations, Boolean(news), Boolean(agenda)),
+          }}
+        >
+          <Header
+            now={now}
+            fetchedAt={tv.fetchedAt}
+            refreshing={tv.refreshing}
+            stale={tv.stale}
+            adminLabel={authenticated ? "Instellingen" : "Inloggen"}
+            onAdmin={() => setAdminOpen(true)}
+            weatherSettings={weather?.settings}
+          />
+          {hasOperations ? (
+            <section className="grid min-h-0 grid-cols-4 overflow-hidden" data-testid="planning-operations">
+              {water ? (
+                <div className={diesel ? "col-span-3 h-full min-h-0" : "col-span-4 h-full min-h-0"}>
+                  <RenderWidget widget={water} />
+                </div>
+              ) : null}
+              {diesel ? (
+                <div className={water ? "col-span-1 h-full min-h-0" : "col-span-4 h-full min-h-0"}>
+                  <RenderWidget widget={diesel} />
+                </div>
+              ) : null}
+            </section>
           ) : null}
-          {diesel ? (
-            <div className={water ? "col-span-1 h-full min-h-0" : "col-span-4 h-full min-h-0"}>
-              <RenderWidget widget={diesel} />
-            </div>
+          <section className="min-h-0 overflow-hidden" data-testid="planning-ships">
+            <ShipPlanningBoard />
+          </section>
+          {news ? (
+            <section className="min-h-0 overflow-hidden" data-testid="planning-news">
+              <NewsWidget density="compact" />
+            </section>
           ) : null}
-        </section>
-      )}
-      <section className="h-[400px] shrink-0 overflow-hidden" data-testid="planning-ships">
-        <ShipPlanningBoard />
-      </section>
-      {news ? (
-        <section className="h-[88px] shrink-0 overflow-hidden" data-testid="planning-news">
-          <NewsWidget density="compact" />
-        </section>
-      ) : null}
-      {agenda ? (
-        <section className="h-[118px] shrink-0">
-          <RenderWidget widget={agenda} />
-        </section>
-      ) : null}
-      {adminOpen ? <AdminPanel authenticated={authenticated} onClose={() => setAdminOpen(false)} /> : null}
-    </StageShell>
+          {agenda ? (
+            <section className="min-h-0 overflow-hidden" data-testid="planning-agenda">
+              <RenderWidget widget={agenda} />
+            </section>
+          ) : null}
+        </div>
+        {adminOpen ? <AdminPanel authenticated={authenticated} onClose={() => setAdminOpen(false)} /> : null}
+      </div>
+    </PlanningFluidProvider>
   );
 }
 

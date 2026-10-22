@@ -131,10 +131,14 @@ export function WeatherCard({ variant = "card", settings }: WeatherCardProps) {
                 ? "font-display text-[34px] font-semibold tabular-nums"
                 : "font-display text-[48px] font-semibold tabular-nums leading-none"
             }
+            data-weather-temp={variant === "header" ? "" : undefined}
           >
             {typeof temperatureC === "number" ? `${temperatureC}°` : "—°"}
           </p>
-          <p className={variant === "header" ? "mt-1 max-w-[240px] truncate text-[15px] text-mist" : "mt-2 text-[18px] text-mist"}>
+          <p
+            className={variant === "header" ? "mt-1 max-w-[240px] truncate text-[15px] text-mist" : "mt-2 text-[18px] text-mist"}
+            data-weather-label={variant === "header" ? "" : undefined}
+          >
             {label}
           </p>
         </div>
