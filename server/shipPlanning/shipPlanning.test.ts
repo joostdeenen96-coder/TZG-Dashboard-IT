@@ -376,6 +376,17 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   assert.match(css, /--ship-row: clamp\(30px, 2\.8vh, 52px\)/);
   assert.match(css, /--ship-row-max: clamp\(46px, 4\.2vh, 72px\)/);
   assert.match(css, /--dashboard-progress-height: clamp\(2px, 0\.2vh, 3px\)/);
+  assert.match(css, /--font-display-value: clamp\(36px, 3\.9vh, 64px\)/);
+  assert.match(css, /--font-card-title: clamp\(18px, 2\.1vh, 32px\)/);
+  assert.match(css, /--font-section-title: clamp\(14px, 1\.55vh, 24px\)/);
+  assert.match(css, /--font-table: clamp\(13px, 1\.34vh, 20px\)/);
+  assert.match(css, /--font-table-header: clamp\(9px, 0\.95vh, 14px\)/);
+  assert.match(css, /--font-body: clamp\(12px, 1\.25vh, 19px\)/);
+  assert.match(css, /--font-meta: clamp\(11px, 1\.02vh, 15px\)/);
+  assert.match(css, /--font-micro: clamp\(10px, 0\.88vh, 13px\)/);
+  assert.match(css, /--font-tile-value: calc\(var\(--font-display-value\) \* 0\.72\)/);
+  assert.match(css, /data-surcharge-unavailable/);
+  assert.match(read("src/components/DieselCard.tsx"), /data-surcharge-unavailable/);
   assert.match(css, /repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(read("src/components/DieselCard.tsx"), /repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(read("src/components/NewsCard.tsx"), /dashboard-progress-track/);

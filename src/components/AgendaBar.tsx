@@ -87,7 +87,7 @@ export function AgendaBar() {
   if (state.status === "loading") {
     return (
       <div className="tv-card flex h-full items-center px-6" data-agenda-root="" data-status="loading">
-        <p className="text-[18px] text-mist">Agenda laden.</p>
+        <p className="text-mist" data-agenda-note="">Agenda laden.</p>
       </div>
     );
   }
@@ -96,7 +96,7 @@ export function AgendaBar() {
     return (
       <div className="tv-card flex h-full items-center gap-4 px-6" data-agenda-root="" data-status="error">
         <p className="text-[13px] font-semibold tracking-[0.08em] text-gold uppercase" data-agenda-heading="">Agenda</p>
-        <p className="truncate text-[18px] text-mist">{state.message}</p>
+        <p className="truncate text-mist" data-agenda-note="">{state.message}</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export function AgendaBar() {
     return (
       <div className="tv-card flex h-full items-center gap-4 px-6" data-agenda-root="" data-status="empty">
         <p className="font-display text-[28px] leading-none font-semibold tracking-[-0.015em]" data-agenda-heading="">Agenda</p>
-        <p className="text-[18px] text-mist">Geen komende afspraken.</p>
+        <p className="text-mist" data-agenda-note="">Geen komende afspraken.</p>
       </div>
     );
   }
@@ -115,7 +115,7 @@ export function AgendaBar() {
     return (
       <div className="tv-card flex h-full items-center gap-4 px-6" data-agenda-root="" data-status={state.status}>
         <p className="text-[13px] font-semibold tracking-[0.08em] text-gold uppercase" data-agenda-heading="">Agenda</p>
-        <p className="truncate text-[18px] text-mist">{agenda.error || "WijTeunesen-agenda niet bereikbaar."}</p>
+        <p className="truncate text-mist" data-agenda-note="">{agenda.error || "WijTeunesen-agenda niet bereikbaar."}</p>
       </div>
     );
   }
@@ -124,7 +124,7 @@ export function AgendaBar() {
     return (
       <div className="tv-card flex h-full items-center gap-4 px-6" data-agenda-root="" data-status="empty">
         <p className="font-display text-[28px] leading-none font-semibold tracking-[-0.015em]" data-agenda-heading="">Agenda</p>
-        <p className="text-[18px] text-mist">Geen komende afspraken.</p>
+        <p className="text-mist" data-agenda-note="">Geen komende afspraken.</p>
       </div>
     );
   }
@@ -150,7 +150,7 @@ export function AgendaBar() {
               </div>
               <div className="min-w-0">
                 {fluid ? (
-                  <p className="truncate font-semibold" data-agenda-title="">
+                  <p className="truncate font-medium" data-agenda-title="">
                     {item.title}
                     {face.time ? (
                       <span className="font-medium text-mist" data-agenda-time="">
