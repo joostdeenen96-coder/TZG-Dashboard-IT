@@ -162,7 +162,7 @@ function GasOilCell({
         <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
         <div className="flex min-h-0 flex-1 items-center">
           {unavailable ? (
-            <p className="font-display text-[28px] leading-tight font-semibold text-mist" data-diesel-value="">Niet beschikbaar</p>
+            <p className="font-display leading-tight" data-surcharge-unavailable="">Niet beschikbaar</p>
           ) : (
             <p className="font-display text-[42px] leading-none font-semibold tabular-nums text-paper" data-gas-value="">
               {formatEuro(result!.surchargePerTon!)}
