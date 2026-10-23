@@ -1,3 +1,4 @@
+import { amsterdamYmdFromEpoch } from "./amsterdamDate";
 import type { ShipPlanningEntry } from "../types/shipPlanning";
 
 export const ROTATION_MS = 12_000;
@@ -60,6 +61,20 @@ export const rowsPerPage = rowsPerColumn;
 
 function loadingInstant(entry: ShipPlanningEntry) {
   return typeof entry.loadingAt === "number" && Number.isFinite(entry.loadingAt) ? entry.loadingAt : null;
+}
+
+/**
+ * Zichtbare lading van de gekozen dag.
+ * De bron zet een rit als lading op de laadplaats van de laaddatum
+ * en als lossing op de losplaats van de losdatum. Een rit die alleen via losdatum
+ * in de dagquery zit, hoort niet in de laadtijdreeks van deze laadplaats.
+ * Records zonder laaddatum blijven staan.
+ */
+export function entriesForDisplayedLoadDay(entries: ShipPlanningEntry[], day: string) {
+  return entries.filter((entry) => {
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
+    return amsterdamYmdFromEpoch(entry.loadingAt) === day;
+  });
 }
 
 /**

@@ -6,6 +6,7 @@ import { groupEntries } from "../shipPlanning/groupEntries";
 import {
   SHIPS_PER_COLUMN,
   buildLocationPages,
+  entriesForDisplayedLoadDay,
   nextRotationIndex,
   stepLocationIndex,
   type LocationPage,
@@ -219,7 +220,11 @@ function LocationSlide({
   notices: ReactNode;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string, trigger: HTMLElement) => void;
 }) {
-  const groups = useMemo(() => groupEntries(day.entries), [day.entries]);
+  const visibleEntries = useMemo(
+    () => entriesForDisplayedLoadDay(day.entries, day.date),
+    [day.date, day.entries],
+  );
+  const groups = useMemo(() => groupEntries(visibleEntries), [visibleEntries]);
   const pages = useMemo(() => buildLocationPages(groups, SHIPS_PER_COLUMN), [groups]);
   const navigation = useLocationNavigation(pages, resetKey);
   const page = navigation.page;

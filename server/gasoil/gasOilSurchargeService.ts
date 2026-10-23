@@ -20,8 +20,6 @@ import {
 import {
   addApplicableMonths,
   currentApplicableMonth,
-  currentApplicableMonthNetherlands,
-  dutchMonthName,
   referenceDateForApplicableMonth,
 } from "./monthLogic.js";
 import {
@@ -275,15 +273,9 @@ async function resolveNetherlands(
   }
 
   if (isNetherlandsProvider(provider)) {
-    const { result, reason } = await fetchAndCacheNetherlandsMonth(provider, applicableMonth);
+    const { result } = await fetchAndCacheNetherlandsMonth(provider, applicableMonth);
     if (result) return result;
-    return unavailableResult(
-      "NL",
-      source,
-      sourceLabel,
-      reason ?? "Interrijn peildatum niet gevonden. Geen fallback op dagprijs.",
-      applicableMonth,
-    );
+    return unknownMonth("NL", source, sourceLabel, applicableMonth);
   }
 
   // Generic mock providers (tests)
@@ -306,6 +298,17 @@ async function resolveNetherlands(
         return resultFromObservation(cached, "stale", "Laatste gevalideerde waarde (nieuwe fetch ongeldig).");
       }
       return unavailableResult("NL", source, sourceLabel, "Ongeldige bronobservation.", applicableMonth);
+    }
+    if (observation.applicableMonth !== applicableMonth) {
+      if (monthCached) {
+        return resultFromObservation(
+          monthEntryToObservation(monthCached),
+          "ok",
+          null,
+          monthCached.sourceType,
+        );
+      }
+      return unknownMonth("NL", source, sourceLabel, applicableMonth);
     }
     if (monthCached) {
       return resultFromObservation(
@@ -333,14 +336,15 @@ async function resolveNetherlands(
       monthCached.sourceType,
     );
   }
-  if (cached) {
-    const monthNote = observationMatchesApplicableMonth(cached, applicableMonth)
-      ? `Laatst bijgewerkt ${cached.retrievedAt}`
-      : `Verouderde cache voor ${dutchMonthName(cached.applicableMonth)}`;
-    return resultFromObservation(cached, "stale", `${monthNote}. ${outcome.reason}`);
+  if (cached && observationMatchesApplicableMonth(cached, applicableMonth)) {
+    return resultFromObservation(
+      cached,
+      "stale",
+      `Laatst bijgewerkt ${cached.retrievedAt}. ${outcome.reason}`,
+    );
   }
 
-  return unavailableResult("NL", source, sourceLabel, outcome.reason, applicableMonth);
+  return unknownMonth("NL", source, sourceLabel, applicableMonth);
 }
 
 async function fetchAndCacheBelgiumMonth(
@@ -675,24 +679,22 @@ function withMonths(current: GasOilSurchargeResult, next: GasOilSurchargeResult)
 
 export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise<GasOilSurchargesPayload> {
   const now = deps.now?.() ?? new Date();
-  // BE: kalendermaand. NL: vanaf 15e → volgende toepassingsmaand.
-  const beApplicableMonth = currentApplicableMonth(now);
-  const nlApplicableMonth = currentApplicableMonthNetherlands(now);
+  // UI-maand is de kalendermaand in Europe/Amsterdam. De 15e bepaalt alleen de peildatum van een maandobservatie.
+  const applicableMonth = currentApplicableMonth(now);
+  const nextMonth = addApplicableMonths(applicableMonth, 1);
   const nlProvider = deps.nlProvider ?? new NetherlandsInterrijnGasOilProvider({ now: deps.now });
   const beProvider = deps.beProvider ?? new BelgiumStatbelGasOilProvider({ now: deps.now });
   const forceRefresh = deps.forceRefresh === true;
 
-  const nlNextMonth = addApplicableMonths(nlApplicableMonth, 1);
-  const beNextMonth = addApplicableMonths(beApplicableMonth, 1);
   const [nlPair, bePair] = await Promise.all([
     (async () => {
-      const current = await resolveNetherlands(nlProvider, nlApplicableMonth, { forceRefresh, now });
-      const next = await resolveFollowingMonth("NL", nlNextMonth, nlProvider, { forceRefresh });
+      const current = await resolveNetherlands(nlProvider, applicableMonth, { forceRefresh, now });
+      const next = await resolveFollowingMonth("NL", nextMonth, nlProvider, { forceRefresh });
       return withMonths(current, next);
     })(),
     (async () => {
-      const resolved = await resolveBelgium(beProvider, beApplicableMonth, { forceRefresh, now });
-      const next = await resolveFollowingMonth("BE", beNextMonth, beProvider, { forceRefresh });
+      const resolved = await resolveBelgium(beProvider, applicableMonth, { forceRefresh, now });
+      const next = await resolveFollowingMonth("BE", nextMonth, beProvider, { forceRefresh });
       return { country: withMonths(resolved.result, next), diagnostics: resolved.diagnostics };
     })(),
   ]);

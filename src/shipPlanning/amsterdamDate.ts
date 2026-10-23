@@ -9,6 +9,10 @@ export function amsterdamToday(now = new Date()) {
   return YMD.format(now);
 }
 
+export function amsterdamYmdFromEpoch(epochMs: number) {
+  return YMD.format(new Date(epochMs));
+}
+
 export function formatPlanningDate(ymd: string) {
   const stamp = Date.parse(`${ymd}T12:00:00Z`);
   if (!Number.isFinite(stamp)) return ymd;

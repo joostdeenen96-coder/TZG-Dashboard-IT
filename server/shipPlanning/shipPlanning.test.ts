@@ -11,7 +11,7 @@ import { SHIP_PLANNING_ENTITY_TYPE_ID, SHIP_PLANNING_QUERY_PATH, shipPlanningDay
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider } from "./teunesenShipPlanningProvider.js";
 import { groupEntries } from "../../src/shipPlanning/groupEntries.ts";
-import { buildLocationPages, orderLocationGroups, rowsPerColumn, sortEntriesChronologically } from "../../src/shipPlanning/rotation.ts";
+import { buildLocationPages, entriesForDisplayedLoadDay, orderLocationGroups, rowsPerColumn, sortEntriesChronologically } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -641,6 +641,96 @@ test("T1-T11 schepen staan chronologisch, links vroeger dan rechts", () => {
   const missing = mapShipPlanningEntry({ volgorde: 1, laadplaats: { zoeknaam: "HOOFDSTRAAT" } });
   assert.equal(missing.loadingAt, null);
   assert.equal(missing.time, null);
+});
+
+test("S1-S7 ladingdagfilter volgt de bron en splitst daarna vroeg naar laat", () => {
+  const load = (dayNum: number, hour: number, minute: number, order: number) =>
+    entry({
+      loadingLocation: "HOOFDSTRAAT",
+      sourceOrder: order,
+      sourceId: `${dayNum}-${hour}-${minute}-${order}`,
+      loadingAt: amsterdamWallToUtcMs(2026, 10, dayNum, hour, minute, 0),
+      time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+      unloadingDate: dayNum === 23 ? "2026-10-26" : "2026-10-23",
+    });
+  const mixed = [
+    load(22, 10, 0, 8),
+    load(23, 12, 0, 5),
+    load(23, 5, 30, -1),
+    load(22, 5, 30, 3),
+    load(23, 9, 0, 2),
+    load(22, 8, 0, 6),
+    load(23, 6, 0, 0),
+    load(23, 11, 0, 3),
+    load(22, 5, 30, 5),
+    load(22, 8, 0, 7),
+    load(24, 5, 30, 1),
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 9, loadingAt: null, time: null }),
+  ];
+  const visible = entriesForDisplayedLoadDay(mixed, "2026-10-23");
+  assert.equal(visible.some((item) => item.sourceId?.startsWith("22-")), false);
+  assert.equal(visible.some((item) => item.sourceId?.startsWith("24-")), false);
+  assert.equal(visible.some((item) => item.loadingAt == null), true);
+
+  const page = buildLocationPages([{ location: "HOOFDSTRAAT", entries: visible }], 6)[0];
+  assert.equal(page?.columns, 1);
+  assert.deepEqual(
+    page?.left.slice(0, 5).map((item) => item.time),
+    ["05:30", "06:00", "09:00", "11:00", "12:00"],
+  );
+  assert.equal(page?.left[5]?.loadingAt ?? null, null);
+  assert.equal(page?.right.length, 0);
+
+  const sameDay = [12, 6, 9, 7, 11, 8, 10].map((hour, index) =>
+    entry({
+      loadingLocation: "HOOFDSTRAAT",
+      sourceOrder: index,
+      loadingAt: amsterdamWallToUtcMs(2026, 10, 23, hour, 0, 0),
+      time: `${String(hour).padStart(2, "0")}:00`,
+    }),
+  );
+  const split = buildLocationPages([{ location: "HOOFDSTRAAT", entries: entriesForDisplayedLoadDay(sameDay, "2026-10-23") }], 6)[0];
+  assert.equal(split?.columns, 2);
+  assert.deepEqual(split?.left.map((item) => item.time), ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00"]);
+  assert.deepEqual(split?.right.map((item) => item.time), ["12:00"]);
+  const leftMax = Math.max(...(split?.left.map((item) => item.loadingAt ?? 0) ?? []));
+  const rightMin = Math.min(...(split?.right.map((item) => item.loadingAt ?? 0) ?? []));
+  assert.ok(leftMax < rightMin);
+
+  const tied = sortEntriesChronologically(
+    entriesForDisplayedLoadDay(
+      [
+        entry({
+          loadingLocation: "HOOFDSTRAAT",
+          sourceOrder: 5,
+          loadingAt: amsterdamWallToUtcMs(2026, 10, 23, 8, 0, 0),
+          time: "08:00",
+        }),
+        entry({
+          loadingLocation: "HOOFDSTRAAT",
+          sourceOrder: 2,
+          loadingAt: amsterdamWallToUtcMs(2026, 10, 23, 8, 0, 0),
+          time: "08:00",
+        }),
+      ],
+      "2026-10-23",
+    ),
+  );
+  assert.deepEqual(tied.map((item) => item.sourceOrder), [2, 5]);
+
+  const bounds = amsterdamDayBounds("2026-10-23");
+  const filter = shipPlanningDayFilter(bounds.startMs, bounds.endMs);
+  assert.match(filter, /laaddatum GEQ/);
+  assert.match(filter, /laaddatum LEQ/);
+  assert.match(filter, /losdatum GEQ/);
+  assert.match(filter, /losdatum LEQ/);
+  assert.match(filter, /status NEQ "geannuleerd"/);
+  const board = read("src/components/ShipPlanningBoard.tsx");
+  assert.match(board, /entriesForDisplayedLoadDay/);
+  assert.match(board, /ship-nav-prev/);
+  assert.match(board, /ship-nav-next/);
+  assert.equal(board.includes("setInterval"), false);
+  assert.equal(board.includes("ship-rotation-progress"), false);
 });
 
 test("G5 G11 G12 gasolie houdt gelijke tegels en toont beide maanden", () => {

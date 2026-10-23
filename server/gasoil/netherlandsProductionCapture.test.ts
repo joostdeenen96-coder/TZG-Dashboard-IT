@@ -125,14 +125,18 @@ test("NL1–NL18 capture + bootstrap + planning", async () => {
       });
       mark(
         "NL17",
-        payload.nl.status === "ok" &&
-          payload.nl.surchargePerTon === 1.9 &&
-          payload.nl.applicableMonth === "2026-11" &&
-          payload.nl.sourcePricePer100Liters === 164.26,
+        payload.nl.applicableMonth === "2026-10" &&
+          payload.nl.status === "unavailable" &&
+          payload.nl.surchargePerTon === null &&
+          payload.nl.next.applicableMonth === "2026-11" &&
+          payload.nl.next.status === "ok" &&
+          payload.nl.next.surchargePerTon === 1.9 &&
+          payload.nl.next.sourcePricePer100Liters === 164.26,
       );
       mark(
         "NL18",
-        payload.nl.sourcePricePer100Liters === 164.26 &&
+        payload.nl.sourcePricePer100Liters == null &&
+          payload.nl.next.sourcePricePer100Liters === 164.26 &&
           readGasOilDayPrice("NL", "2026-10-20")?.pricePer100Liters === 163.55,
       );
     });
@@ -246,9 +250,12 @@ test("NL1–NL18 capture + bootstrap + planning", async () => {
         }),
         beProvider: beSkip(),
       });
-      assert.equal(plan.nl.status, "ok");
-      assert.equal(plan.nl.applicableMonth, "2026-12");
-      assert.equal(plan.nl.sourceType, "automatic");
+      assert.equal(plan.nl.applicableMonth, "2026-11");
+      assert.equal(plan.nl.status, "unavailable");
+      assert.equal(plan.nl.surchargePerTon, null);
+      assert.equal(plan.nl.next.applicableMonth, "2026-12");
+      assert.equal(plan.nl.next.status, "ok");
+      assert.equal(plan.nl.next.sourceType, "automatic");
     });
   });
 });

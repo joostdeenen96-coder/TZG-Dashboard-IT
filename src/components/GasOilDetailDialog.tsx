@@ -54,10 +54,7 @@ function MonthSection({ result, emphasis }: { result: GasOilSurchargeResult; emp
         {monthLabel(result.applicableMonth)}
       </h3>
       {!known ? (
-        <div className="mt-3 text-[18px] text-mist">
-          <p>{emphasis ? "Niet beschikbaar" : "Nog niet vastgesteld"}</p>
-          {emphasis && result.message ? <p className="mt-2">{result.message}</p> : null}
-        </div>
+        <p className="mt-3 text-[18px] text-mist">Nog niet vastgesteld</p>
       ) : (
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-[18px]">
           <div>

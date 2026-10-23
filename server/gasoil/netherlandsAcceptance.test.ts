@@ -259,15 +259,17 @@ test("NL1–NL21 functionele acceptatie", async () => {
       });
       mark(
         "NL21",
-        ready.nl.status === "ok" &&
-          ready.nl.country === "NL" &&
-          ready.nl.source === "interrijn-cbrb-kbn" &&
-          ready.nl.applicableMonth === "2026-11" &&
-          ready.nl.referenceDate === "2026-10-15" &&
-          ready.nl.sourcePricePer100Liters === 164.26 &&
-          ready.nl.priceExVatPer1000Liters === 1642.6 &&
-          ready.nl.surchargePerTon === 1.9 &&
-          typeof ready.nl.retrievedAt === "string",
+        ready.nl.applicableMonth === "2026-10" &&
+          ready.nl.status === "unavailable" &&
+          ready.nl.surchargePerTon === null &&
+          ready.nl.message === "Nog niet vastgesteld" &&
+          ready.nl.next.applicableMonth === "2026-11" &&
+          ready.nl.next.status === "ok" &&
+          ready.nl.next.referenceDate === "2026-10-15" &&
+          ready.nl.next.sourcePricePer100Liters === 164.26 &&
+          ready.nl.next.priceExVatPer1000Liters === 1642.6 &&
+          ready.nl.next.surchargePerTon === 1.9 &&
+          typeof ready.nl.next.retrievedAt === "string",
       );
     });
 
@@ -289,9 +291,12 @@ test("NL1–NL21 functionele acceptatie", async () => {
         }),
         beProvider: beSkip(),
       });
-      assert.equal(fromCapture.nl.status, "ok");
-      assert.equal(fromCapture.nl.surchargePerTon, 1.9);
-      assert.equal(fromCapture.nl.applicableMonth, "2026-11");
+      assert.equal(fromCapture.nl.applicableMonth, "2026-10");
+      assert.equal(fromCapture.nl.status, "unavailable");
+      assert.equal(fromCapture.nl.surchargePerTon, null);
+      assert.equal(fromCapture.nl.next.applicableMonth, "2026-11");
+      assert.equal(fromCapture.nl.next.status, "ok");
+      assert.equal(fromCapture.nl.next.surchargePerTon, 1.9);
     });
   });
 });

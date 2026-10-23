@@ -392,9 +392,13 @@ test("G1–G8 BE en NL tonen huidige en volgende maand zonder verzonnen toeslag"
     assert.equal(october.be.next.applicableMonth, "2026-11");
     assert.equal(october.be.next.surchargePerTon, 0.96);
     assert.equal(october.be.next.referenceDate, "2026-10-15");
-    assert.equal(october.nl.current.applicableMonth, "2026-11");
-    assert.equal(october.nl.current.surchargePerTon, 1.9);
-    assert.equal(october.nl.next.applicableMonth, "2026-12");
+    assert.equal(october.nl.current.applicableMonth, "2026-10");
+    assert.equal(october.nl.current.status, "unavailable");
+    assert.equal(october.nl.current.surchargePerTon, null);
+    assert.equal(october.nl.current.referenceDate, null);
+    assert.equal(october.nl.current.priceExVatPer1000Liters, null);
+    assert.equal(october.nl.current.message, "Nog niet vastgesteld");
+    assert.equal(october.nl.next.applicableMonth, "2026-11");
     assert.equal(october.nl.next.status, "unavailable");
     assert.equal(october.nl.next.surchargePerTon, null);
     assert.equal(october.nl.next.priceExVatPer1000Liters, null);
@@ -459,5 +463,132 @@ test("volgende NL-maand komt uit de maandcache en niet uit de dagobservatie", as
     assert.equal(payload.nl.next.priceExVatPer1000Liters, 1700);
     assert.notEqual(payload.nl.next.priceExVatPer1000Liters, 1500);
     assert.ok(currentCalls >= 1);
+  });
+});
+
+test("G5–G9 kalendermaand blijft staan als de peildatumobservatie ontbreekt", async () => {
+  const boundaries: Array<[string, string, string]> = [
+    ["2026-10-23T12:00:00+02:00", "2026-10", "2026-11"],
+    ["2026-10-31T23:59:00+01:00", "2026-10", "2026-11"],
+    ["2026-11-01T00:00:00+01:00", "2026-11", "2026-12"],
+    ["2026-11-30T18:00:00+01:00", "2026-11", "2026-12"],
+    ["2026-12-01T00:00:00+01:00", "2026-12", "2027-01"],
+    ["2026-12-31T23:59:00+01:00", "2026-12", "2027-01"],
+    ["2027-01-01T00:00:00+01:00", "2027-01", "2027-02"],
+  ];
+  await withTempDataDir(async () => {
+    for (const [iso, current, next] of boundaries) {
+      const payload = await getGasOilSurcharges({
+        now: () => new Date(iso),
+        nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", {
+          ok: false,
+          reason: "geen peildatum",
+        }),
+        beProvider: mockProvider("BE", "bestat-statbel", "be.STAT / FOD Economie", { ok: false, reason: "skip" }),
+      });
+      assert.equal(payload.nl.current.applicableMonth, current, iso);
+      assert.equal(payload.nl.next.applicableMonth, next, iso);
+      assert.equal(payload.be.current.applicableMonth, current, iso);
+      assert.equal(payload.be.next.applicableMonth, next, iso);
+      assert.equal(payload.nl.surchargePerTon, null, iso);
+      assert.equal(payload.nl.message, "Nog niet vastgesteld", iso);
+      assert.equal(payload.be.surchargePerTon, null, iso);
+    }
+  });
+});
+
+test("ontbrekende oktoberobservatie schuift november niet naar de huidige rij", async () => {
+  await withTempDataDir(async () => {
+    writeGasOilMonthCache({
+      country: "NL",
+      referenceDate: "2026-10-15",
+      applicableMonth: "2026-11",
+      rawSourceValue: 164.26,
+      priceExVatPer1000Liters: 1642.6,
+      productIdentifier: "GASOLIEPRIJS (€/100L CBRB)",
+      source: "interrijn-cbrb-kbn",
+      retrievedAt: "2026-10-16T10:00:00.000Z",
+      sourceLabel: "CBRB/KBN via Interrijn",
+      vatStatus: "excl",
+      sourceType: "automatic",
+    });
+    const october = await getGasOilSurcharges({
+      now: () => new Date("2026-10-23T12:00:00+02:00"),
+      nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", {
+        ok: true,
+        observation: {
+          country: "NL",
+          referenceDate: "2026-10-15",
+          applicableMonth: "2026-11",
+          priceExVatPer1000Liters: 1642.6,
+          source: "interrijn-cbrb-kbn",
+          sourceLabel: "CBRB/KBN via Interrijn",
+          retrievedAt: "2026-10-16T10:00:00.000Z",
+        },
+      }),
+      beProvider: mockProvider("BE", "bestat-statbel", "be.STAT / FOD Economie", { ok: false, reason: "skip" }),
+    });
+    assert.equal(october.nl.current.applicableMonth, "2026-10");
+    assert.equal(october.nl.current.surchargePerTon, null);
+    assert.equal(october.nl.current.message, "Nog niet vastgesteld");
+    assert.equal(october.nl.next.applicableMonth, "2026-11");
+    assert.equal(october.nl.next.surchargePerTon, 1.9);
+    assert.equal(october.nl.next.referenceDate, "2026-10-15");
+  });
+});
+
+test("opgeslagen NL-maandobservaties vullen oktober en november via de bestaande staffel", async () => {
+  await withTempDataDir(async () => {
+    writeGasOilMonthCache({
+      country: "NL",
+      referenceDate: "2026-09-15",
+      applicableMonth: "2026-10",
+      rawSourceValue: 168.65,
+      priceExVatPer1000Liters: 1686.5,
+      productIdentifier: "GASOLIEPRIJS (€/100L CBRB)",
+      source: "interrijn-cbrb-kbn",
+      retrievedAt: "2026-09-16T10:00:00.000Z",
+      sourceLabel: "CBRB/KBN via Interrijn",
+      vatStatus: "excl",
+      sourceType: "automatic",
+    });
+    writeGasOilMonthCache({
+      country: "NL",
+      referenceDate: "2026-10-15",
+      applicableMonth: "2026-11",
+      rawSourceValue: 164.26,
+      priceExVatPer1000Liters: 1642.6,
+      productIdentifier: "GASOLIEPRIJS (€/100L CBRB)",
+      source: "interrijn-cbrb-kbn",
+      retrievedAt: "2026-10-16T10:00:00.000Z",
+      sourceLabel: "CBRB/KBN via Interrijn",
+      vatStatus: "excl",
+      sourceType: "automatic",
+    });
+    const payload = await getGasOilSurcharges({
+      now: () => new Date("2026-10-23T12:00:00+02:00"),
+      nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", {
+        ok: true,
+        observation: {
+          country: "NL",
+          referenceDate: "2026-10-22",
+          applicableMonth: "2026-11",
+          priceExVatPer1000Liters: 1639.1,
+          source: "interrijn-cbrb-kbn",
+          sourceLabel: "CBRB/KBN via Interrijn",
+          retrievedAt: "2026-10-22T12:00:00.000Z",
+        },
+      }),
+      beProvider: mockProvider("BE", "bestat-statbel", "be.STAT / FOD Economie", { ok: false, reason: "skip" }),
+    });
+    assert.equal(payload.nl.current.applicableMonth, "2026-10");
+    assert.equal(payload.nl.current.referenceDate, "2026-09-15");
+    assert.equal(payload.nl.current.priceExVatPer1000Liters, 1686.5);
+    assert.equal(payload.nl.current.surchargePerTon, 2);
+    assert.equal(payload.nl.next.applicableMonth, "2026-11");
+    assert.equal(payload.nl.next.referenceDate, "2026-10-15");
+    assert.equal(payload.nl.next.priceExVatPer1000Liters, 1642.6);
+    assert.equal(payload.nl.next.surchargePerTon, 1.9);
+    assert.notEqual(payload.nl.current.priceExVatPer1000Liters, 1639.1);
   });
 });
