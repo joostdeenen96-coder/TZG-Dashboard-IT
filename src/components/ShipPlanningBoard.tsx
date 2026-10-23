@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { formatPlanningDate } from "../shipPlanning/amsterdamDate";
+import { formatPlanningDate, planningTodayMark, shipPlanningTitle } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
@@ -12,7 +12,7 @@ import {
   type LocationPage,
 } from "../shipPlanning/rotation";
 import { useShipPlanning } from "../services/shipPlanningService";
-import type { ShipPlanningDay, ShipPlanningEntry, ShipPlanningResponse } from "../types/shipPlanning";
+import type { ShipPlanningDay, ShipPlanningEntry } from "../types/shipPlanning";
 import { ShipPlanningDetailDialog } from "./ShipPlanningDetailDialog";
 
 const headings = [
@@ -75,20 +75,19 @@ function BoardTitle({
   pageLabel: string | null;
 }) {
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-3">
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
       <h2
-        className="truncate font-display leading-none font-semibold tracking-[0.06em] uppercase"
+        className="min-w-0 font-display leading-none font-semibold"
         style={{ fontSize: "var(--ship-title, 22px)" }}
+        data-ship-title=""
       >
-        {title}
+        <span className="whitespace-nowrap">{title}</span>
+        {dateLabel ? (
+          <span className="ml-3 font-medium text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }} data-ship-today="">
+            {dateLabel}
+          </span>
+        ) : null}
       </h2>
-      {dateLabel ? (
-        <p className="truncate leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
-          {dateLabel}
-        </p>
-      ) : (
-        <span />
-      )}
       <div className="flex min-w-0 items-center justify-end gap-3">
         {notices}
         {pageLabel ? (
@@ -300,12 +299,6 @@ function LocationSlide({
   );
 }
 
-function planningTitle(data: ShipPlanningResponse, bothEmpty: boolean) {
-  if (bothEmpty) return "Schepenplanning";
-  if (data.scope === "today-and-tomorrow") return "Schepenplanning vandaag en morgen";
-  return data.displayedDay === "tomorrow" ? "Schepenplanning morgen" : "Schepenplanning vandaag";
-}
-
 export function ShipPlanningBoard() {
   const { data, error } = useShipPlanning();
   const [selected, setSelected] = useState<{
@@ -326,8 +319,6 @@ export function ShipPlanningBoard() {
   );
   const shownDays = data?.scope === "today-and-tomorrow" ? data.days : data?.days.slice(0, 1) ?? [];
   const finished = data?.switchReason === "today-empty-confirmed" && data.displayedDay === "tomorrow";
-  const title = data ? planningTitle(data, bothEmpty) : "Schepenplanning";
-  const dateLabel = shownDays.length === 1 && shownDays[0] && !bothEmpty ? formatPlanningDate(shownDays[0].date) : null;
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const notices = (
     <>
@@ -348,19 +339,18 @@ export function ShipPlanningBoard() {
     >
       {status === "unavailable" || status === "disabled" ? (
         <>
-          <BoardTitle title={title} dateLabel={null} notices={notices} pageLabel={null} />
+          <BoardTitle title="Schepenplanning" dateLabel={null} notices={notices} pageLabel={null} />
           <p className="mt-2 text-[18px] text-mist">
             {status === "disabled" ? "Schepenplanning staat uit." : "Schepenplanning tijdelijk niet beschikbaar."}
           </p>
         </>
       ) : bothEmpty ? (
         <>
-          <BoardTitle title={title} dateLabel={null} notices={notices} pageLabel={null} />
+          <BoardTitle title="Schepenplanning" dateLabel={null} notices={notices} pageLabel={null} />
           <p className="mt-2 text-[18px] text-mist">Geen schepen gepland voor vandaag of morgen.</p>
         </>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {shownDays.length > 1 ? <BoardTitle title={title} dateLabel={null} notices={notices} pageLabel={null} /> : null}
           {data?.scope === "today-and-tomorrow" ? (
             <p className="mt-1 shrink-0 text-[14px] text-mist">Beide dagen zijn bij veel ritten minder leesbaar op het scherm.</p>
           ) : null}
@@ -370,10 +360,10 @@ export function ShipPlanningBoard() {
                 key={`${day.date}-${data?.displayedDay ?? ""}`}
                 day={day}
                 resetKey={`${data?.displayedDay ?? ""}:${day.date}`}
-                embedTitle={shownDays.length === 1}
-                title={title}
-                dateLabel={shownDays.length === 1 ? dateLabel : formatPlanningDate(day.date)}
-                notices={shownDays.length === 1 ? notices : null}
+                embedTitle
+                title={shipPlanningTitle(day.date)}
+                dateLabel={planningTodayMark(day.date)}
+                notices={dayIndex === 0 ? notices : null}
                 onOpen={(entry, location, label, trigger) => {
                   returnFocusRef.current = trigger;
                   setSelected({

@@ -419,8 +419,9 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
     assert.match(dialog, new RegExp(label));
   }
   const board = read("src/components/ShipPlanningBoard.tsx");
-  assert.match(board, /Schepenplanning vandaag/);
-  assert.match(board, /Schepenplanning morgen/);
+  assert.match(board, /shipPlanningTitle\(day\.date\)/);
+  assert.equal(board.includes("Schepenplanning vandaag"), false);
+  assert.equal(board.includes("Schepenplanning morgen"), false);
   assert.match(board, /Gegevens tijdelijk niet vernieuwd/);
   assert.match(board, /ship-nav-next/);
   assert.equal(board.includes("setInterval"), false);
