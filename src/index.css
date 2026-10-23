@@ -293,9 +293,10 @@ body {
   --font-meta: clamp(11px, 1.02vh, 15px);
   --font-micro: clamp(10px, 0.88vh, 13px);
   --font-tile-value: calc(var(--font-display-value) * 0.72);
-  --gas-month: clamp(11px, 1.05vh, 16px);
-  --gas-amount: clamp(18px, 1.7vh, 32px);
-  --gas-unit: clamp(10px, 0.85vh, 13px);
+  --gas-month: clamp(11px, 1.05vh, 20px);
+  --gas-amount: clamp(18px, 1.55vh, 34px);
+  --gas-unit: clamp(10px, 0.7vh, 15px);
+  --gas-country: clamp(10px, 0.85vh, 14px);
   --gas-pane-pad: clamp(3px, 0.35vh, 8px);
   --gas-pane-gap: clamp(4px, 0.35vw, 8px);
   --gas-pane-radius: clamp(8px, 0.7vh, 12px);
@@ -475,23 +476,83 @@ body {
   line-height: 1;
 }
 
+.planning-display [data-surcharge="gas-nl"] [data-surcharge-body],
+.planning-display [data-surcharge="gas-be"] [data-surcharge-body] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  justify-content: stretch;
+  height: 100%;
+  min-height: 0;
+  container-type: size;
+  container-name: gasoil;
+}
+
 .planning-display [data-gas-months] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   column-gap: var(--gas-pane-gap);
   align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  --gas-month: clamp(11px, 12cqh, 20px);
+  --gas-amount: clamp(18px, 20cqh, 34px);
+  --gas-unit: clamp(10px, 9cqh, 15px);
 }
 
 .planning-display [data-gas-month] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   height: 100%;
-  gap: clamp(2px, 0.25vh, 6px);
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
   padding: var(--gas-pane-pad);
   border: 1px solid color-mix(in srgb, var(--color-veil) 18%, transparent);
   border-radius: var(--gas-pane-radius);
   background: transparent;
   color: var(--color-paper);
+  overflow: visible;
+}
+
+.planning-display [data-gas-stack] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1px, 3cqh, 6px);
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.planning-display [data-gas-amount] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0px, 1.5cqh, 3px);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.planning-display [data-gas-month-label] {
+  max-width: 100%;
   font-size: var(--gas-month);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: 0.04em;
+}
+
+.planning-display [data-gas-country] {
+  flex: 0 0 auto;
+  font-size: clamp(10px, 8cqh, 14px);
+  line-height: 1.1;
 }
 
 .planning-display [data-gas-month="current"] {
