@@ -92,10 +92,10 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
                   {String((shown.indexOf(active) >= 0 ? shown.indexOf(active) : index) + 1).padStart(2, "0")} / {String(shown.length).padStart(2, "0")}
                 </p>
               </div>
-              <h2 className={density === "compact" ? "mt-0.5 truncate font-display text-[length:clamp(18px,2.2vh,40px)] leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
+              <h2 data-news-title="" className={density === "compact" ? "mt-0.5 truncate font-display leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
                 {active.title}
               </h2>
-              <p className={density === "compact" ? "mt-0.5 truncate text-[length:clamp(13px,1.5vh,26px)] text-paper/90" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
+              <p data-news-body="" className={density === "compact" ? "mt-0.5 truncate" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
               {density === "regular" ? (
                 <p className={`mt-3 text-[18px] ${state.status === "fallback" ? "text-gold" : "text-mist"}`}>
                   {state.status === "fallback" ? "Laatste bekende gegevens · " : ""}

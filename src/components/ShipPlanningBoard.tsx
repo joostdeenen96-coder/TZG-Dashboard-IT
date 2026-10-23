@@ -118,7 +118,8 @@ function ShipTable({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div
-        className={`${columnClass} leading-none font-semibold tracking-[0.08em] text-mist uppercase`}
+        className={`${columnClass} leading-none font-medium tracking-[0.06em] text-mist uppercase`}
+        data-ship-head=""
         style={{ height: "var(--ship-head, 20px)", fontSize: "var(--ship-head-text, 12px)" }}
       >
         {headings.map((heading) => (
