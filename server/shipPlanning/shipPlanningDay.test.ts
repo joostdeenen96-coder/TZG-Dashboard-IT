@@ -15,7 +15,7 @@ import { mapShipPlanningEntry } from "./mapRecord.js";
 import type { ShipPlanningEntry } from "./model.js";
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider, isCancelledEntity, type ShipPlanningDayQuery } from "./teunesenShipPlanningProvider.js";
-import { formatPlanningDate } from "../../src/shipPlanning/amsterdamDate.ts";
+import { formatPlanningDate, planningTodayMark, shipPlanningTitle } from "../../src/shipPlanning/amsterdamDate.ts";
 import { buildLocationPages, nextRotationIndex, orderLocationGroups, stepLocationIndex } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -430,12 +430,42 @@ test("A18 A19 A20 A21 D1 D16 D17 D18 modi en standaard Auto", async () => {
   assert.equal(both.days.length, 2);
 });
 
+test("D1-D12 titel volgt de getoonde planningdag", () => {
+  assert.equal(shipPlanningTitle("2026-10-23"), "Schepenplanning vrijdag 23 oktober");
+  assert.equal(shipPlanningTitle("2026-10-26"), "Schepenplanning maandag 26 oktober");
+  assert.equal(shipPlanningTitle("2026-10-26").toLowerCase().includes("vandaag"), false);
+  assert.equal(shipPlanningTitle("2026-10-26").toLowerCase().includes("morgen"), false);
+  assert.equal(shipPlanningTitle("2026-10-23").toLowerCase().includes("morgen"), false);
+  const friday = shipPlanningTitle("2026-10-23");
+  assert.equal(shipPlanningTitle("2026-10-23"), friday);
+  assert.notEqual(shipPlanningTitle("2026-10-23"), shipPlanningTitle("2026-10-26"));
+  assert.equal(formatPlanningDate("2026-10-23"), "vrijdag 23 oktober");
+  assert.equal(formatPlanningDate("2026-10-26"), "maandag 26 oktober");
+  assert.equal(shipPlanningTitle("2026-10-24"), "Schepenplanning zaterdag 24 oktober");
+  assert.equal(shipPlanningTitle("2026-10-25"), "Schepenplanning zondag 25 oktober");
+  assert.equal(planningTodayMark("2026-10-23", new Date("2026-10-23T12:00:00+02:00")), "Vandaag");
+  assert.equal(planningTodayMark("2026-10-26", new Date("2026-10-23T12:00:00+02:00")), null);
+  const dates = readFileSync(path.join(root, "src/shipPlanning/amsterdamDate.ts"), "utf8");
+  assert.match(dates, /nl-NL/);
+  assert.match(dates, /Europe\/Amsterdam/);
+  assert.equal(dates.includes("getDay("), false);
+  const board = readFileSync(path.join(root, "src/components/ShipPlanningBoard.tsx"), "utf8");
+  assert.match(board, /shipPlanningTitle\(day\.date\)/);
+  assert.match(board, /planningTodayMark\(day\.date\)/);
+  assert.match(board, /--ship-title/);
+  assert.match(board, /whitespace-nowrap/);
+  assert.equal(board.includes("Schepenplanning vandaag"), false);
+  assert.equal(board.includes("Schepenplanning morgen"), false);
+  assert.equal(board.includes("setInterval"), false);
+});
+
 test("D12 D13 D19 titel, datum en player zonder refresh", () => {
   assert.equal(formatPlanningDate("2026-10-22"), "donderdag 22 oktober");
   assert.equal(formatPlanningDate("2026-10-23"), "vrijdag 23 oktober");
   const board = readFileSync(path.join(root, "src/components/ShipPlanningBoard.tsx"), "utf8");
-  assert.match(board, /Schepenplanning vandaag/);
-  assert.match(board, /Schepenplanning morgen/);
+  assert.match(board, /shipPlanningTitle\(day\.date\)/);
+  assert.equal(board.includes("Schepenplanning vandaag"), false);
+  assert.equal(board.includes("Schepenplanning morgen"), false);
   assert.match(board, /Planning vandaag afgerond/);
   assert.match(board, /Geen schepen gepland voor vandaag of morgen/);
   assert.match(board, /ship-nav-prev/);
