@@ -3,29 +3,31 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { parseDashboardConfig } from "../services/dashboardConfig.js";
-import { amsterdamWallToUtcMs } from "./dates.js";
+import { amsterdamWallToUtcMs, amsterdamYmd } from "./dates.js";
 import {
+  NEXT_LOAD_LOOKAHEAD_DAYS,
   activePlanningDay,
   emptyConfirmationCountFromEnv,
   observeTodayQuery,
   resetTodayEmptyConfirmation,
+  todayPlanningIsFinished,
   verdictForDay,
 } from "./daySelection.js";
 import { mapShipPlanningEntry } from "./mapRecord.js";
 import type { ShipPlanningEntry } from "./model.js";
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider, isCancelledEntity, type ShipPlanningDayQuery } from "./teunesenShipPlanningProvider.js";
-import { formatPlanningDate, planningTodayMark, shipPlanningTitle } from "../../src/shipPlanning/amsterdamDate.ts";
+import { formatPlanningDate, planningRelationLabel, planningTodayMark, shipPlanningTitle } from "../../src/shipPlanning/amsterdamDate.ts";
 import { buildLocationPages, nextRotationIndex, orderLocationGroups, stepLocationIndex } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
-function entry(location: string, sourceOrder: number): ShipPlanningEntry {
+function entry(location: string, sourceOrder: number, loadingAt: number | null = null): ShipPlanningEntry {
   return {
     sourceId: `${location}-${sourceOrder}`,
     sourceOrder,
     loadingLocation: location,
-    loadingAt: null,
+    loadingAt,
     time: "07:00",
     customer: "Klant",
     unloadingLocation: "Loskade",
@@ -54,6 +56,18 @@ function dayQuery(date: string, locations: string[], extra: Partial<ShipPlanning
     entries,
     entities: entries,
     ...extra,
+  };
+}
+
+function timedDay(date: string, loads: Array<{ location: string; at: number | null }>): ShipPlanningDayQuery {
+  const entries = loads.map((load, index) => entry(load.location, index, load.at));
+  return {
+    ...dayQuery(date, []),
+    entries,
+    entities: entries,
+    recordCount: entries.length,
+    totalCount: entries.length,
+    complete: true,
   };
 }
 
@@ -452,11 +466,172 @@ test("D1-D12 titel volgt de getoonde planningdag", () => {
   const board = readFileSync(path.join(root, "src/components/ShipPlanningBoard.tsx"), "utf8");
   assert.match(board, /shipPlanningTitle\(day\.date\)/);
   assert.match(board, /planningTodayMark\(day\.date\)/);
+  assert.match(board, /planningRelationLabel\(day\.date\)/);
   assert.match(board, /--ship-title/);
   assert.match(board, /whitespace-nowrap/);
   assert.equal(board.includes("Schepenplanning vandaag"), false);
   assert.equal(board.includes("Schepenplanning morgen"), false);
   assert.equal(board.includes("setInterval"), false);
+  assert.equal(board.includes("getDay("), false);
+  const fridayEvening = new Date("2026-10-23T15:00:00Z");
+  assert.equal(planningRelationLabel("2026-10-23", fridayEvening), "Vandaag");
+  assert.equal(planningRelationLabel("2026-10-24", fridayEvening), "Morgen");
+  assert.equal(planningRelationLabel("2026-10-26", fridayEvening), null);
+  assert.equal(planningTodayMark("2026-10-26", fridayEvening), null);
+});
+
+test("vrijdag 23 oktober met afgeronde lading toont de eerstvolgende dag met lading", async () => {
+  resetShipPlanningCache();
+  const now = new Date("2026-10-23T15:00:00Z");
+  const fridayNoon = amsterdamWallToUtcMs(2026, 10, 23, 12, 0, 0);
+  const fridayLater = amsterdamWallToUtcMs(2026, 10, 23, 13, 30, 0);
+  const mondayLoad = amsterdamWallToUtcMs(2026, 10, 26, 5, 30, 0);
+  assert.equal(
+    todayPlanningIsFinished(
+      [entry("HOOFDSTRAAT", 0, fridayNoon), entry("HOOGVELD(I)", 1, fridayLater)],
+      "2026-10-23",
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    todayPlanningIsFinished([entry("HOOFDSTRAAT", 0, fridayNoon), entry("HOOFDSTRAAT", 1, null)], "2026-10-23", now),
+    false,
+  );
+  const byDate = new Map<string, ShipPlanningDayQuery>([
+    [
+      "2026-10-23",
+      timedDay("2026-10-23", [
+        { location: "HOOFDSTRAAT", at: fridayNoon },
+        { location: "HOOGVELD(I)", at: fridayLater },
+      ]),
+    ],
+    ["2026-10-24", timedDay("2026-10-24", [])],
+    ["2026-10-25", timedDay("2026-10-25", [])],
+    [
+      "2026-10-26",
+      timedDay("2026-10-26", [
+        { location: "HOOFDSTRAAT", at: mondayLoad },
+        { location: "HOOGVELD(I)", at: amsterdamWallToUtcMs(2026, 10, 26, 8, 0, 0) },
+      ]),
+    ],
+  ]);
+  const queried: string[] = [];
+  let tomorrowCalls = 0;
+  const reader: ShipPlanningReader = {
+    async queryToday() {
+      return byDate.get("2026-10-23") ?? timedDay("2026-10-23", []);
+    },
+    async queryTomorrow() {
+      tomorrowCalls += 1;
+      return byDate.get("2026-10-24") ?? timedDay("2026-10-24", []);
+    },
+    async queryDate(ymd) {
+      queried.push(ymd);
+      return byDate.get(ymd) ?? timedDay(ymd, []);
+    },
+  };
+  const shown = await getShipPlanning("auto", harness(reader, () => now));
+  assert.equal(shown.days[0]?.date, "2026-10-26");
+  assert.equal(shipPlanningTitle(shown.days[0]?.date ?? ""), "Schepenplanning maandag 26 oktober");
+  assert.equal(shipPlanningTitle(shown.days[0]?.date ?? "").toLowerCase().includes("morgen"), false);
+  assert.equal(planningTodayMark(shown.days[0]?.date ?? "", now), null);
+  assert.equal(shown.switchReason, "next-load-day");
+  assert.equal(shown.displayedDay, "tomorrow");
+  assert.equal(shown.todayEmptyConfirmed, false);
+  assert.equal(shown.todayRecordCount, 2);
+  assert.equal(tomorrowCalls, 1);
+  assert.deepEqual(queried, ["2026-10-25", "2026-10-26"]);
+  const service = readFileSync(path.join(root, "server/shipPlanning/service.ts"), "utf8");
+  const selection = readFileSync(path.join(root, "server/shipPlanning/daySelection.ts"), "utf8");
+  assert.equal(service.includes("getDay("), false);
+  assert.equal(selection.includes("getDay("), false);
+
+  resetShipPlanningCache();
+  const manual = await getShipPlanning("today", harness(reader, () => now, "Today"));
+  assert.equal(manual.days[0]?.date, "2026-10-23");
+  assert.equal(manual.switchReason, "manual-override");
+  assert.equal(shipPlanningTitle(manual.days[0]?.date ?? ""), "Schepenplanning vrijdag 23 oktober");
+});
+
+test("vrijdag met nog komende lading blijft de kalenderdag van vandaag", async () => {
+  resetShipPlanningCache();
+  const now = new Date("2026-10-23T08:00:00Z");
+  let tomorrowCalls = 0;
+  let dateCalls = 0;
+  const reader: ShipPlanningReader = {
+    async queryToday() {
+      return timedDay("2026-10-23", [
+        { location: "HOOFDSTRAAT", at: amsterdamWallToUtcMs(2026, 10, 23, 6, 0, 0) },
+        { location: "HOOFDSTRAAT", at: amsterdamWallToUtcMs(2026, 10, 23, 12, 0, 0) },
+      ]);
+    },
+    async queryTomorrow() {
+      tomorrowCalls += 1;
+      return timedDay("2026-10-26", [{ location: "HOOFDSTRAAT", at: amsterdamWallToUtcMs(2026, 10, 26, 5, 30, 0) }]);
+    },
+    async queryDate() {
+      dateCalls += 1;
+      return timedDay("2026-10-26", [{ location: "HOOFDSTRAAT", at: amsterdamWallToUtcMs(2026, 10, 26, 5, 30, 0) }]);
+    },
+  };
+  const shown = await getShipPlanning("auto", harness(reader, () => now));
+  assert.equal(shown.days[0]?.date, "2026-10-23");
+  assert.equal(shown.displayedDay, "today");
+  assert.equal(shown.switchReason, "today-active");
+  assert.equal(shipPlanningTitle(shown.days[0]?.date ?? ""), "Schepenplanning vrijdag 23 oktober");
+  assert.equal(tomorrowCalls, 0);
+  assert.equal(dateCalls, 0);
+});
+
+test("tussenliggende dag met alleen lossingen telt niet als lading", async () => {
+  resetShipPlanningCache();
+  const now = new Date("2026-10-23T15:00:00Z");
+  const fridayLoad = amsterdamWallToUtcMs(2026, 10, 23, 12, 0, 0);
+  const mondayLoad = amsterdamWallToUtcMs(2026, 10, 26, 10, 0, 0);
+  const queried: string[] = [];
+  const reader: ShipPlanningReader = {
+    async queryToday() {
+      return timedDay("2026-10-23", [{ location: "HOOFDSTRAAT", at: fridayLoad }]);
+    },
+    async queryTomorrow() {
+      return timedDay("2026-10-24", [{ location: "HOOFDSTRAAT", at: fridayLoad }]);
+    },
+    async queryDate(ymd) {
+      queried.push(ymd);
+      if (ymd === "2026-10-26") return timedDay(ymd, [{ location: "HOOGVELD(I)", at: mondayLoad }]);
+      return timedDay(ymd, []);
+    },
+  };
+  const shown = await getShipPlanning("auto", harness(reader, () => now));
+  assert.equal(shown.days[0]?.date, "2026-10-26");
+  assert.equal(shipPlanningTitle(shown.days[0]?.date ?? ""), "Schepenplanning maandag 26 oktober");
+  assert.deepEqual(queried, ["2026-10-25", "2026-10-26"]);
+});
+
+test("zoektocht naar de volgende lading stopt na de vastgelegde horizon", async () => {
+  resetShipPlanningCache();
+  const now = new Date("2026-10-23T15:00:00Z");
+  const queried: string[] = [];
+  const beyond = amsterdamYmd(now, NEXT_LOAD_LOOKAHEAD_DAYS + 1);
+  const reader: ShipPlanningReader = {
+    async queryToday() {
+      return timedDay("2026-10-23", [{ location: "HOOFDSTRAAT", at: amsterdamWallToUtcMs(2026, 10, 23, 12, 0, 0) }]);
+    },
+    async queryTomorrow() {
+      return timedDay(amsterdamYmd(now, 1), []);
+    },
+    async queryDate(ymd) {
+      queried.push(ymd);
+      return timedDay(ymd, []);
+    },
+  };
+  const shown = await getShipPlanning("auto", harness(reader, () => now));
+  assert.equal(shown.days[0]?.date, "2026-10-23");
+  assert.equal(shown.switchReason, "today-active");
+  assert.equal(shipPlanningTitle(shown.days[0]?.date ?? ""), "Schepenplanning vrijdag 23 oktober");
+  assert.equal(queried.includes(beyond), false);
+  assert.equal(queried.length, NEXT_LOAD_LOOKAHEAD_DAYS - 1);
 });
 
 test("D12 D13 D19 titel, datum en player zonder refresh", () => {
