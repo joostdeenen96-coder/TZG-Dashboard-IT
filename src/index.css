@@ -235,6 +235,7 @@ body {
   animation-fill-mode: forwards;
 }
 
+.dashboard-progress-bar[data-paused="true"],
 .ship-rotation-progress[data-paused="true"] {
   animation-play-state: paused;
 }
@@ -259,11 +260,20 @@ body {
   --ship-row: clamp(30px, 2.8vh, 52px);
   --ship-row-max: clamp(46px, 4.2vh, 72px);
   --dashboard-progress-height: clamp(2px, 0.2vh, 3px);
-  --ship-text: clamp(14px, 1.55vh, 28px);
-  --ship-title: clamp(15px, 1.85vh, 32px);
-  --ship-meta: clamp(12px, 1.35vh, 22px);
   --ship-head: clamp(16px, 1.7vh, 28px);
-  --ship-head-text: clamp(10px, 1.15vh, 18px);
+  --font-display-value: clamp(36px, 3.9vh, 64px);
+  --font-card-title: clamp(18px, 2.1vh, 32px);
+  --font-section-title: clamp(14px, 1.55vh, 24px);
+  --font-table: clamp(13px, 1.34vh, 20px);
+  --font-table-header: clamp(9px, 0.95vh, 14px);
+  --font-body: clamp(12px, 1.25vh, 19px);
+  --font-meta: clamp(11px, 1.02vh, 15px);
+  --font-micro: clamp(10px, 0.88vh, 13px);
+  --font-tile-value: calc(var(--font-display-value) * 0.72);
+  --ship-text: var(--font-table);
+  --ship-title: var(--font-section-title);
+  --ship-meta: var(--font-meta);
+  --ship-head-text: var(--font-table-header);
 }
 
 .planning-frame {
@@ -303,21 +313,26 @@ body {
 }
 
 .planning-display [data-clock-date] {
-  font-size: clamp(15px, 1.6vh, 24px);
+  font-size: var(--font-section-title);
+  font-weight: 500;
 }
 
 .planning-display [data-clock-time] {
-  font-size: clamp(24px, 3vh, 54px);
+  font-size: clamp(22px, 2.6vh, 42px);
+  font-weight: 600;
 }
 
 .planning-display [data-clock-updated] {
   margin-top: clamp(2px, 0.25vh, 6px);
-  font-size: clamp(11px, 1.15vh, 16px);
+  font-size: var(--font-micro);
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .planning-display [data-admin-button] {
   padding: clamp(6px, 0.55vh, 10px) clamp(12px, 0.8vw, 20px);
-  font-size: clamp(12px, 1.15vh, 16px);
+  font-size: var(--font-micro);
+  font-weight: 500;
 }
 
 .planning-display [data-display-toggles] button {
@@ -326,13 +341,16 @@ body {
 }
 
 .planning-display [data-weather-temp] {
-  font-size: clamp(22px, 2.5vh, 40px);
+  font-size: var(--font-card-title);
+  font-weight: 600;
 }
 
 .planning-display [data-weather-label] {
   max-width: clamp(140px, 14vw, 280px);
   margin-top: clamp(2px, 0.25vh, 6px);
-  font-size: clamp(12px, 1.2vh, 18px);
+  font-size: var(--font-micro);
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .planning-display [data-water-grid] {
@@ -349,28 +367,47 @@ body {
 }
 
 .planning-display [data-water-name] {
-  font-size: clamp(22px, 2.5vh, 42px);
+  font-size: var(--font-card-title);
+  font-weight: 600;
 }
 
 .planning-display [data-water-level] {
-  font-size: clamp(40px, 4.6vh, 84px);
+  font-size: var(--font-display-value);
+  font-weight: 600;
+  line-height: 1;
 }
 
 .planning-display [data-water-unit] {
-  font-size: clamp(14px, 1.45vh, 22px);
+  font-size: var(--font-meta);
+  font-weight: 500;
+}
+
+.planning-display [data-water-river],
+.planning-display [data-water-status] {
+  font-size: var(--font-micro);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
 }
 
 .planning-display [data-water-meta],
-.planning-display [data-water-river],
-.planning-display [data-water-status],
 .planning-display [data-water-source],
-.planning-display [data-water-forecast-day],
-.planning-display [data-water-forecast-kind] {
-  font-size: clamp(11px, 1.12vh, 16px);
+.planning-display [data-water-forecast-day] {
+  font-size: var(--font-micro);
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .planning-display [data-water-forecast-value] {
-  font-size: clamp(14px, 1.7vh, 28px);
+  font-size: var(--font-body);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.planning-display [data-water-forecast-kind] {
+  font-size: var(--font-micro);
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 .planning-display [data-diesel-card] {
@@ -398,35 +435,84 @@ body {
 }
 
 .planning-display [data-diesel-label] {
-  font-size: clamp(13px, 1.3vh, 20px);
+  font-size: var(--font-meta);
+  font-weight: 600;
   line-height: 1.1;
 }
 
-.planning-display [data-diesel-value] {
-  font-size: clamp(24px, 3.3vh, 54px);
-  line-height: 1;
-}
-
+.planning-display [data-diesel-value],
 .planning-display [data-gas-value] {
-  font-size: clamp(24px, 3.5vh, 58px);
+  font-size: var(--font-tile-value);
+  font-weight: 600;
   line-height: 1;
 }
 
-.planning-display [data-diesel-unit] {
-  font-size: clamp(12px, 1.25vh, 18px);
+.planning-display [data-surcharge-unavailable] {
+  font-size: var(--font-body);
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--color-mist);
 }
 
+.planning-display [data-diesel-unit],
 .planning-display [data-diesel-meta] {
-  font-size: clamp(11px, 1.08vh, 16px);
+  font-size: var(--font-micro);
+  font-weight: 400;
   line-height: 1.15;
 }
 
 .planning-display [data-density="compact"] [data-news-kicker] {
-  font-size: clamp(11px, 1.15vh, 16px);
+  font-size: var(--font-micro);
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .planning-display [data-density="compact"] [data-news-count] {
-  font-size: clamp(13px, 1.4vh, 20px);
+  font-size: var(--font-meta);
+  font-weight: 500;
+}
+
+.planning-display [data-density="compact"] [data-news-title] {
+  font-size: var(--font-card-title);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.planning-display [data-density="compact"] [data-news-body] {
+  font-size: var(--font-body);
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--color-mist);
+}
+
+.planning-display .news-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.planning-display [data-testid="ship-planning"] h2 {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.planning-display [data-location-label] {
+  font-weight: 600;
+}
+
+.planning-display [data-ship-head] {
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--color-mist) 78%, transparent);
+}
+
+.planning-display [data-testid="ship-planning"] li button {
+  font-weight: 400;
+}
+
+.planning-display [data-testid="ship-planning"] li button .font-semibold {
+  font-weight: 500;
 }
 
 .dashboard-progress-track {
@@ -462,39 +548,55 @@ body {
 }
 
 .planning-display [data-agenda-heading] {
-  font-size: clamp(18px, 2vh, 32px);
+  font-size: var(--font-body);
+  font-weight: 600;
+  line-height: 1.1;
 }
 
 .planning-display [data-agenda-brand] {
-  width: clamp(72px, 7vw, 140px);
+  width: clamp(52px, 4.6vw, 88px);
 }
 
 .planning-display [data-agenda-card] {
-  gap: clamp(8px, 0.6vw, 14px);
+  gap: clamp(6px, 0.4vw, 10px);
   border-radius: clamp(12px, 1.1vh, 20px);
-  padding: clamp(4px, 0.4vh, 10px) clamp(8px, 0.6vw, 14px);
+  border-color: rgba(255, 255, 255, 0.08);
+  padding: clamp(3px, 0.28vh, 8px) clamp(6px, 0.4vw, 12px);
 }
 
 .planning-display [data-agenda-date] {
-  width: clamp(52px, 4.2vw, 88px);
+  width: clamp(44px, 3vw, 64px);
+  border-right-color: rgba(246, 212, 77, 0.22);
 }
 
 .planning-display [data-agenda-day] {
-  font-size: clamp(18px, 2.1vh, 34px);
+  font-size: var(--font-section-title);
+  font-weight: 600;
+  line-height: 1;
 }
 
 .planning-display [data-agenda-month] {
-  margin-top: clamp(1px, 0.15vh, 4px);
-  font-size: clamp(10px, 1vh, 14px);
+  margin-top: clamp(1px, 0.12vh, 3px);
+  font-size: var(--font-micro);
+  font-weight: 500;
+  line-height: 1.1;
 }
 
 .planning-display [data-agenda-title] {
-  font-size: clamp(14px, 1.5vh, 22px);
+  font-size: var(--font-body);
+  font-weight: 500;
   line-height: 1.15;
 }
 
 .planning-display [data-agenda-time] {
-  font-size: clamp(12px, 1.2vh, 18px);
+  font-size: var(--font-meta);
+  font-weight: 400;
+}
+
+.planning-display [data-agenda-note] {
+  font-size: var(--font-body);
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .planning-display [data-agenda-extra] {
@@ -526,4 +628,148 @@ body {
 
 .prtg-alarms-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.dashboard-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding: clamp(16px, 3vh, 40px);
+  background: color-mix(in srgb, var(--color-ink) 72%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-detail-modal.tv-card {
+  display: flex;
+  width: min(920px, 85vw);
+  max-width: min(68rem, 85vw);
+  max-height: min(85vh, 960px);
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  padding: 0;
+}
+
+.dashboard-detail-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: clamp(12px, 1.2vw, 24px);
+  padding: clamp(18px, 2.2vh, 32px) clamp(18px, 1.6vw, 32px) clamp(12px, 1.4vh, 20px);
+}
+
+.dashboard-detail-kicker {
+  font-size: clamp(12px, 1.15vh, 15px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--color-gold);
+}
+
+.dashboard-detail-title {
+  margin-top: 0.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.6vh, 36px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-detail-subtitle {
+  margin-top: 0.4rem;
+  font-size: clamp(15px, 1.5vh, 18px);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--color-mist);
+}
+
+.dashboard-detail-close {
+  display: grid;
+  width: clamp(40px, 4vh, 48px);
+  height: clamp(40px, 4vh, 48px);
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-veil) 15%, transparent);
+  background: color-mix(in srgb, var(--color-veil) 6%, transparent);
+  color: var(--color-mist);
+}
+
+.dashboard-detail-close:hover {
+  color: var(--color-paper);
+}
+
+.dashboard-detail-close:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.dashboard-detail-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 clamp(18px, 1.6vw, 32px) clamp(18px, 2vh, 28px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(246, 212, 77, 0.45) transparent;
+}
+
+.dashboard-detail-footer {
+  flex: 0 0 auto;
+  padding: clamp(10px, 1.2vh, 16px) clamp(18px, 1.6vw, 32px) clamp(14px, 1.6vh, 22px);
+  border-top: 1px solid color-mix(in srgb, var(--color-veil) 10%, transparent);
+  font-size: clamp(13px, 1.25vh, 16px);
+  line-height: 1.35;
+  color: var(--color-mist);
+}
+
+.dashboard-detail-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: clamp(10px, 1.2vh, 16px) clamp(16px, 1.5vw, 28px);
+}
+
+.dashboard-detail-field dt {
+  font-size: clamp(12px, 1.15vh, 14px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--color-mist);
+}
+
+.dashboard-detail-field dd {
+  margin-top: 0.25rem;
+  font-size: clamp(16px, 1.7vh, 20px);
+  font-weight: 400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.dashboard-detail-field-wide {
+  grid-column: 1 / -1;
+}
+
+.dashboard-detail-prose {
+  max-width: 68ch;
+  font-size: clamp(16px, 1.65vh, 20px);
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.dashboard-detail-image {
+  display: block;
+  max-width: min(100%, 420px);
+  max-height: clamp(120px, 22vh, 240px);
+  margin-bottom: clamp(12px, 1.6vh, 20px);
+  border-radius: 16px;
+  object-fit: contain;
 }

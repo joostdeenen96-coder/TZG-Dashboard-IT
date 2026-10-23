@@ -74,10 +74,10 @@ export function WaterChart({ series, forecast }: WaterChartProps) {
     <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="Waterstand en verwachting">
       <line x1={pad.left} y1={yOf(max)} x2={width - pad.right} y2={yOf(max)} className="stroke-veil/15" />
       <line x1={pad.left} y1={yOf(min)} x2={width - pad.right} y2={yOf(min)} className="stroke-veil/15" />
-      <text x={4} y={yOf(max) + 4} className="fill-mist" fontSize="12">
+      <text x={4} y={yOf(max) + 4} className="fill-mist" fontSize="10">
         {max}
       </text>
-      <text x={4} y={yOf(min) + 4} className="fill-mist" fontSize="12">
+      <text x={4} y={yOf(min) + 4} className="fill-mist" fontSize="10">
         {min}
       </text>
       {measured.length > 1 ? <path d={chartPath(measured, xOf, yOf)} fill="none" className="stroke-water" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /> : null}
@@ -87,10 +87,10 @@ export function WaterChart({ series, forecast }: WaterChartProps) {
       {estimateBridge.length > 1 ? (
         <path d={chartPath(estimateBridge, xOf, yOf)} fill="none" className="stroke-mist" strokeWidth="2.2" strokeDasharray="2 4" />
       ) : null}
-      <text x={pad.left} y={height - 4} className="fill-mist" fontSize="12">
+      <text x={pad.left} y={height - 4} className="fill-mist" fontSize="10">
         {dayLabel.format(t0)}
       </text>
-      <text x={width - pad.right} y={height - 4} className="fill-mist" fontSize="12" textAnchor="end">
+      <text x={width - pad.right} y={height - 4} className="fill-mist" fontSize="10" textAnchor="end">
         {dayLabel.format(t1)}
       </text>
     </svg>
