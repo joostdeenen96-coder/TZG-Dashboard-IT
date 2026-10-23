@@ -752,4 +752,17 @@ test("G5 G11 G12 gasolie houdt gelijke tegels en toont beide maanden", () => {
   assert.match(dialog, /Nog niet vastgesteld/);
   assert.match(dialog, /data-gas-detail-month=\{emphasis \? "current" : "next"\}/);
   assert.equal(dialog.includes("€0,00"), false);
+  assert.match(card, /data-gas-stack/);
+  assert.match(card, /data-gas-country/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /grid-template-rows: auto minmax\(0, 1fr\) auto/);
+  assert.match(css, /container-type: size/);
+  assert.match(css, /--gas-amount: clamp\(18px, 20cqh, 34px\)/);
+  const gasCss = css.slice(css.indexOf("[data-gas-months]"), css.indexOf("[data-surcharge-unavailable]"));
+  assert.equal(/position:\s*absolute/.test(gasCss), false);
+  const unknown = card.slice(card.indexOf("data-gas-unknown"));
+  assert.equal(unknown.slice(0, 180).includes("/ ton"), false);
+  assert.equal(card.includes("€2,00"), false);
+  assert.equal(card.includes("€10,00"), false);
+  assert.equal(card.includes("€1,90"), false);
 });

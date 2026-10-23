@@ -142,25 +142,27 @@ function GasOilMonthPane({
   const label = monthName(result?.applicableMonth ?? null) || (kind === "current" ? "Huidige maand" : "Volgende maand");
   const missingMonth = kind === "current" && !result?.applicableMonth;
   return (
-    <div data-gas-month={kind} className="flex h-full min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden text-center">
-      <p className="max-w-full whitespace-nowrap uppercase" data-gas-month-label="">
-        {label}
-      </p>
-      <div className="flex max-w-full flex-col items-center" data-gas-amount={known ? "known" : "unknown"}>
-        {known ? (
-          <>
-            <p className="font-display leading-none font-semibold tabular-nums" data-gas-value="">
-              {formatEuro(result!.surchargePerTon!)}
-            </p>
-            <p data-diesel-unit="">/ ton</p>
-          </>
-        ) : missingMonth ? (
-          <span data-surcharge-unavailable="">Niet beschikbaar</span>
-        ) : (
-          <span className="font-display leading-none font-semibold" data-gas-unknown="">
-            –
-          </span>
-        )}
+    <div data-gas-month={kind}>
+      <div data-gas-stack="">
+        <p className="max-w-full whitespace-nowrap uppercase" data-gas-month-label="">
+          {label}
+        </p>
+        <div data-gas-amount={known ? "known" : "unknown"}>
+          {known ? (
+            <>
+              <p className="font-display leading-none font-semibold tabular-nums" data-gas-value="">
+                {formatEuro(result!.surchargePerTon!)}
+              </p>
+              <p data-diesel-unit="">/ ton</p>
+            </>
+          ) : missingMonth ? (
+            <span data-surcharge-unavailable="">Niet beschikbaar</span>
+          ) : (
+            <span className="font-display leading-none font-semibold" data-gas-unknown="">
+              –
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -196,11 +198,11 @@ function GasOilCell({
         className={`${tileBody} absolute inset-0 w-full text-left disabled:opacity-100 ${canOpen ? "cursor-pointer" : "cursor-default"}`}
       >
         <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
-        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-2" data-gas-months="">
+        <div className="grid-cols-2" data-gas-months="">
           <GasOilMonthPane kind="current" result={current} />
           <GasOilMonthPane kind="next" result={next} />
         </div>
-        <p className="truncate capitalize text-mist" data-diesel-meta="">
+        <p className="truncate capitalize text-mist" data-diesel-meta="" data-gas-country="">
           {countryLabel}
           {stale ? " · verouderd" : ""}
         </p>
