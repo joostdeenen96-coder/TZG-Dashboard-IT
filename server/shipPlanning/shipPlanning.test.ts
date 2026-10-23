@@ -368,11 +368,22 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   assert.match(planning, /ShipPlanningBoard/);
   assert.match(planning, /data-testid="planning-ships"/);
   const tracks = read("src/display/planningFluid.tsx");
-  assert.match(tracks, /minmax\(0, 42fr\)/);
+  assert.match(tracks, /minmax\(0, 39\.4fr\)/);
   assert.match(tracks, /minmax\(0, 32fr\)/);
-  assert.match(tracks, /minmax\(0, 8\.5fr\)/);
+  assert.match(tracks, /minmax\(0, 11\.1fr\)/);
   assert.match(tracks, /minmax\(0, 6\.5fr\)/);
+  assert.match(tracks, /minmax\(0, 47\.4fr\)/);
+  assert.match(tracks, /minmax\(0, 24fr\)/);
+  assert.match(read("src/components/DashboardDetailModal.tsx"), /data-detail-scroll/);
+  assert.match(read("src/components/DashboardDetailModal.tsx"), /role="dialog"/);
+  assert.match(read("src/components/DashboardDetailModal.tsx"), /aria-modal="true"/);
+  assert.match(read("src/components/ShipPlanningDetailDialog.tsx"), /DashboardDetailModal/);
+  assert.match(read("src/components/NewsDetailDialog.tsx"), /DashboardDetailModal/);
+  assert.match(read("src/components/NewsCard.tsx"), /data-news-open/);
+  assert.match(read("src/components/NewsCard.tsx"), /data-paused/);
   const css = read("src/index.css");
+  assert.match(css, /dashboard-detail-scroll/);
+  assert.match(css, /overscroll-behavior: contain/);
   assert.match(css, /--ship-row: clamp\(30px, 2\.8vh, 52px\)/);
   assert.match(css, /--ship-row-max: clamp\(46px, 4\.2vh, 72px\)/);
   assert.match(css, /--dashboard-progress-height: clamp\(2px, 0\.2vh, 3px\)/);
@@ -411,8 +422,9 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   assert.match(board, /Schepenplanning morgen/);
   assert.match(board, /Gegevens tijdelijk niet vernieuwd/);
   assert.match(board, /ROTATION_MS/);
-  assert.match(dialog, /data-testid="ship-planning-detail"/);
-  assert.match(dialog, /createPortal/);
+  assert.match(dialog, /testId="ship-planning-detail"/);
+  assert.match(read("src/components/DashboardDetailModal.tsx"), /data-testid=\{testId\}/);
+  assert.match(read("src/components/DashboardDetailModal.tsx"), /createPortal/);
 });
 
 test("SP27-SP33 player, bestaande tegels en ICT", () => {

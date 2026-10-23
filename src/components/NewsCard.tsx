@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatPublicationDate } from "../lib/format";
 import { useWijNews } from "../services/newsService";
 import type { WijNewsItem } from "../types";
 import { CardState } from "./CardState";
+import { NewsDetailDialog } from "./NewsDetailDialog";
 
 const ROTATE_MS = 20_000;
 
@@ -30,6 +31,8 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
   const state = useWijNews();
   const [index, setIndex] = useState(0);
   const [hiddenPhoto, setHiddenPhoto] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const ready = state.status === "ready" || state.status === "fallback" ? state : null;
   const liveItems = ready?.data.connected ? ready.data.items : [];
   const sample = ready !== null && !ready.data.connected;
@@ -42,12 +45,12 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
   }, [rotationKey]);
 
   useEffect(() => {
-    if (shown.length < 2) return;
+    if (detailOpen || shown.length < 2) return;
     const id = window.setInterval(() => {
       setIndex((current) => (current + 1) % shown.length);
     }, ROTATE_MS);
     return () => window.clearInterval(id);
-  }, [shown.length, rotationKey]);
+  }, [detailOpen, shown.length, rotationKey]);
 
   if (state.status === "error") {
     return <CardState status="error" title="WijTeunesen" message={state.message} />;
@@ -71,7 +74,16 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className={density === "compact" ? "flex h-full min-h-0 items-center gap-[clamp(8px,0.8vw,16px)] px-[clamp(12px,1vw,22px)] py-[clamp(4px,0.45vh,10px)]" : "flex h-full min-h-0 gap-8 px-10 py-6"}>
+          <button
+            ref={triggerRef}
+            type="button"
+            data-testid="news-open"
+            data-news-open=""
+            className="absolute inset-0 z-[1] cursor-pointer hover:bg-white/[0.04] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold"
+            aria-label={active.title}
+            onClick={() => setDetailOpen(true)}
+          />
+          <div className={density === "compact" ? "pointer-events-none relative z-[2] flex h-full min-h-0 items-center gap-[clamp(8px,0.8vw,16px)] px-[clamp(12px,1vw,22px)] py-[clamp(4px,0.45vh,10px)]" : "pointer-events-none relative z-[2] flex h-full min-h-0 gap-8 px-10 py-6"}>
             {density === "regular" && active.imagePath && hiddenPhoto !== active.id ? (
               <div className="flex w-[380px] shrink-0 items-center justify-center">
                 <img
@@ -95,7 +107,7 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
               <h2 data-news-title="" className={density === "compact" ? "mt-0.5 truncate font-display leading-tight font-semibold" : "mt-2 line-clamp-2 pb-1 font-display text-[42px] leading-tight font-semibold tracking-[-0.015em]"}>
                 {active.title}
               </h2>
-              <p data-news-body="" className={density === "compact" ? "mt-0.5 truncate" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
+              <p data-news-body="" className={density === "compact" ? "news-excerpt mt-0.5" : "mt-3 line-clamp-[16] text-[22px] leading-snug text-paper/90"}>{active.summary}</p>
               {density === "regular" ? (
                 <p className={`mt-3 text-[18px] ${state.status === "fallback" ? "text-gold" : "text-mist"}`}>
                   {state.status === "fallback" ? "Laatste bekende gegevens · " : ""}
@@ -107,8 +119,22 @@ export function NewsCard({ density = "regular" }: { density?: "regular" | "compa
         </motion.div>
       </AnimatePresence>
       <div className="dashboard-progress-track" data-news-progress="">
-        <div key={`${active.id}-${index}`} className="progress-bar dashboard-progress-bar" style={{ animationDuration: `${ROTATE_MS}ms` }} />
+        <div
+          key={`${active.id}-${index}`}
+          className="progress-bar dashboard-progress-bar"
+          data-paused={detailOpen ? "true" : "false"}
+          style={{ animationDuration: `${ROTATE_MS}ms` }}
+        />
       </div>
+      {detailOpen ? (
+        <NewsDetailDialog
+          item={active}
+          sample={sample}
+          site={ready?.data.site ?? null}
+          returnFocus={triggerRef.current}
+          onClose={() => setDetailOpen(false)}
+        />
+      ) : null}
     </article>
   );
 }

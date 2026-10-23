@@ -12,9 +12,9 @@ export function usePlanningFluid() {
 
 /** Shares of the area under the header. Gaps and padding sit outside these tracks. */
 export const PLANNING_TRACKS = {
-  operations: "minmax(0, 42fr)",
+  operations: "minmax(0, 39.4fr)",
   ships: "minmax(0, 32fr)",
-  news: "minmax(0, 8.5fr)",
+  news: "minmax(0, 11.1fr)",
   agenda: "minmax(0, 6.5fr)",
 } as const;
 
@@ -23,9 +23,9 @@ export const PLANNING_TRACKS = {
  * The freed share goes to the water charts. News and agenda stay on the same tracks.
  */
 export const PLANNING_TRACKS_TALL = {
-  operations: "minmax(0, 50fr)",
+  operations: "minmax(0, 47.4fr)",
   ships: "minmax(0, 24fr)",
-  news: "minmax(0, 8.5fr)",
+  news: "minmax(0, 11.1fr)",
   agenda: "minmax(0, 6.5fr)",
 } as const;
 

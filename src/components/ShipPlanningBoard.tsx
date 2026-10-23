@@ -113,7 +113,7 @@ function ShipTable({
   location: string;
   label: string;
   columnClass: string;
-  onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
+  onOpen: (entry: ShipPlanningEntry, location: string, label: string, trigger: HTMLElement) => void;
 }) {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -147,7 +147,7 @@ function ShipTable({
                 type="button"
                 className={`${columnClass} h-full w-full overflow-hidden text-left leading-none hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gold ${rowIndex % 2 === 1 ? "bg-white/[0.04]" : ""}`}
                 style={{ fontSize: "var(--ship-text, 20px)" }}
-                onClick={() => onOpen(entry, location, label)}
+                onClick={(event) => onOpen(entry, location, label, event.currentTarget)}
               >
                 <span className="min-w-0 truncate font-display font-semibold tabular-nums" title={cellTitle(entry.time)}>
                   {entry.time ?? "—"}
@@ -198,7 +198,7 @@ function LocationSlide({
   title: string;
   dateLabel: string | null;
   notices: ReactNode;
-  onOpen: (entry: ShipPlanningEntry, location: string, label: string) => void;
+  onOpen: (entry: ShipPlanningEntry, location: string, label: string, trigger: HTMLElement) => void;
   onProgress: (state: { key: string; active: boolean }) => void;
 }) {
   const groups = useMemo(() => groupEntries(day.entries), [day.entries]);
@@ -305,6 +305,7 @@ export function ShipPlanningBoard() {
   const finished = data?.switchReason === "today-empty-confirmed" && data.displayedDay === "tomorrow";
   const title = data ? planningTitle(data, bothEmpty) : "Schepenplanning";
   const dateLabel = shownDays.length === 1 && shownDays[0] && !bothEmpty ? formatPlanningDate(shownDays[0].date) : null;
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const [progress, setProgress] = useState<{ key: string; active: boolean } | null>(null);
   const onProgress = useCallback((next: { key: string; active: boolean }) => {
     setProgress((current) => (current?.key === next.key && current.active === next.active ? current : next));
@@ -355,7 +356,8 @@ export function ShipPlanningBoard() {
                 title={title}
                 dateLabel={shownDays.length === 1 ? dateLabel : formatPlanningDate(day.date)}
                 notices={shownDays.length === 1 ? notices : null}
-                onOpen={(entry, location, label) =>
+                onOpen={(entry, location, label, trigger) => {
+                  returnFocusRef.current = trigger;
                   setSelected({
                     entry,
                     location,
@@ -367,8 +369,8 @@ export function ShipPlanningBoard() {
                         : dayIndex === 1
                           ? "Morgen"
                           : "Vandaag",
-                  })
-                }
+                  });
+                }}
                 onProgress={onProgress}
               />
             ))}
@@ -391,6 +393,7 @@ export function ShipPlanningBoard() {
           entry={selected.entry}
           location={selected.label}
           planningDate={`${selected.dayLabel} · ${selected.planningDate}`}
+          returnFocus={returnFocusRef.current}
           onClose={() => setSelected(null)}
         />
       ) : null}
