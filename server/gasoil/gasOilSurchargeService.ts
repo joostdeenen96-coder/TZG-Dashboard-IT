@@ -4,6 +4,7 @@ import type {
   GasOilCountry,
   GasOilPriceObservation,
   GasOilProviderHealth,
+  GasOilCountryPayload,
   GasOilSurchargeResult,
   GasOilSurchargesPayload,
 } from "./model.js";
@@ -17,11 +18,10 @@ import {
   type GasOilMonthCacheEntry,
 } from "./cache.js";
 import {
+  addApplicableMonths,
   currentApplicableMonth,
   currentApplicableMonthNetherlands,
   dutchMonthName,
-  formatIsoDate,
-  formatYearMonth,
   referenceDateForApplicableMonth,
 } from "./monthLogic.js";
 import {
@@ -52,36 +52,6 @@ export type GasOilServiceDeps = {
   forceRefresh?: boolean;
 };
 
-function amsterdamParts(now: Date) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Amsterdam",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(now)
-      .map((part) => [part.type, part.value]),
-  );
-  return {
-    year: Number(parts.year),
-    month: Number(parts.month),
-    day: Number(parts.day),
-  };
-}
-
-function nextApplicableMonth(applicableMonth: string) {
-  const match = /^(\d{4})-(\d{2})$/.exec(applicableMonth);
-  if (!match) throw new Error(`Ongeldige toepassingsmaand: ${applicableMonth}`);
-  let year = Number(match[1]);
-  let month = Number(match[2]) + 1;
-  if (month > 12) {
-    month = 1;
-    year += 1;
-  }
-  return formatYearMonth(year, month);
-}
-
 function diagnosticsEnabled() {
   if (process.env.GASOIL_DIAGNOSTICS === "1") return true;
   return (process.env.NODE_ENV || "development") !== "production";
@@ -102,11 +72,12 @@ function unavailableResult(
   source: GasOilSurchargeResult["source"],
   sourceLabel: string,
   message: string,
+  applicableMonth: string | null = null,
 ): GasOilSurchargeResult {
   return {
     country,
     status: "unavailable",
-    applicableMonth: null,
+    applicableMonth,
     referenceDate: null,
     priceExVatPer1000Liters: null,
     surchargePerTon: null,
@@ -233,7 +204,13 @@ async function fetchAndCacheNetherlandsMonth(
         };
       }
       return {
-        result: unavailableResult("NL", "interrijn-cbrb-kbn", INTERRIJN_SOURCE_LABEL, "Ongeldige bronobservation."),
+        result: unavailableResult(
+          "NL",
+          "interrijn-cbrb-kbn",
+          INTERRIJN_SOURCE_LABEL,
+          "Ongeldige bronobservation.",
+          applicableMonth,
+        ),
         reason: "Ongeldige bronobservation.",
       };
     }
@@ -305,6 +282,7 @@ async function resolveNetherlands(
       source,
       sourceLabel,
       reason ?? "Interrijn peildatum niet gevonden. Geen fallback op dagprijs.",
+      applicableMonth,
     );
   }
 
@@ -327,7 +305,7 @@ async function resolveNetherlands(
       if (cached && observationMatchesApplicableMonth(cached, applicableMonth)) {
         return resultFromObservation(cached, "stale", "Laatste gevalideerde waarde (nieuwe fetch ongeldig).");
       }
-      return unavailableResult("NL", source, sourceLabel, "Ongeldige bronobservation.");
+      return unavailableResult("NL", source, sourceLabel, "Ongeldige bronobservation.", applicableMonth);
     }
     if (monthCached) {
       return resultFromObservation(
@@ -362,7 +340,7 @@ async function resolveNetherlands(
     return resultFromObservation(cached, "stale", `${monthNote}. ${outcome.reason}`);
   }
 
-  return unavailableResult("NL", source, sourceLabel, outcome.reason);
+  return unavailableResult("NL", source, sourceLabel, outcome.reason, applicableMonth);
 }
 
 async function fetchAndCacheBelgiumMonth(
@@ -413,7 +391,13 @@ async function fetchAndCacheBelgiumMonth(
         };
       }
       return {
-        result: unavailableResult("BE", "bestat-statbel", STATBEL_SOURCE_LABEL, "Ongeldige bronobservation."),
+        result: unavailableResult(
+          "BE",
+          "bestat-statbel",
+          STATBEL_SOURCE_LABEL,
+          "Ongeldige bronobservation.",
+          applicableMonth,
+        ),
         diagnostics: { ...baseDiag, ...diagnostics, vatStatus: "unavailable", cacheHit: false },
         reason: "Ongeldige bronobservation.",
       };
@@ -533,6 +517,7 @@ async function resolveBelgium(
         source,
         sourceLabel,
         reason ?? "be.STAT peildatum niet gevonden. Geen fallback.",
+        applicableMonth,
       ),
       diagnostics,
     };
@@ -572,7 +557,7 @@ async function resolveBelgium(
         };
       }
       return {
-        result: unavailableResult("BE", source, sourceLabel, "Ongeldige bronobservation."),
+        result: unavailableResult("BE", source, sourceLabel, "Ongeldige bronobservation.", applicableMonth),
         diagnostics,
       };
     }
@@ -617,9 +602,75 @@ async function resolveBelgium(
     };
   }
   return {
-    result: unavailableResult("BE", source, sourceLabel, outcome.reason),
+    result: unavailableResult("BE", source, sourceLabel, outcome.reason, applicableMonth),
     diagnostics,
   };
+}
+
+function unknownMonth(
+  country: GasOilCountry,
+  source: GasOilSurchargeResult["source"],
+  sourceLabel: string,
+  applicableMonth: string,
+): GasOilSurchargeResult {
+  return {
+    ...unavailableResult(country, source, sourceLabel, "Nog niet vastgesteld"),
+    applicableMonth,
+    referenceDate: null,
+    priceExVatPer1000Liters: null,
+    surchargePerTon: null,
+    staffelRange: null,
+  };
+}
+
+function isEstablishedMonth(result: GasOilSurchargeResult | null, applicableMonth: string) {
+  return (
+    result != null &&
+    result.status !== "unavailable" &&
+    result.applicableMonth === applicableMonth &&
+    typeof result.surchargePerTon === "number"
+  );
+}
+
+/**
+ * Volgende maand alleen uit een vastgelegde peildatumobservatie.
+ * De actuele dagprijs wordt niet als toekomstige maandprijs gebruikt.
+ */
+async function resolveFollowingMonth(
+  country: GasOilCountry,
+  applicableMonth: string,
+  provider: GasOilPriceProvider | NetherlandsInterrijnGasOilProvider | BelgiumStatbelGasOilProvider,
+  options: { forceRefresh: boolean },
+): Promise<GasOilSurchargeResult> {
+  const source = country === "NL" ? ("interrijn-cbrb-kbn" as const) : ("bestat-statbel" as const);
+  const sourceLabel = provider.sourceLabel || (country === "NL" ? INTERRIJN_SOURCE_LABEL : STATBEL_SOURCE_LABEL);
+  const cached = await loadMonthEntry(country, applicableMonth);
+  if (cached && !options.forceRefresh) {
+    return resultFromObservation(monthEntryToObservation(cached), "ok", null, cached.sourceType);
+  }
+
+  if (country === "NL" && isNetherlandsProvider(provider)) {
+    const { result } = await fetchAndCacheNetherlandsMonth(provider, applicableMonth);
+    if (isEstablishedMonth(result, applicableMonth) && result) return result;
+  }
+  if (country === "BE" && isBelgiumProvider(provider)) {
+    const { result } = await fetchAndCacheBelgiumMonth(provider, applicableMonth);
+    if (isEstablishedMonth(result, applicableMonth) && result) return result;
+  }
+
+  if (cached) {
+    return resultFromObservation(
+      monthEntryToObservation(cached),
+      "stale",
+      "Laatste gevalideerde maandwaarde.",
+      cached.sourceType,
+    );
+  }
+  return unknownMonth(country, source, sourceLabel, applicableMonth);
+}
+
+function withMonths(current: GasOilSurchargeResult, next: GasOilSurchargeResult): GasOilCountryPayload {
+  return { ...current, current, next };
 }
 
 export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise<GasOilSurchargesPayload> {
@@ -631,45 +682,29 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
   const beProvider = deps.beProvider ?? new BelgiumStatbelGasOilProvider({ now: deps.now });
   const forceRefresh = deps.forceRefresh === true;
 
-  const [nl, beResolved] = await Promise.all([
-    resolveNetherlands(nlProvider, nlApplicableMonth, { forceRefresh, now }),
-    resolveBelgium(beProvider, beApplicableMonth, { forceRefresh, now }),
+  const nlNextMonth = addApplicableMonths(nlApplicableMonth, 1);
+  const beNextMonth = addApplicableMonths(beApplicableMonth, 1);
+  const [nlPair, bePair] = await Promise.all([
+    (async () => {
+      const current = await resolveNetherlands(nlProvider, nlApplicableMonth, { forceRefresh, now });
+      const next = await resolveFollowingMonth("NL", nlNextMonth, nlProvider, { forceRefresh });
+      return withMonths(current, next);
+    })(),
+    (async () => {
+      const resolved = await resolveBelgium(beProvider, beApplicableMonth, { forceRefresh, now });
+      const next = await resolveFollowingMonth("BE", beNextMonth, beProvider, { forceRefresh });
+      return { country: withMonths(resolved.result, next), diagnostics: resolved.diagnostics };
+    })(),
   ]);
 
-  // Prefetch next month when its peildatum is already available.
-  const today = amsterdamParts(now);
-  const todayIso = formatIsoDate(today.year, today.month, today.day);
-  const upcomingBe = nextApplicableMonth(beApplicableMonth);
-  const upcomingNl = nextApplicableMonth(nlApplicableMonth);
-  const upcomingBeRef = referenceDateForApplicableMonth(upcomingBe);
-  const upcomingNlRef = referenceDateForApplicableMonth(upcomingNl);
-  if (upcomingBeRef <= todayIso) {
-    if (isBelgiumProvider(beProvider) && (forceRefresh || !(await loadMonthEntry("BE", upcomingBe)))) {
-      try {
-        await fetchAndCacheBelgiumMonth(beProvider, upcomingBe);
-      } catch {
-        // Prefetch is best-effort.
-      }
-    }
-  }
-  if (upcomingNlRef <= todayIso) {
-    if (isNetherlandsProvider(nlProvider) && (forceRefresh || !(await loadMonthEntry("NL", upcomingNl)))) {
-      try {
-        await fetchAndCacheNetherlandsMonth(nlProvider, upcomingNl);
-      } catch {
-        // Prefetch is best-effort.
-      }
-    }
-  }
-
   const payload: GasOilSurchargesPayload = {
-    nl,
-    be: beResolved.result,
+    nl: nlPair,
+    be: bePair.country,
     fetchedAt: now.toISOString(),
   };
 
   if (diagnosticsEnabled()) {
-    payload.diagnostics = { be: beResolved.diagnostics };
+    payload.diagnostics = { be: bePair.diagnostics };
   }
 
   return payload;

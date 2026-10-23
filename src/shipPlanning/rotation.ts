@@ -58,6 +58,33 @@ export function rowsPerColumn(listHeight: number, rowHeight = 32) {
 
 export const rowsPerPage = rowsPerColumn;
 
+function loadingInstant(entry: ShipPlanningEntry) {
+  return typeof entry.loadingAt === "number" && Number.isFinite(entry.loadingAt) ? entry.loadingAt : null;
+}
+
+/**
+ * Eerst op laaddatum, daarna op oorspronkelijke bronvolgorde.
+ * Ontbrekende of ongeldige tijden blijven achteraan, in bronvolgorde.
+ */
+export function sortEntriesChronologically(entries: ShipPlanningEntry[]) {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => {
+      const leftAt = loadingInstant(left.entry);
+      const rightAt = loadingInstant(right.entry);
+      if (leftAt != null && rightAt != null && leftAt !== rightAt) return leftAt - rightAt;
+      if (leftAt != null && rightAt == null) return -1;
+      if (leftAt == null && rightAt != null) return 1;
+      const leftOrder = left.entry.sourceOrder;
+      const rightOrder = right.entry.sourceOrder;
+      if (leftOrder != null && rightOrder != null && leftOrder !== rightOrder) return leftOrder - rightOrder;
+      if (leftOrder != null && rightOrder == null) return -1;
+      if (leftOrder == null && rightOrder != null) return 1;
+      return left.index - right.index;
+    })
+    .map((row) => row.entry);
+}
+
 /** Links eerst vullen tot de kolomgrens, daarna rechts. Geen oneven/even. */
 export function splitSequential(entries: ShipPlanningEntry[], perColumn: number) {
   const size = Math.max(1, perColumn);
@@ -73,11 +100,12 @@ export function buildLocationPages(
   const pageCapacity = columnSize * 2;
   const pages: LocationPage[] = [];
   for (const group of orderLocationGroups(groups)) {
-    const locationCount = group.entries.length;
+    const sorted = sortEntriesChronologically(group.entries);
+    const locationCount = sorted.length;
     const locationPageCount = Math.ceil(locationCount / pageCapacity);
     for (let pageInLocation = 0; pageInLocation < locationPageCount; pageInLocation += 1) {
       const start = pageInLocation * pageCapacity;
-      const slice = group.entries.slice(start, start + pageCapacity);
+      const slice = sorted.slice(start, start + pageCapacity);
       const split = splitSequential(slice, columnSize);
       pages.push({
         location: group.location,
@@ -95,14 +123,50 @@ export function buildLocationPages(
   return pages;
 }
 
-/** Houdt de huidige pagina als die nog bestaat. Een verdwenen laadplaats schuift niet terug naar het begin. */
+function pageIndex(
+  pages: LocationPage[],
+  location: string,
+  pageInLocation: number | null,
+) {
+  if (pageInLocation != null) {
+    const exact = pages.findIndex(
+      (candidate) => candidate.location === location && candidate.pageInLocation === pageInLocation,
+    );
+    if (exact >= 0) return exact;
+  }
+  const sameLocation = pages
+    .map((candidate, index) => ({ candidate, index }))
+    .filter((row) => row.candidate.location === location);
+  if (sameLocation.length === 0) return -1;
+  if (pageInLocation == null) return sameLocation[0]?.index ?? -1;
+  const notAfter = sameLocation.filter((row) => row.candidate.pageInLocation <= pageInLocation);
+  return (notAfter.at(-1) ?? sameLocation[0]).index;
+}
+
+/**
+ * Houdt de actieve laadplaats/pagina vast na een datarefresh.
+ * Is de pagina weg maar de laadplaats niet, dan blijft die laadplaats.
+ * Is de laadplaats weg, dan volgt de eerstvolgende state. Nooit een sprong terug naar het begin
+ * zolang er nog een latere state bestaat.
+ */
 export function nextRotationIndex(current: number, previousPages: LocationPage[], nextPages: LocationPage[]) {
   if (nextPages.length === 0) return 0;
   const page = previousPages[current];
   if (!page) return Math.min(Math.max(current, 0), nextPages.length - 1);
-  const same = nextPages.findIndex(
-    (candidate) => candidate.location === page.location && candidate.pageInLocation === page.pageInLocation,
-  );
-  if (same >= 0) return same;
-  return Math.min(current, nextPages.length - 1);
+  const exact = pageIndex(nextPages, page.location, page.pageInLocation);
+  if (exact >= 0) return exact;
+  for (let cursor = current + 1; cursor < previousPages.length; cursor += 1) {
+    const candidate = previousPages[cursor];
+    if (!candidate) continue;
+    const found = pageIndex(nextPages, candidate.location, candidate.pageInLocation);
+    if (found >= 0) return found;
+  }
+  return 0;
+}
+
+/** Handmatige stap. Eerste + links en laatste + rechts lopen rond. */
+export function stepLocationIndex(current: number, count: number, delta: number) {
+  if (count <= 0) return 0;
+  const base = ((current % count) + count) % count;
+  return (base + delta + count) % count;
 }

@@ -227,6 +227,29 @@ body {
   animation-fill-mode: forwards;
 }
 
+.ship-nav-button {
+  display: grid;
+  width: clamp(40px, 3.4vh, 48px);
+  height: clamp(36px, 3.2vh, 44px);
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-veil) 18%, transparent);
+  background: transparent;
+  color: var(--color-mist);
+}
+
+.ship-nav-button:hover,
+.ship-nav-button:focus-visible {
+  color: var(--color-gold);
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.ship-nav-button:disabled {
+  opacity: 0.35;
+}
+
 .ship-rotation-progress {
   width: 100%;
   transform-origin: left center;
@@ -440,11 +463,31 @@ body {
   line-height: 1.1;
 }
 
-.planning-display [data-diesel-value],
-.planning-display [data-gas-value] {
+.planning-display [data-diesel-value] {
   font-size: var(--font-tile-value);
   font-weight: 600;
   line-height: 1;
+}
+
+.planning-display [data-gas-month] {
+  font-size: var(--font-body);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--color-paper);
+}
+
+.planning-display [data-gas-month="current"] {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-gold) 14%, transparent);
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+.planning-display [data-gas-month] [data-gas-value] {
+  font-size: var(--font-body);
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .planning-display [data-surcharge-unavailable] {

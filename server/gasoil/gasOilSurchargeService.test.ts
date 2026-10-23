@@ -81,9 +81,18 @@ test("NL unavailable zonder cache toont geen 0-toeslag", async () => {
       }),
     });
     assert.equal(payload.nl.status, "unavailable");
+    assert.equal(payload.nl.applicableMonth, "2026-11");
+    assert.equal(payload.nl.current.applicableMonth, "2026-11");
     assert.equal(payload.nl.surchargePerTon, null);
+    assert.equal(payload.nl.referenceDate, null);
     assert.equal(payload.nl.priceExVatPer1000Liters, null);
     assert.notEqual(payload.nl.surchargePerTon, 0);
+    assert.equal(payload.nl.next.applicableMonth, "2026-12");
+    assert.equal(payload.nl.next.surchargePerTon, null);
+    assert.equal(payload.be.current.applicableMonth, "2026-11");
+    assert.equal(payload.be.current.surchargePerTon, null);
+    assert.equal(payload.be.next.applicableMonth, "2026-12");
+    assert.equal(payload.be.next.message, "Nog niet vastgesteld");
   });
 });
 
@@ -351,5 +360,104 @@ test("health gasoil bronnen: unavailable/stale zonder server-unhealthy te forcer
     });
     assert.equal(health.find((row) => row.id === "interrijnCbrb")?.status, "unavailable");
     assert.equal(health.find((row) => row.id === "statbelGasOil")?.status, "unavailable");
+  });
+});
+
+test("G1–G8 BE en NL tonen huidige en volgende maand zonder verzonnen toeslag", async () => {
+  await withTempDataDir(async () => {
+    const be = new BelgiumStatbelGasOilProvider({
+      fetchText: async (url) => (url.includes("c42c9c16") ? dayFixtureOtherDate : historyFixtureJson),
+      now: () => new Date("2026-10-23T12:00:00+02:00"),
+    });
+    const october = await getGasOilSurcharges({
+      now: () => new Date("2026-10-23T12:00:00+02:00"),
+      forceRefresh: true,
+      nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", {
+        ok: true,
+        observation: {
+          country: "NL",
+          referenceDate: "2026-10-15",
+          applicableMonth: "2026-11",
+          priceExVatPer1000Liters: 1642.6,
+          source: "interrijn-cbrb-kbn",
+          sourceLabel: "CBRB/KBN via Interrijn",
+          retrievedAt: "2026-10-16T10:00:00.000Z",
+        },
+      }),
+      beProvider: be,
+    });
+    assert.equal(october.be.applicableMonth, "2026-10");
+    assert.equal(october.be.current.applicableMonth, "2026-10");
+    assert.equal(october.be.current.surchargePerTon, 0.93);
+    assert.equal(october.be.next.applicableMonth, "2026-11");
+    assert.equal(october.be.next.surchargePerTon, 0.96);
+    assert.equal(october.be.next.referenceDate, "2026-10-15");
+    assert.equal(october.nl.current.applicableMonth, "2026-11");
+    assert.equal(october.nl.current.surchargePerTon, 1.9);
+    assert.equal(october.nl.next.applicableMonth, "2026-12");
+    assert.equal(october.nl.next.status, "unavailable");
+    assert.equal(october.nl.next.surchargePerTon, null);
+    assert.equal(october.nl.next.priceExVatPer1000Liters, null);
+    assert.equal(october.nl.next.referenceDate, null);
+    assert.notEqual(october.nl.next.surchargePerTon, 0);
+    assert.equal(october.nl.next.message, "Nog niet vastgesteld");
+
+    const november = await getGasOilSurcharges({
+      now: () => new Date("2026-11-01T00:30:00+01:00"),
+      forceRefresh: true,
+      nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", { ok: false, reason: "skip" }),
+      beProvider: be,
+    });
+    assert.equal(november.be.current.applicableMonth, "2026-11");
+    assert.equal(november.be.current.surchargePerTon, 0.96);
+    assert.equal(november.be.next.applicableMonth, "2026-12");
+    assert.equal(november.be.next.surchargePerTon, null);
+    assert.equal(november.be.next.referenceDate, null);
+    assert.notEqual(november.be.next.surchargePerTon, 0);
+    assert.equal(november.be.next.message, "Nog niet vastgesteld");
+  });
+});
+
+test("volgende NL-maand komt uit de maandcache en niet uit de dagobservatie", async () => {
+  await withTempDataDir(async () => {
+    writeGasOilMonthCache({
+      country: "NL",
+      referenceDate: "2026-11-15",
+      applicableMonth: "2026-12",
+      rawSourceValue: 170,
+      priceExVatPer1000Liters: 1700,
+      productIdentifier: "GASOLIEPRIJS (€/100L CBRB)",
+      source: "interrijn-cbrb-kbn",
+      retrievedAt: "2026-11-16T10:00:00.000Z",
+      sourceLabel: "CBRB/KBN via Interrijn",
+      vatStatus: "excl",
+      sourceType: "automatic",
+    });
+    let currentCalls = 0;
+    const payload = await getGasOilSurcharges({
+      now: () => new Date("2026-11-10T12:00:00+01:00"),
+      nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", async () => {
+        currentCalls += 1;
+        return {
+          ok: true,
+          observation: {
+            country: "NL",
+            referenceDate: "2026-11-20",
+            applicableMonth: "2026-11",
+            priceExVatPer1000Liters: 1500,
+            source: "interrijn-cbrb-kbn",
+            sourceLabel: "CBRB/KBN via Interrijn",
+            retrievedAt: "2026-11-20T12:00:00.000Z",
+          },
+        };
+      }),
+      beProvider: mockProvider("BE", "bestat-statbel", "be.STAT / FOD Economie", { ok: false, reason: "skip" }),
+    });
+    assert.equal(payload.nl.current.applicableMonth, "2026-11");
+    assert.equal(payload.nl.next.applicableMonth, "2026-12");
+    assert.equal(payload.nl.next.referenceDate, "2026-11-15");
+    assert.equal(payload.nl.next.priceExVatPer1000Liters, 1700);
+    assert.notEqual(payload.nl.next.priceExVatPer1000Liters, 1500);
+    assert.ok(currentCalls >= 1);
   });
 });

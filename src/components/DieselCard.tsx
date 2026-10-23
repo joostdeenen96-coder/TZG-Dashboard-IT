@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useDieselSurcharge } from "../services/dieselService";
 import { useGasOilSurcharges } from "../services/gasOilService";
 import type { DieselWeek } from "../types";
-import type { GasOilSurchargeResult } from "../types/gasoil";
+import type { GasOilCountryPayload, GasOilSurchargeResult } from "../types/gasoil";
 import { formatEuro } from "../lib/format";
 import { GasOilDetailDialog } from "./GasOilDetailDialog";
 
@@ -127,22 +127,53 @@ function DieselWeekCell({ week, emphasize }: { week: DieselWeek | null; emphasiz
   );
 }
 
+function monthKnown(result: GasOilSurchargeResult | null | undefined) {
+  return !!result && result.status !== "unavailable" && typeof result.surchargePerTon === "number";
+}
+
+function GasOilMonthLine({
+  kind,
+  result,
+}: {
+  kind: "current" | "next";
+  result: GasOilSurchargeResult | null;
+}) {
+  const known = monthKnown(result);
+  const label = monthName(result?.applicableMonth ?? null) || (kind === "current" ? "Huidige maand" : "Volgende maand");
+  return (
+    <p data-gas-month={kind} className="flex min-w-0 items-baseline justify-between gap-2">
+      <span className="truncate capitalize" data-gas-month-label="">
+        {label}
+      </span>
+      <span className="shrink-0 tabular-nums" data-gas-amount={known ? "known" : "unknown"}>
+        {known ? (
+          <>
+            <span data-gas-value="">{formatEuro(result!.surchargePerTon!)}</span>
+            <span data-diesel-unit=""> / ton</span>
+          </>
+        ) : kind === "current" && !result?.applicableMonth ? (
+          <span data-surcharge-unavailable="">Niet beschikbaar</span>
+        ) : (
+          <span data-gas-unknown="">–</span>
+        )}
+      </span>
+    </p>
+  );
+}
+
 function GasOilCell({
   result,
   countryLabel,
   onOpen,
 }: {
-  result: GasOilSurchargeResult | null;
+  result: GasOilCountryPayload | null;
   countryLabel: string;
   onOpen: () => void;
 }) {
-  const unavailable = !result || result.status === "unavailable";
-  const stale = result?.status === "stale";
-  const canOpen =
-    !!result &&
-    (result.status === "ok" || result.status === "stale") &&
-    typeof result.surchargePerTon === "number";
-
+  const current = result?.current ?? result;
+  const next = result?.next ?? null;
+  const stale = current?.status === "stale" || next?.status === "stale";
+  const canOpen = result != null;
   const key = countryLabel === "België" ? "gas-be" : "gas-nl";
   return (
     <li
@@ -160,19 +191,12 @@ function GasOilCell({
         className={`${tileBody} absolute inset-0 w-full text-left disabled:opacity-100 ${canOpen ? "cursor-pointer" : "cursor-default"}`}
       >
         <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
-        <div className="flex min-h-0 flex-1 items-center">
-          {unavailable ? (
-            <p className="font-display leading-tight" data-surcharge-unavailable="">Niet beschikbaar</p>
-          ) : (
-            <p className="font-display text-[42px] leading-none font-semibold tabular-nums text-paper" data-gas-value="">
-              {formatEuro(result!.surchargePerTon!)}
-              <span className="ml-1 text-[18px] font-normal text-mist" data-diesel-unit="">/ ton</span>
-            </p>
-          )}
+        <div className="flex min-h-0 flex-1 flex-col justify-center gap-1">
+          <GasOilMonthLine kind="current" result={current} />
+          <GasOilMonthLine kind="next" result={next} />
         </div>
-        <p className="truncate text-[15px] capitalize text-mist" data-diesel-meta="">
+        <p className="truncate capitalize text-mist" data-diesel-meta="">
           {countryLabel}
-          {result?.applicableMonth ? ` · ${monthName(result.applicableMonth)}` : ""}
           {stale ? " · verouderd" : ""}
         </p>
       </button>
@@ -201,7 +225,7 @@ function DieselStatusCell({
 export function DieselCard() {
   const dieselState = useDieselSurcharge();
   const gasOilState = useGasOilSurcharges();
-  const [detail, setDetail] = useState<GasOilSurchargeResult | null>(null);
+  const [detail, setDetail] = useState<"NL" | "BE" | null>(null);
 
   const dieselReady = dieselState.status === "ready" || dieselState.status === "fallback";
   const dieselWeeks = dieselReady
@@ -242,26 +266,18 @@ export function DieselCard() {
             <DieselStatusCell title="Dieseltoeslag" message="Toeslag laden." />
           </>
         )}
-        <GasOilCell
-          result={gasOil?.nl ?? null}
-          countryLabel="Nederland"
-          onOpen={() => {
-            if (gasOil?.nl) setDetail(gasOil.nl);
-          }}
-        />
-        <GasOilCell
-          result={gasOil?.be ?? null}
-          countryLabel="België"
-          onOpen={() => {
-            if (gasOil?.be) setDetail(gasOil.be);
-          }}
-        />
+        <GasOilCell result={gasOil?.nl ?? null} countryLabel="Nederland" onOpen={() => setDetail("NL")} />
+        <GasOilCell result={gasOil?.be ?? null} countryLabel="België" onOpen={() => setDetail("BE")} />
       </ul>
       {dieselState.status === "fallback" ? (
         <p className="mt-1 truncate text-center text-[13px] text-gold">Laatste bekende dieselgegevens</p>
       ) : null}
-      {detail && (detail.status === "ok" || detail.status === "stale") ? (
-        <GasOilDetailDialog result={detail} onClose={() => setDetail(null)} />
+      {detail && gasOil ? (
+        <GasOilDetailDialog
+          current={detail === "NL" ? gasOil.nl.current : gasOil.be.current}
+          next={detail === "NL" ? gasOil.nl.next : gasOil.be.next}
+          onClose={() => setDetail(null)}
+        />
       ) : null}
     </article>
   );

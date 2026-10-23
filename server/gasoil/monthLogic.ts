@@ -72,6 +72,14 @@ export function referenceDateForApplicableMonth(applicableMonth: string) {
 /** Spec-alias: getReferenceDate(applicableMonth) */
 export const getReferenceDate = referenceDateForApplicableMonth;
 
+/** Volgende of vorige toepassingsmaand, zonder kalenderdag. December + 1 = januari volgend jaar. */
+export function addApplicableMonths(applicableMonth: string, delta = 1) {
+  const match = /^(\d{4})-(\d{2})$/.exec(applicableMonth);
+  if (!match) throw new Error(`Ongeldige toepassingsmaand: ${applicableMonth}`);
+  const cursor = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + delta, 1));
+  return formatYearMonth(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1);
+}
+
 export function applicableMonthFromReferenceDate(referenceDate: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(referenceDate);
   if (!match) throw new Error(`Ongeldige peildatum: ${referenceDate}`);

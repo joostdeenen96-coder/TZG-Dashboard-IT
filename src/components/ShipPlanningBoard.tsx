@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPlanningDate } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
-  ROTATION_MS,
   SHIPS_PER_COLUMN,
   buildLocationPages,
   nextRotationIndex,
+  stepLocationIndex,
   type LocationPage,
 } from "../shipPlanning/rotation";
 import { useShipPlanning } from "../services/shipPlanningService";
@@ -36,7 +37,7 @@ function cellTitle(value: string | null | undefined) {
   return text ? text : undefined;
 }
 
-function useRotation(pages: LocationPage[], resetKey: string, paused: boolean) {
+function useLocationNavigation(pages: LocationPage[], resetKey: string) {
   const [index, setIndex] = useState(0);
   const previous = useRef(pages);
   const keyRef = useRef(resetKey);
@@ -52,16 +53,13 @@ function useRotation(pages: LocationPage[], resetKey: string, paused: boolean) {
     previous.current = pages;
   }, [pages, resetKey]);
 
-  useEffect(() => {
-    if (paused || pages.length < 2) return;
-    const id = window.setInterval(() => {
-      setIndex((current) => (current + 1) % pages.length);
-    }, ROTATION_MS);
-    return () => window.clearInterval(id);
-  }, [paused, pages.length, resetKey]);
-
-  const safeIndex = pages.length === 0 ? 0 : Math.min(index, pages.length - 1);
-  return { page: pages[safeIndex] ?? null, index: safeIndex, count: pages.length };
+  const count = pages.length;
+  const safeIndex = count === 0 ? 0 : Math.min(index, count - 1);
+  const step = (delta: number) => {
+    if (count < 2) return;
+    setIndex((current) => stepLocationIndex(current, count, delta));
+  };
+  return { page: pages[safeIndex] ?? null, index: safeIndex, count, step };
 }
 
 function BoardTitle({
@@ -150,7 +148,7 @@ function ShipTable({
                 onClick={(event) => onOpen(entry, location, label, event.currentTarget)}
               >
                 <span className="min-w-0 truncate font-display font-semibold tabular-nums" title={cellTitle(entry.time)}>
-                  {entry.time ?? "—"}
+                  {entry.time ?? "–"}
                 </span>
                 <span className="min-w-0 truncate" title={cellTitle(entry.customer)}>
                   {entry.customer ?? "—"}
@@ -180,37 +178,53 @@ function ShipTable({
   );
 }
 
+function NavButton({
+  direction,
+  disabled,
+  onStep,
+}: {
+  direction: "prev" | "next";
+  disabled: boolean;
+  onStep: (delta: number) => void;
+}) {
+  const previous = direction === "prev";
+  return (
+    <button
+      type="button"
+      className="ship-nav-button"
+      data-testid={previous ? "ship-nav-prev" : "ship-nav-next"}
+      aria-label={previous ? "Vorige laadplaats" : "Volgende laadplaats"}
+      disabled={disabled}
+      onClick={() => onStep(previous ? -1 : 1)}
+    >
+      {previous ? <ChevronLeft className="h-5 w-5" strokeWidth={2.2} /> : <ChevronRight className="h-5 w-5" strokeWidth={2.2} />}
+    </button>
+  );
+}
+
 function LocationSlide({
   day,
   resetKey,
-  paused,
   embedTitle,
   title,
   dateLabel,
   notices,
   onOpen,
-  onProgress,
 }: {
   day: ShipPlanningDay;
   resetKey: string;
-  paused: boolean;
   embedTitle: boolean;
   title: string;
   dateLabel: string | null;
   notices: ReactNode;
   onOpen: (entry: ShipPlanningEntry, location: string, label: string, trigger: HTMLElement) => void;
-  onProgress: (state: { key: string; active: boolean }) => void;
 }) {
   const groups = useMemo(() => groupEntries(day.entries), [day.entries]);
   const pages = useMemo(() => buildLocationPages(groups, SHIPS_PER_COLUMN), [groups]);
-  const rotation = useRotation(pages, resetKey, paused);
-  const page = rotation.page;
-  const pageLabel = rotation.count > 1 ? `${rotation.index + 1} / ${rotation.count}` : null;
-  const progressKey = page ? `${resetKey}:${page.location}:${page.pageInLocation}` : resetKey;
-
-  useEffect(() => {
-    onProgress({ key: progressKey, active: rotation.count > 1 && page != null });
-  }, [onProgress, page, progressKey, rotation.count]);
+  const navigation = useLocationNavigation(pages, resetKey);
+  const page = navigation.page;
+  const pageLabel = navigation.count > 1 ? `${navigation.index + 1} / ${navigation.count}` : null;
+  const navDisabled = navigation.count < 2;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -220,20 +234,24 @@ function LocationSlide({
       ) : (
         <>
           {!embedTitle && dateLabel ? <p className="text-[16px] leading-none text-mist">{dateLabel}</p> : null}
-          <div className="mt-1 flex shrink-0 items-baseline justify-between gap-3">
-            <h3
-              className="truncate font-display leading-none font-semibold tracking-[0.04em] uppercase"
-              style={{ fontSize: "var(--ship-title, 20px)" }}
-              data-location={page.location}
-              data-location-label={page.label}
-            >
-              {page.label}
-              {page.locationPageCount > 1 ? (
-                <span className="ml-3 font-medium tracking-normal text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
-                  {page.pageInLocation + 1}/{page.locationPageCount}
-                </span>
-              ) : null}
-            </h3>
+          <div className="mt-1 flex shrink-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <NavButton direction="prev" disabled={navDisabled} onStep={navigation.step} />
+              <h3
+                className="truncate font-display leading-none font-semibold tracking-[0.04em] uppercase"
+                style={{ fontSize: "var(--ship-title, 20px)" }}
+                data-location={page.location}
+                data-location-label={page.label}
+              >
+                {page.label}
+                {page.locationPageCount > 1 ? (
+                  <span className="ml-3 font-medium tracking-normal text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }}>
+                    {page.pageInLocation + 1}/{page.locationPageCount}
+                  </span>
+                ) : null}
+              </h3>
+              <NavButton direction="next" disabled={navDisabled} onStep={navigation.step} />
+            </div>
             <p className="shrink-0 leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }} data-ship-count={page.locationCount}>
               {page.locationCount === 1 ? "1 schip" : `${page.locationCount} schepen`}
             </p>
@@ -306,10 +324,6 @@ export function ShipPlanningBoard() {
   const title = data ? planningTitle(data, bothEmpty) : "Schepenplanning";
   const dateLabel = shownDays.length === 1 && shownDays[0] && !bothEmpty ? formatPlanningDate(shownDays[0].date) : null;
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const [progress, setProgress] = useState<{ key: string; active: boolean } | null>(null);
-  const onProgress = useCallback((next: { key: string; active: boolean }) => {
-    setProgress((current) => (current?.key === next.key && current.active === next.active ? current : next));
-  }, []);
   const notices = (
     <>
       {status === "stale" ? <p className="truncate text-[14px] leading-none text-gold">Gegevens tijdelijk niet vernieuwd</p> : null}
@@ -351,7 +365,6 @@ export function ShipPlanningBoard() {
                 key={`${day.date}-${data?.displayedDay ?? ""}`}
                 day={day}
                 resetKey={`${data?.displayedDay ?? ""}:${day.date}`}
-                paused={selected != null}
                 embedTitle={shownDays.length === 1}
                 title={title}
                 dateLabel={shownDays.length === 1 ? dateLabel : formatPlanningDate(day.date)}
@@ -371,23 +384,11 @@ export function ShipPlanningBoard() {
                           : "Vandaag",
                   });
                 }}
-                onProgress={onProgress}
               />
             ))}
           </div>
         </div>
       )}
-      {progress?.active ? (
-        <div className="dashboard-progress-track" data-testid="ship-rotation-track">
-          <div
-            key={progress.key}
-            data-testid="ship-rotation-progress"
-            data-paused={selected != null ? "true" : "false"}
-            className="ship-rotation-progress dashboard-progress-bar"
-            style={{ animationDuration: `${ROTATION_MS}ms` }}
-          />
-        </div>
-      ) : null}
       {selected ? (
         <ShipPlanningDetailDialog
           entry={selected.entry}

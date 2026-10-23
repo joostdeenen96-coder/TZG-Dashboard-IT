@@ -74,9 +74,15 @@ export type GasOilBeDiagnostics = {
   dayEndpoint: string;
 };
 
+/** Huidige toeslag plus de expliciete huidige en volgende maand. Top-level velden blijven de huidige maand. */
+export type GasOilCountryPayload = GasOilSurchargeResult & {
+  current: GasOilSurchargeResult;
+  next: GasOilSurchargeResult;
+};
+
 export type GasOilSurchargesPayload = {
-  nl: GasOilSurchargeResult;
-  be: GasOilSurchargeResult;
+  nl: GasOilCountryPayload;
+  be: GasOilCountryPayload;
   fetchedAt: string;
   /** Alleen in development of bij GASOIL_DIAGNOSTICS=1. */
   diagnostics?: {

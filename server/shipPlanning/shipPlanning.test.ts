@@ -11,7 +11,7 @@ import { SHIP_PLANNING_ENTITY_TYPE_ID, SHIP_PLANNING_QUERY_PATH, shipPlanningDay
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider } from "./teunesenShipPlanningProvider.js";
 import { groupEntries } from "../../src/shipPlanning/groupEntries.ts";
-import { buildLocationPages, orderLocationGroups, rowsPerColumn } from "../../src/shipPlanning/rotation.ts";
+import { buildLocationPages, orderLocationGroups, rowsPerColumn, sortEntriesChronologically } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -38,6 +38,7 @@ function entry(partial: Partial<ShipPlanningEntry> & Pick<ShipPlanningEntry, "lo
     sourceId: partial.sourceId ?? null,
     sourceOrder: partial.sourceOrder,
     loadingLocation: partial.loadingLocation,
+    loadingAt: partial.loadingAt ?? null,
     time: partial.time ?? "07:00",
     customer: partial.customer ?? "Klant",
     unloadingLocation: partial.unloadingLocation ?? "Loskade",
@@ -421,7 +422,8 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
   assert.match(board, /Schepenplanning vandaag/);
   assert.match(board, /Schepenplanning morgen/);
   assert.match(board, /Gegevens tijdelijk niet vernieuwd/);
-  assert.match(board, /ROTATION_MS/);
+  assert.match(board, /ship-nav-next/);
+  assert.equal(board.includes("setInterval"), false);
   assert.match(dialog, /testId="ship-planning-detail"/);
   assert.match(read("src/components/DashboardDetailModal.tsx"), /data-testid=\{testId\}/);
   assert.match(read("src/components/DashboardDetailModal.tsx"), /createPortal/);
@@ -558,13 +560,101 @@ test("V4-V14 adaptieve kolommen, paginering en compacte kaart", () => {
   assert.match(board, /grid-cols-2/);
   assert.equal(board.includes("max-w-[1240px]"), false);
   assert.match(board, /SHIPS_PER_COLUMN/);
-  assert.match(board, /ship-rotation-progress/);
-  assert.match(board, /data-paused/);
+  assert.match(board, /ship-nav-prev/);
+  assert.match(board, /ship-nav-next/);
+  assert.equal(board.includes("ship-rotation-progress"), false);
+  assert.equal(board.includes("setInterval"), false);
+  assert.match(read("src/components/NewsCard.tsx"), /dashboard-progress-track/);
   assert.match(read("src/index.css"), /prefers-reduced-motion: reduce/);
   assert.match(read("src/index.css"), /animation-play-state: paused/);
   assert.match(board, /ROW_HEIGHT = 40/);
   assert.match(board, /text-right/);
   assert.match(board, /truncate/);
   assert.equal(/overflow-y-auto|marquee/.test(board), false);
-  assert.match(board, /ROTATION_MS/);
+  assert.equal(board.includes("ROTATION_MS"), false);
+});
+
+test("T1-T11 schepen staan chronologisch, links vroeger dan rechts", () => {
+  const descending = [11.5, 11, 10.5, 10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6];
+  const ships = descending.map((hour, index) =>
+    entry({
+      loadingLocation: "HOOFDSTRAAT",
+      sourceOrder: index,
+      sourceId: `h-${index}`,
+      loadingAt: hour,
+      time: "23:59",
+    }),
+  );
+  const page = buildLocationPages([{ location: "HOOFDSTRAAT", entries: ships }], 6)[0];
+  assert.equal(page?.columns, 2);
+  assert.deepEqual(page?.left.map((item) => item.loadingAt), [6, 6.5, 7, 7.5, 8, 8.5]);
+  assert.deepEqual(page?.right.map((item) => item.loadingAt), [9, 9.5, 10, 10.5, 11, 11.5]);
+  const leftMax = Math.max(...(page?.left.map((item) => item.loadingAt ?? 0) ?? []));
+  const rightMin = Math.min(...(page?.right.map((item) => item.loadingAt ?? 0) ?? []));
+  assert.ok(leftMax < rightMin);
+
+  const tied = sortEntriesChronologically([
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 5, loadingAt: 8, time: "08:00" }),
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 2, loadingAt: 8, time: "08:00" }),
+  ]);
+  assert.deepEqual(tied.map((item) => item.sourceOrder), [2, 5]);
+
+  const oppositeLabels = sortEntriesChronologically([
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 0, loadingAt: 2, time: "00:00" }),
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 1, loadingAt: 1, time: "23:00" }),
+  ]);
+  assert.deepEqual(oppositeLabels.map((item) => item.loadingAt), [1, 2]);
+  assert.equal(oppositeLabels[0]?.time, "23:00");
+
+  const withMissing = sortEntriesChronologically([
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 4, loadingAt: null, time: null }),
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 1, loadingAt: null, time: null }),
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 9, loadingAt: 2, time: "07:00" }),
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 8, loadingAt: 1, time: "06:00" }),
+  ]);
+  assert.equal(withMissing.length, 4);
+  assert.deepEqual(withMissing.map((item) => item.sourceOrder), [8, 9, 1, 4]);
+
+  const eighteen = Array.from({ length: 18 }, (_, index) =>
+    entry({ loadingLocation: "HOOFDSTRAAT", sourceOrder: 18 - index, loadingAt: 18 - index, time: "12:00" }),
+  );
+  const pages = buildLocationPages([{ location: "HOOFDSTRAAT", entries: eighteen }], 6);
+  assert.equal(pages.length, 2);
+  assert.deepEqual(
+    pages.flatMap((item) => [...item.left, ...item.right].map((ship) => ship.loadingAt)),
+    Array.from({ length: 18 }, (_, index) => index + 1),
+  );
+  const few = buildLocationPages(
+    [{ location: "HOOGVELD(I)", entries: eighteen.slice(0, 6).map((item, index) => ({ ...item, loadingLocation: "HOOGVELD(I)", loadingAt: 6 - index })) }],
+    6,
+  );
+  assert.equal(few[0]?.columns, 1);
+  assert.deepEqual(few[0]?.left.map((item) => item.loadingAt), [1, 2, 3, 4, 5, 6]);
+
+  const mapped = mapShipPlanningEntry({
+    volgorde: 3,
+    laaddatum: amsterdamWallToUtcMs(2026, 10, 23, 6, 0, 0),
+    laadplaats: { zoeknaam: "HOOFDSTRAAT" },
+  });
+  assert.equal(mapped.loadingAt, amsterdamWallToUtcMs(2026, 10, 23, 6, 0, 0));
+  assert.equal(mapped.time, "06:00");
+  const missing = mapShipPlanningEntry({ volgorde: 1, laadplaats: { zoeknaam: "HOOFDSTRAAT" } });
+  assert.equal(missing.loadingAt, null);
+  assert.equal(missing.time, null);
+});
+
+test("G5 G11 G12 gasolie houdt gelijke tegels en toont beide maanden", () => {
+  const card = read("src/components/DieselCard.tsx");
+  const css = read("src/index.css");
+  const dialog = read("src/components/GasOilDetailDialog.tsx");
+  assert.match(card, /kind="current"/);
+  assert.match(card, /kind="next"/);
+  assert.match(card, /data-gas-month=\{kind\}/);
+  assert.match(card, /data-gas-unknown/);
+  assert.match(card, /repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\[data-gas-month="current"\]/);
+  assert.match(css, /--color-gold/);
+  assert.match(dialog, /Nog niet vastgesteld/);
+  assert.match(dialog, /data-gas-detail-month=\{emphasis \? "current" : "next"\}/);
+  assert.equal(dialog.includes("€0,00"), false);
 });
