@@ -9,6 +9,7 @@ export type ShipPlanningDisplayedDay = "today" | "tomorrow";
 export type ShipPlanningSwitchReason =
   | "today-active"
   | "today-empty-confirmed"
+  | "next-load-day"
   | "manual-override"
   | "stale-today"
   | "source-unavailable";

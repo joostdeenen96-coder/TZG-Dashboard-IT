@@ -1,6 +1,35 @@
+import { formatAmsterdamDate } from "./dates.js";
 import type { ShipPlanningDayQuery } from "./teunesenShipPlanningProvider.js";
 
 export type TodayVerdict = "active" | "empty" | "invalid";
+
+/** Kalenderdagen na vandaag waarin een dag met lading gezocht wordt. Lege dagen bepaalt de bron. */
+export const NEXT_LOAD_LOOKAHEAD_DAYS = 6;
+
+type TimedEntry = { loadingAt: number | null };
+
+/** Zelfde zichtbaarheidsregel als het bord: een rit zonder laaddatum blijft bij deze dag. */
+export function loadingEntriesOnDay<T extends TimedEntry>(entries: T[], day: string) {
+  return entries.filter((entry) => {
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
+    return formatAmsterdamDate(entry.loadingAt) === day;
+  });
+}
+
+export function dayHasLoadingEntries(entries: TimedEntry[], day: string) {
+  return loadingEntriesOnDay(entries, day).length > 0;
+}
+
+/**
+ * Vandaag is afgerond als elke zichtbare lading al begonnen is.
+ * Een rit zonder laadtijd houdt de dag open. Alleen lossingen tellen niet als lading.
+ */
+export function todayPlanningIsFinished(entries: TimedEntry[], day: string, now: Date) {
+  const visible = loadingEntriesOnDay(entries, day);
+  if (visible.length === 0) return entries.length > 0;
+  const nowMs = now.getTime();
+  return visible.every((entry) => typeof entry.loadingAt === "number" && entry.loadingAt < nowMs);
+}
 
 /**
  * Leeg telt alleen bij een volledige, technische response van precies deze dag.

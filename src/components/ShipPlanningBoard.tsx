@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { formatPlanningDate, planningTodayMark, shipPlanningTitle } from "../shipPlanning/amsterdamDate";
+import { formatPlanningDate, planningRelationLabel, planningTodayMark, shipPlanningTitle } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
@@ -318,7 +318,9 @@ export function ShipPlanningBoard() {
       data.switchReason === "today-empty-confirmed",
   );
   const shownDays = data?.scope === "today-and-tomorrow" ? data.days : data?.days.slice(0, 1) ?? [];
-  const finished = data?.switchReason === "today-empty-confirmed" && data.displayedDay === "tomorrow";
+  const finished =
+    data?.displayedDay === "tomorrow" &&
+    (data.switchReason === "today-empty-confirmed" || data.switchReason === "next-load-day");
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const notices = (
     <>
@@ -366,17 +368,13 @@ export function ShipPlanningBoard() {
                 notices={dayIndex === 0 ? notices : null}
                 onOpen={(entry, location, label, trigger) => {
                   returnFocusRef.current = trigger;
+                  const relation = planningRelationLabel(day.date);
                   setSelected({
                     entry,
                     location,
                     label,
                     planningDate: formatPlanningDate(day.date),
-                    dayLabel:
-                      data?.displayedDay === "tomorrow" && data.scope !== "today-and-tomorrow"
-                        ? "Morgen"
-                        : dayIndex === 1
-                          ? "Morgen"
-                          : "Vandaag",
+                    dayLabel: relation ?? "",
                   });
                 }}
               />
@@ -388,7 +386,7 @@ export function ShipPlanningBoard() {
         <ShipPlanningDetailDialog
           entry={selected.entry}
           location={selected.label}
-          planningDate={`${selected.dayLabel} · ${selected.planningDate}`}
+          planningDate={selected.dayLabel ? `${selected.dayLabel} · ${selected.planningDate}` : selected.planningDate}
           returnFocus={returnFocusRef.current}
           onClose={() => setSelected(null)}
         />
