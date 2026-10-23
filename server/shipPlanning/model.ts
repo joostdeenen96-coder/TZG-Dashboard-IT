@@ -17,6 +17,8 @@ export type ShipPlanningEntry = {
   sourceId: string | null;
   sourceOrder: number | null;
   loadingLocation: string | null;
+  /** Epoch ms van laaddatum. Ontbreekt als de bron geen geldige laaddatum heeft. */
+  loadingAt: number | null;
   time: string | null;
   customer: string | null;
   unloadingLocation: string | null;

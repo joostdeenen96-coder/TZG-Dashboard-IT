@@ -29,8 +29,13 @@ export type GasOilSurchargeResult = {
   message: string | null;
 };
 
+export type GasOilCountryPayload = GasOilSurchargeResult & {
+  current: GasOilSurchargeResult;
+  next: GasOilSurchargeResult;
+};
+
 export type GasOilSurchargesPayload = {
-  nl: GasOilSurchargeResult;
-  be: GasOilSurchargeResult;
+  nl: GasOilCountryPayload;
+  be: GasOilCountryPayload;
   fetchedAt: string;
 };

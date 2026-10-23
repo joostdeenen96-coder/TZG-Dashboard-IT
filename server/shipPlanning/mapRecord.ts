@@ -90,6 +90,7 @@ export function mapShipPlanningEntry(entity: unknown): ShipPlanningEntry {
     sourceId: sourceIdOf(entity),
     sourceOrder: numberValue(read("sourceOrder").present ? read("sourceOrder").value : null),
     loadingLocation: textValue(read("loadingLocation").present ? read("loadingLocation").value : null),
+    loadingAt: laaddatum,
     time: laaddatum == null ? null : formatAmsterdamTime(laaddatum),
     customer: textValue(read("customer").present ? read("customer").value : null),
     unloadingLocation: textValue(read("unloadingLocation").present ? read("unloadingLocation").value : null),

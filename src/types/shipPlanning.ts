@@ -15,6 +15,7 @@ export type ShipPlanningEntry = {
   sourceId: string | null;
   sourceOrder: number | null;
   loadingLocation: string | null;
+  loadingAt?: number | null;
   time: string | null;
   customer: string | null;
   unloadingLocation: string | null;

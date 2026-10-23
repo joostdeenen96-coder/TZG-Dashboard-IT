@@ -16,7 +16,7 @@ import type { ShipPlanningEntry } from "./model.js";
 import { getShipPlanning, resetShipPlanningCache, type ShipPlanningReader, type ShipPlanningServiceDeps } from "./service.js";
 import { TeunesenShipPlanningProvider, isCancelledEntity, type ShipPlanningDayQuery } from "./teunesenShipPlanningProvider.js";
 import { formatPlanningDate } from "../../src/shipPlanning/amsterdamDate.ts";
-import { buildLocationPages, nextRotationIndex, orderLocationGroups } from "../../src/shipPlanning/rotation.ts";
+import { buildLocationPages, nextRotationIndex, orderLocationGroups, stepLocationIndex } from "../../src/shipPlanning/rotation.ts";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -25,6 +25,7 @@ function entry(location: string, sourceOrder: number): ShipPlanningEntry {
     sourceId: `${location}-${sourceOrder}`,
     sourceOrder,
     loadingLocation: location,
+    loadingAt: null,
     time: "07:00",
     customer: "Klant",
     unloadingLocation: "Loskade",
@@ -293,6 +294,13 @@ test("A15 A16 D9 D10 rotatie laat lege laadplaatsen weg", () => {
   assert.equal(withoutHoogveld[1]?.label, "Cuijk");
   assert.equal(buildLocationPages([{ location: "HOOFDSTRAAT", entries: [] }], 8).length, 0);
   assert.equal(nextRotationIndex(0, pages, []), 0);
+  assert.equal(nextRotationIndex(1, pages, pages), 1);
+  assert.equal(pages[nextRotationIndex(1, pages, pages)]?.location, "HOOGVELD(I)");
+  const withoutLast = pages.slice(0, -1);
+  assert.equal(nextRotationIndex(pages.length - 1, pages, withoutLast), 0);
+  assert.equal(stepLocationIndex(0, pages.length, -1), pages.length - 1);
+  assert.equal(stepLocationIndex(pages.length - 1, pages.length, 1), 0);
+  assert.equal(stepLocationIndex(1, pages.length, 1), 2);
 });
 
 test("A17 geannuleerde records tellen niet als actief", async () => {
@@ -430,7 +438,8 @@ test("D12 D13 D19 titel, datum en player zonder refresh", () => {
   assert.match(board, /Schepenplanning morgen/);
   assert.match(board, /Planning vandaag afgerond/);
   assert.match(board, /Geen schepen gepland voor vandaag of morgen/);
-  assert.match(board, /ROTATION_MS/);
+  assert.match(board, /ship-nav-prev/);
+  assert.equal(board.includes("ship-rotation-progress"), false);
   const hook = readFileSync(path.join(root, "src/services/shipPlanningService.ts"), "utf8");
   assert.match(hook, /amsterdamToday/);
   assert.equal(hook.includes("location.reload"), false);

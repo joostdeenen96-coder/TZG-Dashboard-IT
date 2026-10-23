@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { GasOilSurchargeResult, GasOilSurchargesPayload } from "../types/gasoil";
+import type { GasOilCountry, GasOilCountryPayload, GasOilSurchargeResult, GasOilSurchargesPayload } from "../types/gasoil";
 import { createPollingFeed } from "./tvFeed";
 
 const GASOIL_PATH = "/api/gasoil-surcharges";
@@ -58,14 +58,53 @@ function mapResult(value: unknown, country: "NL" | "BE"): GasOilSurchargeResult 
   };
 }
 
+function shiftMonth(applicableMonth: string | null) {
+  const match = /^(\d{4})-(\d{2})$/.exec(applicableMonth ?? "");
+  if (!match) return null;
+  const cursor = new Date(Date.UTC(Number(match[1]), Number(match[2]), 1));
+  return `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function unknownMonth(country: GasOilCountry, applicableMonth: string | null, source: string, sourceLabel: string): GasOilSurchargeResult {
+  return {
+    country,
+    status: "unavailable",
+    applicableMonth,
+    referenceDate: null,
+    priceExVatPer1000Liters: null,
+    surchargePerTon: null,
+    staffelRange: null,
+    source,
+    sourceLabel,
+    retrievedAt: null,
+    product: null,
+    productLabel: null,
+    rawPricePer100LitersCbrb: null,
+    sourcePricePer100Liters: null,
+    sourceType: null,
+    sourceNote: null,
+    message: "Nog niet vastgesteld",
+  };
+}
+
+function mapCountry(value: unknown, country: GasOilCountry): GasOilCountryPayload | null {
+  const current = mapResult(value, country);
+  if (!current) return null;
+  const row = value as Record<string, unknown>;
+  const next =
+    mapResult(row.next, country) ??
+    unknownMonth(country, shiftMonth(current.applicableMonth), current.source, current.sourceLabel);
+  return { ...current, current, next };
+}
+
 function mapPayload(payload: unknown): GasOilSurchargesPayload | "empty" {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Gasolietoeslag heeft een ongeldig formaat.");
   }
   const row = payload as Record<string, unknown>;
   if (typeof row.error === "string" && row.error.trim()) throw new Error(row.error);
-  const nl = mapResult(row.nl, "NL");
-  const be = mapResult(row.be, "BE");
+  const nl = mapCountry(row.nl, "NL");
+  const be = mapCountry(row.be, "BE");
   if (!nl || !be) throw new Error("Gasolietoeslag heeft een ongeldig formaat.");
   return {
     nl,
