@@ -739,11 +739,15 @@ test("G5 G11 G12 gasolie houdt gelijke tegels en toont beide maanden", () => {
   const dialog = read("src/components/GasOilDetailDialog.tsx");
   assert.match(card, /kind="current"/);
   assert.match(card, /kind="next"/);
+  assert.match(card, /data-gas-months/);
+  assert.match(card, /grid-cols-2/);
   assert.match(card, /data-gas-month=\{kind\}/);
   assert.match(card, /data-gas-unknown/);
   assert.match(card, /repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /\[data-gas-month="current"\]/);
+  assert.match(css, /--gas-amount/);
   assert.match(css, /--color-gold/);
+  assert.equal(css.includes("background: color-mix(in srgb, var(--color-gold) 14%, transparent)"), false);
   assert.match(dialog, /Nog niet vastgesteld/);
   assert.match(dialog, /data-gas-detail-month=\{emphasis \? "current" : "next"\}/);
   assert.equal(dialog.includes("€0,00"), false);

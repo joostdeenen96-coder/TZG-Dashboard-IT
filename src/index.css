@@ -293,6 +293,12 @@ body {
   --font-meta: clamp(11px, 1.02vh, 15px);
   --font-micro: clamp(10px, 0.88vh, 13px);
   --font-tile-value: calc(var(--font-display-value) * 0.72);
+  --gas-month: clamp(11px, 1.05vh, 16px);
+  --gas-amount: clamp(18px, 1.7vh, 32px);
+  --gas-unit: clamp(10px, 0.85vh, 13px);
+  --gas-pane-pad: clamp(3px, 0.35vh, 8px);
+  --gas-pane-gap: clamp(4px, 0.35vw, 8px);
+  --gas-pane-radius: clamp(8px, 0.7vh, 12px);
   --ship-text: var(--font-table);
   --ship-title: var(--font-section-title);
   --ship-meta: var(--font-meta);
@@ -469,25 +475,58 @@ body {
   line-height: 1;
 }
 
+.planning-display [data-gas-months] {
+  column-gap: var(--gas-pane-gap);
+  align-items: stretch;
+}
+
 .planning-display [data-gas-month] {
-  font-size: var(--font-body);
-  font-weight: 500;
-  line-height: 1.2;
+  height: 100%;
+  gap: clamp(2px, 0.25vh, 6px);
+  padding: var(--gas-pane-pad);
+  border: 1px solid color-mix(in srgb, var(--color-veil) 18%, transparent);
+  border-radius: var(--gas-pane-radius);
+  background: transparent;
   color: var(--color-paper);
+  font-size: var(--gas-month);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
 }
 
 .planning-display [data-gas-month="current"] {
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--color-gold) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-gold) 72%, transparent);
+  box-shadow: inset 0 2px 0 var(--color-gold);
+  background: transparent;
   color: var(--color-gold);
-  font-weight: 600;
 }
 
-.planning-display [data-gas-month] [data-gas-value] {
-  font-size: var(--font-body);
+.planning-display [data-gas-month="next"] [data-gas-month-label] {
+  color: var(--color-mist);
+  font-weight: 500;
+}
+
+.planning-display [data-gas-month] [data-gas-value],
+.planning-display [data-gas-month] [data-gas-unknown] {
+  font-size: var(--gas-amount);
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--color-paper);
+}
+
+.planning-display [data-gas-month] [data-diesel-unit] {
+  margin-top: 1px;
+  font-size: var(--gas-unit);
+  font-weight: 500;
+  line-height: 1.1;
+  color: color-mix(in srgb, var(--color-paper) 78%, transparent);
+}
+
+.planning-display [data-gas-month="next"] [data-gas-value],
+.planning-display [data-gas-month="next"] [data-gas-unknown],
+.planning-display [data-gas-month="next"] [data-diesel-unit] {
+  color: color-mix(in srgb, var(--color-paper) 88%, var(--color-mist));
 }
 
 .planning-display [data-surcharge-unavailable] {

@@ -131,7 +131,7 @@ function monthKnown(result: GasOilSurchargeResult | null | undefined) {
   return !!result && result.status !== "unavailable" && typeof result.surchargePerTon === "number";
 }
 
-function GasOilMonthLine({
+function GasOilMonthPane({
   kind,
   result,
 }: {
@@ -140,24 +140,29 @@ function GasOilMonthLine({
 }) {
   const known = monthKnown(result);
   const label = monthName(result?.applicableMonth ?? null) || (kind === "current" ? "Huidige maand" : "Volgende maand");
+  const missingMonth = kind === "current" && !result?.applicableMonth;
   return (
-    <p data-gas-month={kind} className="flex min-w-0 items-baseline justify-between gap-2">
-      <span className="truncate capitalize" data-gas-month-label="">
+    <div data-gas-month={kind} className="flex h-full min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden text-center">
+      <p className="max-w-full whitespace-nowrap uppercase" data-gas-month-label="">
         {label}
-      </span>
-      <span className="shrink-0 tabular-nums" data-gas-amount={known ? "known" : "unknown"}>
+      </p>
+      <div className="flex max-w-full flex-col items-center" data-gas-amount={known ? "known" : "unknown"}>
         {known ? (
           <>
-            <span data-gas-value="">{formatEuro(result!.surchargePerTon!)}</span>
-            <span data-diesel-unit=""> / ton</span>
+            <p className="font-display leading-none font-semibold tabular-nums" data-gas-value="">
+              {formatEuro(result!.surchargePerTon!)}
+            </p>
+            <p data-diesel-unit="">/ ton</p>
           </>
-        ) : kind === "current" && !result?.applicableMonth ? (
+        ) : missingMonth ? (
           <span data-surcharge-unavailable="">Niet beschikbaar</span>
         ) : (
-          <span data-gas-unknown="">–</span>
+          <span className="font-display leading-none font-semibold" data-gas-unknown="">
+            –
+          </span>
         )}
-      </span>
-    </p>
+      </div>
+    </div>
   );
 }
 
@@ -191,9 +196,9 @@ function GasOilCell({
         className={`${tileBody} absolute inset-0 w-full text-left disabled:opacity-100 ${canOpen ? "cursor-pointer" : "cursor-default"}`}
       >
         <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
-        <div className="flex min-h-0 flex-1 flex-col justify-center gap-1">
-          <GasOilMonthLine kind="current" result={current} />
-          <GasOilMonthLine kind="next" result={next} />
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-2" data-gas-months="">
+          <GasOilMonthPane kind="current" result={current} />
+          <GasOilMonthPane kind="next" result={next} />
         </div>
         <p className="truncate capitalize text-mist" data-diesel-meta="">
           {countryLabel}
