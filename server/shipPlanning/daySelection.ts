@@ -8,7 +8,15 @@ export const NEXT_LOAD_LOOKAHEAD_DAYS = 6;
 
 type TimedEntry = { loadingAt: number | null };
 
-/** Zelfde zichtbaarheidsregel als het bord: een rit zonder laaddatum blijft bij deze dag. */
+/** Zichtbare lading van precies deze kalenderdag. Een rit zonder laaddatum hoort er niet bij. */
+export function calendarLoadEntries<T extends TimedEntry>(entries: T[], day: string) {
+  return entries.filter((entry) => {
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return false;
+    return formatAmsterdamDate(entry.loadingAt) === day;
+  });
+}
+
+/** Oudere hulp voor afronding: een rit zonder laadtijd houdt de dag open. */
 export function loadingEntriesOnDay<T extends TimedEntry>(entries: T[], day: string) {
   return entries.filter((entry) => {
     if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
@@ -17,7 +25,15 @@ export function loadingEntriesOnDay<T extends TimedEntry>(entries: T[], day: str
 }
 
 export function dayHasLoadingEntries(entries: TimedEntry[], day: string) {
-  return loadingEntriesOnDay(entries, day).length > 0;
+  return calendarLoadEntries(entries, day).length > 0;
+}
+
+/**
+ * Publicatie van één laaddag.
+ * De gekozen querydatum blijft de titel. Alleen records met die laaddatum blijven zichtbaar.
+ */
+export function resolveDisplayedLoadPlanning<T extends TimedEntry>(entries: T[], queryDate: string) {
+  return { date: queryDate, entries: calendarLoadEntries(entries, queryDate) };
 }
 
 /**

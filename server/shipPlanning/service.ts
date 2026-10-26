@@ -2,15 +2,12 @@ import { shipPlanningCredentialsConfigured } from "./client.js";
 import { amsterdamYmd } from "./dates.js";
 import {
   NEXT_LOAD_LOOKAHEAD_DAYS,
-  activePlanningDay,
-  dayHasLoadingEntries,
-  emptyConfirmationCountFromEnv,
-  observeTodayQuery,
+  calendarLoadEntries,
   resetTodayEmptyConfirmation,
-  todayPlanningIsFinished,
+  resolveDisplayedLoadPlanning,
   verdictForDay,
 } from "./daySelection.js";
-import { entityDataRoot } from "./mapRecord.js";
+import { compareSourceOrder, entityDataRoot } from "./mapRecord.js";
 import type {
   ShipPlanningDay,
   ShipPlanningDisplayedDay,
@@ -72,10 +69,25 @@ function sourceUpdatedAt(entities: unknown[]) {
   return new Date(max).toISOString();
 }
 
+function sortByLoadTime(entries: ShipPlanningDay["entries"]) {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => {
+      const leftAt = left.entry.loadingAt;
+      const rightAt = right.entry.loadingAt;
+      if (typeof leftAt === "number" && typeof rightAt === "number" && leftAt !== rightAt) return leftAt - rightAt;
+      const bySource = compareSourceOrder(left.entry, right.entry);
+      if (bySource !== 0) return bySource;
+      return left.index - right.index;
+    })
+    .map((row) => row.entry);
+}
+
 function dayFromQuery(query: ShipPlanningDayQuery, retrievedAt: string, status: ShipPlanningStatus): ShipPlanningDay {
+  const published = resolveDisplayedLoadPlanning(query.entries, query.date);
   return {
-    date: query.date,
-    entries: query.entries,
+    date: published.date,
+    entries: sortByLoadTime(published.entries),
     retrievedAt,
     sourceUpdatedAt: sourceUpdatedAt(query.entities),
     status,
@@ -97,7 +109,8 @@ function envelope(input: {
   days: ShipPlanningDay[];
   retrievedAt: string;
 }): ShipPlanningResponse {
-  return input;
+  const displayedPlanningDate = input.days.find((day) => day.date)?.date ?? "";
+  return { ...input, displayedPlanningDate };
 }
 
 function asStale(response: ShipPlanningResponse): ShipPlanningResponse {
@@ -111,10 +124,6 @@ function asStale(response: ShipPlanningResponse): ShipPlanningResponse {
 
 function capQuery(query: ShipPlanningDayQuery, limit: number): ShipPlanningDayQuery {
   return { ...query, entries: query.entries.slice(0, limit) };
-}
-
-function confirmationCount(deps: ShipPlanningServiceDeps) {
-  return deps.emptyConfirmationCount ?? emptyConfirmationCountFromEnv();
 }
 
 async function loadManual(scope: Exclude<ShipPlanningScope, "auto">, deps: ShipPlanningServiceDeps): Promise<ShipPlanningResponse> {
@@ -188,115 +197,73 @@ async function loadManual(scope: Exclude<ShipPlanningScope, "auto">, deps: ShipP
   });
 }
 
-type LoadLookahead = {
-  selected: ShipPlanningDayQuery | null;
-  tomorrow: ShipPlanningDayQuery;
-};
-
 async function queryAhead(deps: ShipPlanningServiceDeps, now: Date, offset: number, date: string) {
   if (offset === 1) return deps.reader.queryTomorrow(now);
   if (!deps.reader.queryDate) return null;
   return deps.reader.queryDate(date);
 }
 
-/** Eerstvolgende kalenderdag met lading. Lege dagen en dagen met alleen lossingen slaat de bron over. */
-async function findNextLoadDay(deps: ShipPlanningServiceDeps, now: Date, limit: number): Promise<LoadLookahead> {
-  let tomorrow: ShipPlanningDayQuery | null = null;
+/**
+ * Eerstvolgende toekomstige kalenderdag met lading.
+ * De zoektocht begint de dag na vandaag. Een onvolledige dag stopt de zoektocht,
+ * zodat een bronfout geen latere datum kiest.
+ */
+async function findNextLoadDay(deps: ShipPlanningServiceDeps, now: Date, limit: number): Promise<ShipPlanningDayQuery | null> {
   for (let offset = 1; offset <= NEXT_LOAD_LOOKAHEAD_DAYS; offset += 1) {
     const date = amsterdamYmd(now, offset);
     const query = await queryAhead(deps, now, offset, date);
-    if (!query) break;
-    if (offset === 1) tomorrow = query;
+    if (!query) throw Object.assign(new Error("geen query voor een volgende laaddag"), { status: 0 });
     const verdict = verdictForDay(query, date);
-    if (verdict === "invalid") {
-      if (offset === 1) throw Object.assign(new Error("onvolledige of ongeldige morgenquery"), { status: 0 });
-      break;
-    }
+    if (verdict === "invalid") throw Object.assign(new Error("onvolledige of ongeldige planningsquery"), { status: 0 });
     if (verdict === "empty") continue;
-    const capped = capQuery(query, limit);
-    if (dayHasLoadingEntries(capped.entries, date)) {
-      if (!tomorrow) throw Object.assign(new Error("onvolledige of ongeldige morgenquery"), { status: 0 });
-      return { selected: capped, tomorrow };
-    }
+    const loads = calendarLoadEntries(query.entries, date);
+    if (loads.length === 0) continue;
+    return capQuery({ ...query, entries: loads }, limit);
   }
-  if (!tomorrow) throw Object.assign(new Error("onvolledige of ongeldige morgenquery"), { status: 0 });
-  return { selected: null, tomorrow };
+  return null;
 }
 
 async function loadAuto(deps: ShipPlanningServiceDeps): Promise<ShipPlanningResponse> {
   const now = deps.now();
   const retrievedAt = now.toISOString();
-  const todayDate = amsterdamYmd(now, 0);
   const limit = deps.settings().maxRows;
   if (!deps.credentialsConfigured()) {
     return envelope({
       scope: "auto",
-      displayedDay: "today",
+      displayedDay: "tomorrow",
       switchReason: "source-unavailable",
       status: "unavailable",
       todayRecordCount: null,
       tomorrowRecordCount: null,
       todayEmptyConfirmed: false,
-      days: [unavailableDay(todayDate, retrievedAt)],
+      days: [],
       retrievedAt,
     });
   }
-  const todayQuery = await deps.reader.queryToday(now);
-  const verdict = verdictForDay(todayQuery, todayDate);
-  if (verdict === "invalid") {
-    throw Object.assign(new Error("onvolledige of ongeldige vandaagquery"), { status: 0 });
-  }
-  const observed = observeTodayQuery({ date: todayDate, verdict, confirmationCount: confirmationCount(deps) });
-  const todayCapped = capQuery(todayQuery, limit);
-  const finished = verdict === "active" && todayPlanningIsFinished(todayCapped.entries, todayDate, now);
-  const displayed = activePlanningDay({
-    todayHasActiveEntries: verdict === "active" && !finished,
-    todayConfirmedEmpty: observed.confirmed,
-  });
-  const todayActive = () =>
-    envelope({
-      scope: "auto",
-      displayedDay: "today",
-      switchReason: "today-active",
-      status: "ok",
-      todayRecordCount: todayCapped.entries.length,
-      tomorrowRecordCount: null,
-      todayEmptyConfirmed: false,
-      days: [dayFromQuery(todayCapped, retrievedAt, "ok")],
-      retrievedAt,
-    });
-  if (displayed === "today" && !finished) return todayActive();
-  let lookahead: LoadLookahead;
-  try {
-    lookahead = await findNextLoadDay(deps, now, limit);
-  } catch (error) {
-    if (!finished) throw error;
-    return todayActive();
-  }
-  if (!lookahead.selected) {
-    if (finished) return todayActive();
-    const tomorrowCapped = capQuery(lookahead.tomorrow, limit);
+  const selected = await findNextLoadDay(deps, now, limit);
+  if (!selected) {
     return envelope({
       scope: "auto",
-      displayedDay: "today",
-      switchReason: "today-empty-confirmed",
+      displayedDay: "tomorrow",
+      switchReason: "next-load-day",
       status: "ok",
-      todayRecordCount: 0,
-      tomorrowRecordCount: tomorrowCapped.entries.length,
-      todayEmptyConfirmed: true,
-      days: [dayFromQuery(todayCapped, retrievedAt, "ok"), dayFromQuery(tomorrowCapped, retrievedAt, "ok")],
+      todayRecordCount: null,
+      tomorrowRecordCount: 0,
+      todayEmptyConfirmed: false,
+      days: [],
       retrievedAt,
     });
   }
+  const day = dayFromQuery(selected, retrievedAt, "ok");
   return envelope({
     scope: "auto",
     displayedDay: "tomorrow",
-    switchReason: finished ? "next-load-day" : "today-empty-confirmed",
+    switchReason: "next-load-day",
     status: "ok",
-    todayRecordCount: finished ? todayCapped.entries.length : 0,
-    tomorrowRecordCount: lookahead.selected.entries.length,
-    todayEmptyConfirmed: !finished,
-    days: [dayFromQuery(lookahead.selected, retrievedAt, "ok")],
+    todayRecordCount: null,
+    tomorrowRecordCount: day.entries.length,
+    todayEmptyConfirmed: false,
+    days: [day],
     retrievedAt,
   });
 }
@@ -306,13 +273,17 @@ function unavailableResponse(scope: ShipPlanningScope, deps: ShipPlanningService
   const retrievedAt = now.toISOString();
   const today = amsterdamYmd(now, 0);
   const tomorrow = amsterdamYmd(now, 1);
+  // Auto publiceert geen kalenderdag bij een bronfout. Een placeholder van
+  // vandaag zou displayedPlanningDate ten onrechte op vandaag zetten.
   const days =
-    scope === "today-and-tomorrow"
-      ? [unavailableDay(today, retrievedAt), unavailableDay(tomorrow, retrievedAt)]
-      : [unavailableDay(scope === "tomorrow" ? tomorrow : today, retrievedAt)];
+    scope === "auto"
+      ? []
+      : scope === "today-and-tomorrow"
+        ? [unavailableDay(today, retrievedAt), unavailableDay(tomorrow, retrievedAt)]
+        : [unavailableDay(scope === "tomorrow" ? tomorrow : today, retrievedAt)];
   return envelope({
     scope,
-    displayedDay: scope === "tomorrow" ? "tomorrow" : "today",
+    displayedDay: scope === "today" || scope === "today-and-tomorrow" ? "today" : "tomorrow",
     switchReason: "source-unavailable",
     status: "unavailable",
     todayRecordCount: null,

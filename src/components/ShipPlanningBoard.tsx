@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { formatPlanningDate, planningRelationLabel, planningTodayMark, shipPlanningTitle } from "../shipPlanning/amsterdamDate";
+import { formatPlanningDate, shipPlanningTitle } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
@@ -310,22 +310,12 @@ export function ShipPlanningBoard() {
   } | null>(null);
 
   const status = error && !data ? "unavailable" : (data?.status ?? "unavailable");
-  const bothEmpty = Boolean(
-    data &&
-      data.todayEmptyConfirmed &&
-      data.todayRecordCount === 0 &&
-      data.tomorrowRecordCount === 0 &&
-      data.switchReason === "today-empty-confirmed",
-  );
   const shownDays = data?.scope === "today-and-tomorrow" ? data.days : data?.days.slice(0, 1) ?? [];
-  const finished =
-    data?.displayedDay === "tomorrow" &&
-    (data.switchReason === "today-empty-confirmed" || data.switchReason === "next-load-day");
+  const noUpcoming = Boolean(data && data.scope === "auto" && data.days.length === 0 && status !== "unavailable" && status !== "disabled");
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const notices = (
     <>
       {status === "stale" ? <p className="truncate text-[14px] leading-none text-gold">Gegevens tijdelijk niet vernieuwd</p> : null}
-      {finished ? <p className="truncate text-[14px] leading-none text-mist">Planning vandaag afgerond</p> : null}
       {status === "disabled" ? <p className="truncate text-[14px] leading-none text-mist">Uitgeschakeld</p> : null}
     </>
   );
@@ -346,10 +336,10 @@ export function ShipPlanningBoard() {
             {status === "disabled" ? "Schepenplanning staat uit." : "Schepenplanning tijdelijk niet beschikbaar."}
           </p>
         </>
-      ) : bothEmpty ? (
+      ) : noUpcoming ? (
         <>
           <BoardTitle title="Schepenplanning" dateLabel={null} notices={notices} pageLabel={null} />
-          <p className="mt-2 text-[18px] text-mist">Geen schepen gepland voor vandaag of morgen.</p>
+          <p className="mt-2 text-[18px] text-mist">Geen laadplanning voor de komende dagen.</p>
         </>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -363,18 +353,18 @@ export function ShipPlanningBoard() {
                 day={day}
                 resetKey={`${data?.displayedDay ?? ""}:${day.date}`}
                 embedTitle
-                title={shipPlanningTitle(day.date)}
-                dateLabel={planningTodayMark(day.date)}
+                title={shipPlanningTitle(dayIndex === 0 ? data?.displayedPlanningDate || day.date : day.date)}
+                dateLabel={null}
                 notices={dayIndex === 0 ? notices : null}
                 onOpen={(entry, location, label, trigger) => {
                   returnFocusRef.current = trigger;
-                  const relation = planningRelationLabel(day.date);
+                  const shownDate = dayIndex === 0 ? data?.displayedPlanningDate || day.date : day.date;
                   setSelected({
                     entry,
                     location,
                     label,
-                    planningDate: formatPlanningDate(day.date),
-                    dayLabel: relation ?? "",
+                    planningDate: formatPlanningDate(shownDate),
+                    dayLabel: "",
                   });
                 }}
               />
