@@ -15,6 +15,10 @@ export type WaterForecastPoint = WaterPoint & {
   kind: WaterForecastKind;
 };
 
+export type WaterForecastStatus = "ok" | "stale" | "unavailable";
+
+export type WaterForecastClock = "absolute" | "shifted";
+
 export type WaterStationResult = {
   id: WaterStationId;
   name: string;
@@ -28,6 +32,13 @@ export type WaterStationResult = {
   series: WaterPoint[];
   forecast: WaterForecastPoint[];
   forecastError: string | null;
+  forecastIssuedAt?: string | null;
+  forecastValidFrom?: string | null;
+  forecastValidTo?: string | null;
+  forecastSource?: string | null;
+  forecastStationId?: string | null;
+  forecastStatus?: WaterForecastStatus | null;
+  forecastClock?: WaterForecastClock;
   graphPath: string | null;
   error: string | null;
 };

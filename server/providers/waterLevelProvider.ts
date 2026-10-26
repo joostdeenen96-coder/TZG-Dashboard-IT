@@ -15,6 +15,10 @@ export type WaterForecastPoint = WaterPoint & {
   kind: WaterForecastKind;
 };
 
+export type WaterForecastStatus = "ok" | "stale" | "unavailable";
+
+export type WaterForecastClock = "absolute" | "shifted";
+
 export type WaterStationResult = {
   id: WaterStationId;
   name: string;
@@ -28,6 +32,15 @@ export type WaterStationResult = {
   series: WaterPoint[];
   forecast: WaterForecastPoint[];
   forecastError: string | null;
+  /** Publicatietijd van de voorspelling, als de bron die levert. */
+  forecastIssuedAt?: string | null;
+  forecastValidFrom?: string | null;
+  forecastValidTo?: string | null;
+  forecastSource?: string | null;
+  forecastStationId?: string | null;
+  forecastStatus?: WaterForecastStatus | null;
+  /** `absolute` = tijdstip is het voorspellingsmoment. `shifted` = PEGELONLINE-WV, weergave +24 uur. */
+  forecastClock?: WaterForecastClock;
   graphPath: string | null;
   error: string | null;
 };
