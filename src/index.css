@@ -293,9 +293,9 @@ body {
   --font-meta: clamp(11px, 1.02vh, 15px);
   --font-micro: clamp(10px, 0.88vh, 13px);
   --font-tile-value: calc(var(--font-display-value) * 0.72);
-  --gas-month: clamp(11px, 0.9vh, 17px);
-  --gas-amount: clamp(16px, 1.45vh, 34px);
-  --gas-unit: clamp(10px, 0.72vh, 14px);
+  --gas-month: clamp(10px, 0.82vh, 15px);
+  --gas-amount: clamp(14px, 1.3vh, 30px);
+  --gas-unit: clamp(9px, 0.65vh, 13px);
   --gas-pane-pad: clamp(4px, 0.45vh, 10px);
   --gas-pane-gap: clamp(4px, 0.35vw, 8px);
   --gas-pane-radius: clamp(8px, 0.7vh, 12px);
@@ -491,7 +491,7 @@ body {
 .planning-display [data-gas-title] {
   margin: 0;
   min-width: 0;
-  font-size: clamp(12px, 1vh, 17px);
+  font-size: clamp(11px, 0.9vh, 15px);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.01em;
@@ -581,7 +581,7 @@ body {
 
 .planning-display [data-gas-month-label] {
   max-width: 100%;
-  font-size: clamp(11px, 13cqh, 17px);
+  font-size: clamp(10px, 12cqh, 15px);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: 0.04em;
@@ -604,7 +604,7 @@ body {
 .planning-display .gas-oil-amount,
 .planning-display [data-gas-month] [data-gas-value],
 .planning-display [data-gas-month] [data-gas-unknown] {
-  font-size: clamp(16px, 22cqh, 34px);
+  font-size: clamp(14px, 20cqh, 30px);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
@@ -613,7 +613,7 @@ body {
 
 .planning-display .gas-oil-unit,
 .planning-display [data-gas-month] [data-gas-unit] {
-  font-size: clamp(10px, 9cqh, 14px);
+  font-size: clamp(9px, 8cqh, 13px);
   font-weight: 500;
   line-height: 1;
   color: color-mix(in srgb, var(--color-paper) 72%, transparent);

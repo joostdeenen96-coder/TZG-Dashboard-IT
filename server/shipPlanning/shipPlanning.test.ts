@@ -783,10 +783,10 @@ test("G5 G11 G12 gasolie houdt gelijke tegels en toont beide maanden", () => {
   assert.match(valueLineRule, /gap:\s*0\.3em/);
   assert.equal(/flex-direction:\s*column/.test(valueLineRule), false);
   assert.equal(/max-width:\s*100%/.test(valueLineRule), false);
-  assert.match(css, /\[data-gas-title\][\s\S]*font-size:\s*clamp\(12px, 1vh, 17px\)/);
-  assert.match(css, /\[data-gas-month-label\][\s\S]*font-size:\s*clamp\(11px, 13cqh, 17px\)/);
-  assert.match(css, /\[data-gas-value\][\s\S]*font-size:\s*clamp\(16px, 22cqh, 34px\)/);
-  assert.match(css, /\[data-gas-unit\][\s\S]*font-size:\s*clamp\(10px, 9cqh, 14px\)/);
+  assert.match(css, /\[data-gas-title\][\s\S]*font-size:\s*clamp\(11px, 0\.9vh, 15px\)/);
+  assert.match(css, /\[data-gas-month-label\][\s\S]*font-size:\s*clamp\(10px, 12cqh, 15px\)/);
+  assert.match(css, /\[data-gas-value\][\s\S]*font-size:\s*clamp\(14px, 20cqh, 30px\)/);
+  assert.match(css, /\[data-gas-unit\][\s\S]*font-size:\s*clamp\(9px, 8cqh, 13px\)/);
   assert.match(css, /\[data-gas-month="current"\][\s\S]*color-mix\(in srgb, var\(--color-gold\) 78%/);
   const unknownBranch = card.slice(card.indexOf("data-gas-unknown"));
   assert.equal(unknownBranch.slice(0, 180).includes("/ ton"), false);
