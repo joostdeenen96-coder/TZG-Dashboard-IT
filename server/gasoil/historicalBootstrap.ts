@@ -91,7 +91,7 @@ export async function ensureNetherlandsHistoricalBootstrap() {
       skipped.push(row.applicableMonth);
       continue;
     }
-    void upsertGasOilMonthObservation(entry);
+    await upsertGasOilMonthObservation(entry);
     created.push(row.applicableMonth);
   }
   if (created.length) {
