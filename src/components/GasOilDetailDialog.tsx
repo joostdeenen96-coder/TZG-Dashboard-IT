@@ -58,12 +58,14 @@ function MonthSection({ result, emphasis }: { result: GasOilSurchargeResult; emp
       ) : (
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-[18px]">
           <div>
-            <dt className="text-mist">Toepassingsmaand</dt>
+            <dt className="text-mist">Maand</dt>
             <dd className="font-semibold capitalize text-paper">{monthLabel(result.applicableMonth)}</dd>
           </div>
           <div>
             <dt className="text-mist">Peildatum</dt>
-            <dd className="font-semibold text-paper">{peildatumLabel(result.referenceDate)}</dd>
+            <dd className="font-semibold text-paper" data-gas-detail-reference="">
+              {peildatumLabel(result.referenceDate)}
+            </dd>
           </div>
           {result.country === "NL" && typeof bronPrijs === "number" ? (
             <div>
@@ -72,8 +74,10 @@ function MonthSection({ result, emphasis }: { result: GasOilSurchargeResult; emp
             </div>
           ) : null}
           <div>
-            <dt className="text-mist">{result.country === "NL" ? "Prijs staffel" : "Gasolieprijs"}</dt>
-            <dd className="font-semibold text-paper">
+            <dt className="text-mist">
+              {result.country === "NL" && typeof bronPrijs === "number" ? "Prijs staffel" : result.country === "NL" ? "Prijs" : "Gasolieprijs"}
+            </dt>
+            <dd className="font-semibold text-paper" data-gas-detail-price="">
               {typeof result.priceExVatPer1000Liters === "number"
                 ? `${priceFormatter.format(result.priceExVatPer1000Liters)} / 1000 L ex BTW`
                 : "—"}
@@ -88,8 +92,11 @@ function MonthSection({ result, emphasis }: { result: GasOilSurchargeResult; emp
             </dd>
           </div>
           <div>
-            <dt className="text-mist">Toeslag per ton</dt>
-            <dd className={`font-display text-[36px] leading-none font-semibold ${emphasis ? "text-gold" : "text-paper"}`}>
+            <dt className="text-mist">Toeslag</dt>
+            <dd
+              className={`font-display text-[36px] leading-none font-semibold ${emphasis ? "text-gold" : "text-paper"}`}
+              data-gas-detail-surcharge=""
+            >
               {formatEuro(result.surchargePerTon!)} / ton
             </dd>
           </div>
@@ -99,7 +106,9 @@ function MonthSection({ result, emphasis }: { result: GasOilSurchargeResult; emp
           </div>
           <div>
             <dt className="text-mist">Bron</dt>
-            <dd className="font-semibold text-paper">{result.sourceLabel}</dd>
+            <dd className="font-semibold text-paper" data-gas-detail-source="">
+              {result.sourceLabel}
+            </dd>
           </div>
           <div>
             <dt className="text-mist">Vastlegging</dt>

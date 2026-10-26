@@ -18,6 +18,8 @@ export type GasOilMonthCacheEntry = {
   surchargePerTon?: number;
   sourceType?: GasOilSourceType;
   sourceNote?: string;
+  /** EUR/100L = Interrijn-bron. EUR/1000L = historische prijs zonder afgeleide €/100L. */
+  publishedPriceUnit?: "EUR/100L" | "EUR/1000L";
 };
 
 export type GasOilDayPriceEntry = {
@@ -234,7 +236,10 @@ export function monthEntryToObservation(entry: GasOilMonthCacheEntry): GasOilPri
     retrievedAt: entry.retrievedAt,
     productLabel: entry.productIdentifier,
     rawPriceInclPerLiter: entry.vatStatus === "incl-converted" ? entry.rawSourceValue : undefined,
-    rawPricePer100LitersCbrb: entry.country === "NL" ? entry.rawSourceValue : undefined,
+    rawPricePer100LitersCbrb:
+      entry.country === "NL" && entry.publishedPriceUnit !== "EUR/1000L" && !entry.conversionNote?.includes("prijs per 1000 liter")
+        ? entry.rawSourceValue
+        : undefined,
     conversionNote: entry.conversionNote,
     sourceType: entry.sourceType ?? "automatic",
     sourceNote: entry.sourceNote,

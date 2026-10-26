@@ -59,6 +59,7 @@ function sourcePricePer100(observation: GasOilPriceObservation): number | null {
   if (typeof observation.rawPricePer100LitersCbrb === "number") {
     return observation.rawPricePer100LitersCbrb;
   }
+  if (observation.conversionNote?.includes("prijs per 1000 liter")) return null;
   if (observation.country === "NL" && Number.isFinite(observation.priceExVatPer1000Liters)) {
     return Math.round((observation.priceExVatPer1000Liters / 10) * 100) / 100;
   }
