@@ -672,15 +672,15 @@ test("S1-S7 ladingdagfilter volgt de bron en splitst daarna vroeg naar laat", ()
   const visible = entriesForDisplayedLoadDay(mixed, "2026-10-23");
   assert.equal(visible.some((item) => item.sourceId?.startsWith("22-")), false);
   assert.equal(visible.some((item) => item.sourceId?.startsWith("24-")), false);
-  assert.equal(visible.some((item) => item.loadingAt == null), true);
+  assert.equal(visible.some((item) => item.loadingAt == null), false);
+  assert.equal(visible.length, 5);
 
   const page = buildLocationPages([{ location: "HOOFDSTRAAT", entries: visible }], 6)[0];
   assert.equal(page?.columns, 1);
   assert.deepEqual(
-    page?.left.slice(0, 5).map((item) => item.time),
+    page?.left.map((item) => item.time),
     ["05:30", "06:00", "09:00", "11:00", "12:00"],
   );
-  assert.equal(page?.left[5]?.loadingAt ?? null, null);
   assert.equal(page?.right.length, 0);
 
   const sameDay = [12, 6, 9, 7, 11, 8, 10].map((hour, index) =>

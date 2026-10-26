@@ -8,7 +8,15 @@ export const NEXT_LOAD_LOOKAHEAD_DAYS = 6;
 
 type TimedEntry = { loadingAt: number | null };
 
-/** Zelfde zichtbaarheidsregel als het bord: een rit zonder laaddatum blijft bij deze dag. */
+/** Zichtbare lading van precies deze kalenderdag. Een rit zonder laaddatum hoort er niet bij. */
+export function calendarLoadEntries<T extends TimedEntry>(entries: T[], day: string) {
+  return entries.filter((entry) => {
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return false;
+    return formatAmsterdamDate(entry.loadingAt) === day;
+  });
+}
+
+/** Oudere hulp voor afronding: een rit zonder laadtijd houdt de dag open. */
 export function loadingEntriesOnDay<T extends TimedEntry>(entries: T[], day: string) {
   return entries.filter((entry) => {
     if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
@@ -17,33 +25,15 @@ export function loadingEntriesOnDay<T extends TimedEntry>(entries: T[], day: str
 }
 
 export function dayHasLoadingEntries(entries: TimedEntry[], day: string) {
-  return loadingEntriesOnDay(entries, day).length > 0;
-}
-
-/** Testfixtures gebruiken kleine offsets. Een echte laaddatum is een epoch in milliseconden. */
-function isCalendarLoadInstant(value: number) {
-  return value >= 1_000_000_000_000;
+  return calendarLoadEntries(entries, day).length > 0;
 }
 
 /**
- * Publicatiedatum van de laadplanning.
- * Als de gekozen dag zelf lading heeft, blijft die datum leidend.
- * Bevat de set alleen lading van één andere kalenderdag, dan is die laaddag de titel.
+ * Publicatie van één laaddag.
+ * De gekozen querydatum blijft de titel. Alleen records met die laaddatum blijven zichtbaar.
  */
 export function resolveDisplayedLoadPlanning<T extends TimedEntry>(entries: T[], queryDate: string) {
-  const realDays = new Set<string>();
-  for (const entry of entries) {
-    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) continue;
-    if (!isCalendarLoadInstant(entry.loadingAt)) continue;
-    realDays.add(formatAmsterdamDate(entry.loadingAt));
-  }
-  const date = realDays.has(queryDate) || realDays.size !== 1 ? queryDate : [...realDays][0]!;
-  const visible = entries.filter((entry) => {
-    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
-    if (!isCalendarLoadInstant(entry.loadingAt)) return true;
-    return formatAmsterdamDate(entry.loadingAt) === date;
-  });
-  return { date, entries: visible };
+  return { date: queryDate, entries: calendarLoadEntries(entries, queryDate) };
 }
 
 /**

@@ -65,14 +65,12 @@ function loadingInstant(entry: ShipPlanningEntry) {
 
 /**
  * Zichtbare lading van de gekozen dag.
- * De bron zet een rit als lading op de laadplaats van de laaddatum
- * en als lossing op de losplaats van de losdatum. Een rit die alleen via losdatum
- * in de dagquery zit, hoort niet in de laadtijdreeks van deze laadplaats.
- * Records zonder laaddatum blijven staan.
+ * Alleen een laaddatum op die kalenderdag blijft staan.
+ * Een rit die alleen via losdatum in de bronquery zit, of zonder laaddatum, hoort er niet bij.
  */
 export function entriesForDisplayedLoadDay(entries: ShipPlanningEntry[], day: string) {
   return entries.filter((entry) => {
-    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return false;
     return amsterdamYmdFromEpoch(entry.loadingAt) === day;
   });
 }
