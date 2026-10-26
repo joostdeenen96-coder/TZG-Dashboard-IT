@@ -51,7 +51,7 @@ Het scherm is opgezet voor 2560×1440 en schaalt naar het venster. De browser pr
 | --- | --- | --- | --- |
 | Kaub | `KaubProvider` | PEGELONLINE, kortnaam `KAUB` | ja |
 | Ruhrort | `RuhrortProvider` | PEGELONLINE, kortnaam `DUISBURG-RUHRORT` | ja |
-| Maxau | `MaxauProvider` | HVZ Baden-Württemberg, pegel `09016` | ja |
+| Maxau | `MaxauProvider` | HVZ Baden-Württemberg, pegel `09016`; voorspelling via RLP `23700200` | ja |
 
 ### Kaub en Ruhrort — ELWIS / PEGELONLINE
 
@@ -85,7 +85,13 @@ De publieke dataset die de HVZ-site zelf ververst, bestaat uit twee gestructuree
 
 `changeCm` is de actuele centimeter minus die dagwaarde. De dagwaarde moet op de kalenderdag vóór de meting staan. Status volgt dezelfde grenzen als PEGELONLINE: op of onder MNW is `laag`, op of boven de laagste hoogwaterstand is `hoog`, daartussen `normaal`. Ontbreekt een van die getallen, of staat de waterstand niet in centimeter, dan faalt Maxau.
 
-De kaart tekent dezelfde donkere grafiek als Kaub en Ruhrort. De lijn komt uit de PEGELONLINE-tijdreeks `W` van station `b6c6d5c8-e2d5-4469-8dd8-fa972ef7eaea`, de laatste vier dagen, uitgedund tot 48 punten. De actuele centimeter, status en daggemiddelde blijven van HVZ. PEGELONLINE heeft voor Maxau geen tijdreeks `WV`, dus de kaart toont geen verwachtingscijfers en geen fouttekst daarover. Faalt de reeks, dan blijft de HVZ-stand staan en is `series` leeg.
+De kaart tekent dezelfde donkere grafiek als Kaub en Ruhrort. De gemeten lijn komt uit de PEGELONLINE-tijdreeks `W` van station `b6c6d5c8-e2d5-4469-8dd8-fa972ef7eaea`, de laatste vier dagen, uitgedund tot 48 punten. De actuele centimeter, status en daggemiddelde blijven van HVZ. PEGELONLINE heeft voor Maxau geen tijdreeks `WV`.
+
+De voorspelling komt uit de officiële JSON van Hochwasservorhersagezentrale Rheinland-Pfalz: `GET https://www.hochwasser.rlp.de/api/v1/measurement-site/23700200`. Dat is het endpoint dat de pagina `/flussgebied/oberrhein/maxau` zelf aanroept. Alleen `W.predictions.p50` is de Vorhersage (legendatekst "Vorhersage der HVZ Baden-Württemberg", koppeling naar HVZ-pegel `09016`). `Q` is afvoer, `measurements` zijn metingen, `p10`–`p90` zijn onzekerheidsbanden. Elk p50-punt heeft alleen een tijdstip en een centimeter, zonder forecast- of estimate-type. De hele reeks blijft daarom Vorhersage (`verwacht`), ook wanneer de bron langer is dan twee dagen. Er wordt niets na een vaste horizon afgekapt en niets zelf als inschatting geclassificeerd.
+
+HVZ zet Maxau in de Vorhersagenliste (`forecast.html`, pegel `09016`). Die lijst toont de actuele meting en een vlag dat de grafiek bestaat. De grafiek is `gifs/09016-2001.GIF`. "Hinweise zu den Abschätzungen" opent `pdf/HW-Fruehwarnung.pdf` en levert geen cijferreeks. PEGELONLINE, waar de RLP-config voor station `23700200` naar verwijst, heeft voor Maxau alleen `W` en `Q`, geen `WV`. Een numerieke Abschätzung is daardoor niet beschikbaar. De grijze inschattingslijn blijft weg tot de bron punten met dat onderscheid levert.
+
+Tijdstippen blijven de UTC-instanten uit de bron. De grafiek zet ze niet nog een dag vooruit; die verschuiving geldt alleen voor PEGELONLINE-`WV` van Kaub en Ruhrort. Punten op of vóór de laatste meting vallen weg. Een tijdelijke storing van deze voorspelling laat de HVZ-stand staan. Binnen zes uur na een eerdere geldige reeks is `forecastStatus` `stale`; daarna is `forecast` leeg. De HVZ-GIF wordt niet uitgelezen.
 
 ## Dieseltoeslag
 

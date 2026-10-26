@@ -45,6 +45,12 @@ function failed(id: WaterStationId, message: string, row?: Record<string, unknow
     series: [],
     forecast: [],
     forecastError: null,
+    forecastIssuedAt: null,
+    forecastValidFrom: null,
+    forecastValidTo: null,
+    forecastSource: null,
+    forecastStationId: null,
+    forecastStatus: null,
     graphPath: null,
     error: message,
   };
@@ -101,6 +107,16 @@ function normalizeStation(id: WaterStationId, value: unknown): WaterStationResul
     series: seriesPoints(row.series),
     forecast: forecastPoints(row.forecast),
     forecastError: typeof row.forecastError === "string" && row.forecastError.trim() ? row.forecastError : null,
+    forecastIssuedAt: typeof row.forecastIssuedAt === "string" ? row.forecastIssuedAt : null,
+    forecastValidFrom: typeof row.forecastValidFrom === "string" ? row.forecastValidFrom : null,
+    forecastValidTo: typeof row.forecastValidTo === "string" ? row.forecastValidTo : null,
+    forecastSource: typeof row.forecastSource === "string" ? row.forecastSource : null,
+    forecastStationId: typeof row.forecastStationId === "string" ? row.forecastStationId : null,
+    forecastStatus:
+      row.forecastStatus === "ok" || row.forecastStatus === "stale" || row.forecastStatus === "unavailable"
+        ? row.forecastStatus
+        : null,
+    forecastClock: row.forecastClock === "absolute" || row.forecastClock === "shifted" ? row.forecastClock : undefined,
     graphPath: localGraphPath(row.graphPath),
     error: null,
   };

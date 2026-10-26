@@ -1,11 +1,12 @@
+import { alignForecast, formatWaterPointTooltip, type ForecastClock } from "../lib/waterForecast";
 import type { WaterForecastPoint, WaterPoint } from "../types";
 
 type WaterChartProps = {
   series: WaterPoint[];
   forecast: WaterForecastPoint[];
+  stationName?: string;
+  forecastClock?: ForecastClock;
 };
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const dayLabel = new Intl.DateTimeFormat("nl-NL", {
   timeZone: "Europe/Amsterdam",
@@ -13,29 +14,16 @@ const dayLabel = new Intl.DateTimeFormat("nl-NL", {
   month: "numeric",
 });
 
-function shiftForecast(points: WaterForecastPoint[], afterMs: number) {
-  const shifted: WaterForecastPoint[] = [];
-  for (const point of points) {
-    const time = Date.parse(point.timestamp);
-    if (!Number.isFinite(time)) continue;
-    const next = time + DAY_MS;
-    if (next <= afterMs) continue;
-    shifted.push({ ...point, timestamp: new Date(next).toISOString() });
-  }
-  shifted.sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
-  return shifted;
-}
-
 function chartPath(points: WaterPoint[], xOf: (timestamp: string) => number, yOf: (levelCm: number) => number) {
   return points
     .map((point, index) => `${index === 0 ? "M" : "L"}${xOf(point.timestamp).toFixed(1)},${yOf(point.levelCm).toFixed(1)}`)
     .join(" ");
 }
 
-export function WaterChart({ series, forecast }: WaterChartProps) {
+export function WaterChart({ series, forecast, stationName = "Waterstand", forecastClock = "shifted" }: WaterChartProps) {
   const measured = [...series].sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
   const lastMeasuredMs = measured.length > 0 ? Date.parse(measured[measured.length - 1].timestamp) : Number.NEGATIVE_INFINITY;
-  const shifted = shiftForecast(forecast, lastMeasuredMs);
+  const shifted = alignForecast(forecast, lastMeasuredMs, forecastClock);
   const expected = shifted.filter((point) => point.kind === "verwacht");
   const estimated = shifted.filter((point) => point.kind === "inschatting");
   const bridge = measured.length > 0 ? [measured[measured.length - 1], ...expected] : expected;
@@ -69,9 +57,23 @@ export function WaterChart({ series, forecast }: WaterChartProps) {
     const span = max - min;
     return height - pad.bottom - ((levelCm - min) / span) * (height - pad.top - pad.bottom);
   };
+  const marks = (points: WaterPoint[], mode: "Gemeten" | "Voorspelling") =>
+    points.map((point) => (
+      <circle
+        key={`${mode}-${point.timestamp}-${point.levelCm}`}
+        cx={xOf(point.timestamp)}
+        cy={yOf(point.levelCm)}
+        r={6}
+        fill="transparent"
+        data-water-tooltip=""
+        data-water-tooltip-mode={mode}
+      >
+        <title>{formatWaterPointTooltip(stationName, mode, point.timestamp, point.levelCm)}</title>
+      </circle>
+    ));
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="Waterstand en verwachting">
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="Waterstand en verwachting" data-forecast-clock={forecastClock}>
       <line x1={pad.left} y1={yOf(max)} x2={width - pad.right} y2={yOf(max)} className="stroke-veil/15" />
       <line x1={pad.left} y1={yOf(min)} x2={width - pad.right} y2={yOf(min)} className="stroke-veil/15" />
       <text x={4} y={yOf(max) + 4} className="fill-mist" fontSize="10">
@@ -80,13 +82,26 @@ export function WaterChart({ series, forecast }: WaterChartProps) {
       <text x={4} y={yOf(min) + 4} className="fill-mist" fontSize="10">
         {min}
       </text>
-      {measured.length > 1 ? <path d={chartPath(measured, xOf, yOf)} fill="none" className="stroke-water" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {measured.length > 1 ? (
+        <path d={chartPath(measured, xOf, yOf)} fill="none" className="stroke-water" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" data-water-measured-line="" />
+      ) : null}
       {bridge.length > 1 ? (
-        <path d={chartPath(bridge, xOf, yOf)} fill="none" className="stroke-gold" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 4" />
+        <path
+          d={chartPath(bridge, xOf, yOf)}
+          fill="none"
+          className="stroke-gold"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="6 4"
+          data-water-forecast-line=""
+        />
       ) : null}
       {estimateBridge.length > 1 ? (
         <path d={chartPath(estimateBridge, xOf, yOf)} fill="none" className="stroke-mist" strokeWidth="2.2" strokeDasharray="2 4" />
       ) : null}
+      {marks(measured, "Gemeten")}
+      {marks(expected, "Voorspelling")}
       <text x={pad.left} y={height - 4} className="fill-mist" fontSize="10">
         {dayLabel.format(t0)}
       </text>
