@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { parseDashboardConfig } from "../services/dashboardConfig.js";
-import { amsterdamWallToUtcMs, amsterdamYmd } from "./dates.js";
+import { amsterdamWallToUtcMs, amsterdamYmd, formatAmsterdamDate } from "./dates.js";
 import {
   NEXT_LOAD_LOOKAHEAD_DAYS,
   activePlanningDay,
@@ -464,9 +464,10 @@ test("D1-D12 titel volgt de getoonde planningdag", () => {
   assert.match(dates, /Europe\/Amsterdam/);
   assert.equal(dates.includes("getDay("), false);
   const board = readFileSync(path.join(root, "src/components/ShipPlanningBoard.tsx"), "utf8");
-  assert.match(board, /shipPlanningTitle\(day\.date\)/);
-  assert.match(board, /planningTodayMark\(day\.date\)/);
-  assert.match(board, /planningRelationLabel\(day\.date\)/);
+  assert.match(board, /displayedPlanningDate/);
+  assert.match(board, /shipPlanningTitle\(/);
+  assert.match(board, /planningTodayMark\(/);
+  assert.match(board, /planningRelationLabel\(shownDate\)/);
   assert.match(board, /--ship-title/);
   assert.match(board, /whitespace-nowrap/);
   assert.equal(board.includes("Schepenplanning vandaag"), false);
@@ -634,11 +635,84 @@ test("zoektocht naar de volgende lading stopt na de vastgelegde horizon", async 
   assert.equal(queried.length, NEXT_LOAD_LOOKAHEAD_DAYS - 1);
 });
 
+test("P1-P10 titel is de laaddag van de getoonde records", async () => {
+  resetShipPlanningCache();
+  const now = new Date("2026-10-26T07:30:00Z");
+  const fridayUnload = amsterdamWallToUtcMs(2026, 10, 23, 12, 0, 0);
+  const tuesdayEarly = amsterdamWallToUtcMs(2026, 10, 27, 6, 0, 0);
+  const tuesdayLater = amsterdamWallToUtcMs(2026, 10, 27, 10, 0, 0);
+  const reader: ShipPlanningReader = {
+    async queryToday() {
+      return timedDay("2026-10-26", [{ location: "HOOFDSTRAAT", at: fridayUnload }]);
+    },
+    async queryTomorrow() {
+      return timedDay("2026-10-27", [{ location: "HOOFDSTRAAT", at: tuesdayEarly }]);
+    },
+    async queryDate(ymd) {
+      if (ymd === "2026-10-27") {
+        return timedDay(ymd, [
+          { location: "HOOFDSTRAAT", at: tuesdayEarly },
+          { location: "HOOGVELD(I)", at: tuesdayLater },
+          { location: "HOOFDSTRAAT", at: fridayUnload },
+        ]);
+      }
+      return timedDay(ymd, []);
+    },
+  };
+  const shown = await getShipPlanning("auto", harness(reader, () => now));
+  assert.equal(shown.displayedPlanningDate, "2026-10-27");
+  assert.equal(shown.days[0]?.date, "2026-10-27");
+  const title = shipPlanningTitle(shown.displayedPlanningDate);
+  assert.equal(title, "Schepenplanning dinsdag 27 oktober");
+  assert.equal(title.toLowerCase().includes("vandaag"), false);
+  assert.equal(title.toLowerCase().includes("morgen"), false);
+  for (const row of shown.days[0]?.entries ?? []) {
+    if (typeof row.loadingAt === "number" && row.loadingAt >= 1_000_000_000_000) {
+      assert.equal(formatAmsterdamDate(row.loadingAt), shown.displayedPlanningDate);
+    }
+  }
+  assert.equal(shipPlanningTitle("2026-10-24"), "Schepenplanning zaterdag 24 oktober");
+  const dates = readFileSync(path.join(root, "src/shipPlanning/amsterdamDate.ts"), "utf8");
+  const board = readFileSync(path.join(root, "src/components/ShipPlanningBoard.tsx"), "utf8");
+  const selection = readFileSync(path.join(root, "server/shipPlanning/daySelection.ts"), "utf8");
+  assert.match(dates, /nl-NL/);
+  assert.match(dates, /Europe\/Amsterdam/);
+  assert.equal(dates.includes("getDay("), false);
+  assert.equal(selection.includes("getDay("), false);
+  assert.match(board, /displayedPlanningDate/);
+  assert.equal(board.includes("setInterval"), false);
+  assert.match(board, /ship-nav-prev/);
+  assert.match(board, /ship-nav-next/);
+
+  resetShipPlanningCache();
+  const mondayLoad = amsterdamWallToUtcMs(2026, 10, 26, 14, 0, 0);
+  const staying: ShipPlanningReader = {
+    async queryToday() {
+      return timedDay("2026-10-26", [
+        { location: "HOOFDSTRAAT", at: mondayLoad },
+        { location: "HOOFDSTRAAT", at: fridayUnload },
+      ]);
+    },
+    async queryTomorrow() {
+      return timedDay("2026-10-27", [{ location: "HOOFDSTRAAT", at: tuesdayEarly }]);
+    },
+    async queryDate() {
+      return timedDay("2026-10-27", [{ location: "HOOFDSTRAAT", at: tuesdayEarly }]);
+    },
+  };
+  const today = await getShipPlanning("auto", harness(staying, () => now));
+  assert.equal(today.displayedPlanningDate, "2026-10-26");
+  assert.equal(shipPlanningTitle(today.displayedPlanningDate), "Schepenplanning maandag 26 oktober");
+  assert.equal(today.days[0]?.entries.length, 1);
+  assert.equal(formatAmsterdamDate(today.days[0]?.entries[0]?.loadingAt ?? 0), "2026-10-26");
+});
+
 test("D12 D13 D19 titel, datum en player zonder refresh", () => {
   assert.equal(formatPlanningDate("2026-10-22"), "donderdag 22 oktober");
   assert.equal(formatPlanningDate("2026-10-23"), "vrijdag 23 oktober");
   const board = readFileSync(path.join(root, "src/components/ShipPlanningBoard.tsx"), "utf8");
-  assert.match(board, /shipPlanningTitle\(day\.date\)/);
+  assert.match(board, /displayedPlanningDate/);
+  assert.match(board, /shipPlanningTitle\(/);
   assert.equal(board.includes("Schepenplanning vandaag"), false);
   assert.equal(board.includes("Schepenplanning morgen"), false);
   assert.match(board, /Planning vandaag afgerond/);

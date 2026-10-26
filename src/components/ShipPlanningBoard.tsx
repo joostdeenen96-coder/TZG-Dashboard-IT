@@ -363,17 +363,18 @@ export function ShipPlanningBoard() {
                 day={day}
                 resetKey={`${data?.displayedDay ?? ""}:${day.date}`}
                 embedTitle
-                title={shipPlanningTitle(day.date)}
-                dateLabel={planningTodayMark(day.date)}
+                title={shipPlanningTitle(dayIndex === 0 ? data?.displayedPlanningDate || day.date : day.date)}
+                dateLabel={planningTodayMark(dayIndex === 0 ? data?.displayedPlanningDate || day.date : day.date)}
                 notices={dayIndex === 0 ? notices : null}
                 onOpen={(entry, location, label, trigger) => {
                   returnFocusRef.current = trigger;
-                  const relation = planningRelationLabel(day.date);
+                  const shownDate = dayIndex === 0 ? data?.displayedPlanningDate || day.date : day.date;
+                  const relation = planningRelationLabel(shownDate);
                   setSelected({
                     entry,
                     location,
                     label,
-                    planningDate: formatPlanningDate(day.date),
+                    planningDate: formatPlanningDate(shownDate),
                     dayLabel: relation ?? "",
                   });
                 }}

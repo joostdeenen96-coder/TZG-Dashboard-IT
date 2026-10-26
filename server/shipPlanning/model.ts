@@ -51,6 +51,8 @@ export type ShipPlanningResponse = {
   todayRecordCount: number | null;
   tomorrowRecordCount: number | null;
   todayEmptyConfirmed: boolean;
+  /** Kalenderdag van de lading die het bord toont, Europe/Amsterdam, YYYY-MM-DD. */
+  displayedPlanningDate: string;
   days: ShipPlanningDay[];
   retrievedAt: string;
 };

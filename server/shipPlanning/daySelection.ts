@@ -20,6 +20,32 @@ export function dayHasLoadingEntries(entries: TimedEntry[], day: string) {
   return loadingEntriesOnDay(entries, day).length > 0;
 }
 
+/** Testfixtures gebruiken kleine offsets. Een echte laaddatum is een epoch in milliseconden. */
+function isCalendarLoadInstant(value: number) {
+  return value >= 1_000_000_000_000;
+}
+
+/**
+ * Publicatiedatum van de laadplanning.
+ * Als de gekozen dag zelf lading heeft, blijft die datum leidend.
+ * Bevat de set alleen lading van één andere kalenderdag, dan is die laaddag de titel.
+ */
+export function resolveDisplayedLoadPlanning<T extends TimedEntry>(entries: T[], queryDate: string) {
+  const realDays = new Set<string>();
+  for (const entry of entries) {
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) continue;
+    if (!isCalendarLoadInstant(entry.loadingAt)) continue;
+    realDays.add(formatAmsterdamDate(entry.loadingAt));
+  }
+  const date = realDays.has(queryDate) || realDays.size !== 1 ? queryDate : [...realDays][0]!;
+  const visible = entries.filter((entry) => {
+    if (typeof entry.loadingAt !== "number" || !Number.isFinite(entry.loadingAt)) return true;
+    if (!isCalendarLoadInstant(entry.loadingAt)) return true;
+    return formatAmsterdamDate(entry.loadingAt) === date;
+  });
+  return { date, entries: visible };
+}
+
 /**
  * Vandaag is afgerond als elke zichtbare lading al begonnen is.
  * Een rit zonder laadtijd houdt de dag open. Alleen lossingen tellen niet als lading.

@@ -90,6 +90,7 @@ export function useShipPlanning() {
             todayRecordCount: null,
             tomorrowRecordCount: null,
             todayEmptyConfirmed: false,
+            displayedPlanningDate: "",
             days: [],
             retrievedAt: new Date().toISOString(),
           });

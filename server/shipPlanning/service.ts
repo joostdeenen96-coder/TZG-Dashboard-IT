@@ -7,6 +7,7 @@ import {
   emptyConfirmationCountFromEnv,
   observeTodayQuery,
   resetTodayEmptyConfirmation,
+  resolveDisplayedLoadPlanning,
   todayPlanningIsFinished,
   verdictForDay,
 } from "./daySelection.js";
@@ -73,9 +74,10 @@ function sourceUpdatedAt(entities: unknown[]) {
 }
 
 function dayFromQuery(query: ShipPlanningDayQuery, retrievedAt: string, status: ShipPlanningStatus): ShipPlanningDay {
+  const published = resolveDisplayedLoadPlanning(query.entries, query.date);
   return {
-    date: query.date,
-    entries: query.entries,
+    date: published.date,
+    entries: published.entries,
     retrievedAt,
     sourceUpdatedAt: sourceUpdatedAt(query.entities),
     status,
@@ -97,7 +99,8 @@ function envelope(input: {
   days: ShipPlanningDay[];
   retrievedAt: string;
 }): ShipPlanningResponse {
-  return input;
+  const displayedPlanningDate = input.days.find((day) => day.date)?.date ?? "";
+  return { ...input, displayedPlanningDate };
 }
 
 function asStale(response: ShipPlanningResponse): ShipPlanningResponse {

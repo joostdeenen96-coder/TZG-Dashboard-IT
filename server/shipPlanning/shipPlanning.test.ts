@@ -419,7 +419,8 @@ test("SP22-SP26 weergave Tomorrow, TodayAndTomorrow, Auto en 1920x1080", () => {
     assert.match(dialog, new RegExp(label));
   }
   const board = read("src/components/ShipPlanningBoard.tsx");
-  assert.match(board, /shipPlanningTitle\(day\.date\)/);
+  assert.match(board, /displayedPlanningDate/);
+  assert.match(board, /shipPlanningTitle\(/);
   assert.equal(board.includes("Schepenplanning vandaag"), false);
   assert.equal(board.includes("Schepenplanning morgen"), false);
   assert.match(board, /Gegevens tijdelijk niet vernieuwd/);
@@ -752,4 +753,15 @@ test("G5 G11 G12 gasolie houdt gelijke tegels en toont beide maanden", () => {
   assert.match(dialog, /Nog niet vastgesteld/);
   assert.match(dialog, /data-gas-detail-month=\{emphasis \? "current" : "next"\}/);
   assert.equal(dialog.includes("€0,00"), false);
+  assert.match(card, /data-gas-stack/);
+  assert.match(card, /data-gas-country/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /grid-template-rows: auto minmax\(0, 1fr\) auto/);
+  assert.match(css, /justify-content: stretch/);
+  assert.match(css, /justify-content: center/);
+  assert.match(css, /container-type: size/);
+  const gasCss = css.slice(css.indexOf("[data-gas-months]"), css.indexOf("[data-surcharge-unavailable]"));
+  assert.equal(/position:\s*absolute/.test(gasCss), false);
+  assert.equal(card.includes("€2,00"), false);
+  assert.equal(card.includes("€10,00"), false);
 });
