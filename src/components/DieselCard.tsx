@@ -149,12 +149,10 @@ function GasOilMonthPane({
         </p>
         <div data-gas-amount={known ? "known" : "unknown"}>
           {known ? (
-            <>
-              <p className="font-display leading-none font-semibold tabular-nums" data-gas-value="">
-                {formatEuro(result!.surchargePerTon!)}
-              </p>
-              <p data-diesel-unit="">/ ton</p>
-            </>
+            <p className="font-display leading-none font-semibold tabular-nums" data-gas-value-line="">
+              <span data-gas-value="">{formatEuro(result!.surchargePerTon!)}</span>
+              <span data-gas-unit="">/ ton</span>
+            </p>
           ) : missingMonth ? (
             <span data-surcharge-unavailable="">Niet beschikbaar</span>
           ) : (

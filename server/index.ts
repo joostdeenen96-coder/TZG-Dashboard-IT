@@ -139,6 +139,15 @@ app.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
   }
 });
 
+await import("./gasoil/historicalBootstrap.js")
+  .then(({ ensureNetherlandsHistoricalBootstrap, logHistoricalBootstrapFailure }) =>
+    ensureNetherlandsHistoricalBootstrap().catch(logHistoricalBootstrapFailure),
+  )
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "historische bootstrap niet geladen";
+    logWarn(message, { event: "gasoil.historical_bootstrap.failed" });
+  });
+
 const server = app.listen(port, "0.0.0.0", () => {
   logInfo(`applicatie gestart op poort ${port}`, { event: "startup" });
   logInfo(`health: http://127.0.0.1:${port}/api/health`, { event: "startup" });
