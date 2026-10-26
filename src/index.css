@@ -293,11 +293,10 @@ body {
   --font-meta: clamp(11px, 1.02vh, 15px);
   --font-micro: clamp(10px, 0.88vh, 13px);
   --font-tile-value: calc(var(--font-display-value) * 0.72);
-  --gas-month: clamp(11px, 1.05vh, 20px);
-  --gas-amount: clamp(18px, 1.55vh, 34px);
-  --gas-unit: clamp(10px, 0.7vh, 15px);
-  --gas-country: clamp(10px, 0.85vh, 14px);
-  --gas-pane-pad: clamp(3px, 0.35vh, 8px);
+  --gas-month: clamp(12px, 1.05vh, 20px);
+  --gas-amount: clamp(18px, 1.7vh, 40px);
+  --gas-unit: clamp(11px, 0.85vh, 16px);
+  --gas-pane-pad: clamp(4px, 0.45vh, 10px);
   --gas-pane-gap: clamp(4px, 0.35vw, 8px);
   --gas-pane-radius: clamp(8px, 0.7vh, 12px);
   --ship-text: var(--font-table);
@@ -479,13 +478,29 @@ body {
 .planning-display [data-surcharge="gas-nl"] [data-surcharge-body],
 .planning-display [data-surcharge="gas-be"] [data-surcharge-body] {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
+  align-items: stretch;
   justify-content: stretch;
   height: 100%;
   min-height: 0;
-  container-type: size;
-  container-name: gasoil;
+  width: 100%;
+  gap: clamp(4px, 0.4vh, 8px);
+}
+
+.planning-display [data-gas-title] {
+  margin: 0;
+  min-width: 0;
+  font-size: clamp(13px, 1.15vh, 20px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.planning-display [data-gas-stale] {
+  font-weight: 500;
+  color: var(--color-mist);
 }
 
 .planning-display [data-gas-months] {
@@ -494,12 +509,11 @@ body {
   grid-template-rows: minmax(0, 1fr);
   column-gap: var(--gas-pane-gap);
   align-items: stretch;
+  justify-content: stretch;
+  width: 100%;
   height: 100%;
   min-height: 0;
   min-width: 0;
-  --gas-month: clamp(11px, 12cqh, 20px);
-  --gas-amount: clamp(18px, 20cqh, 34px);
-  --gas-unit: clamp(10px, 9cqh, 15px);
 }
 
 .planning-display [data-gas-month] {
@@ -512,11 +526,13 @@ body {
   min-width: 0;
   box-sizing: border-box;
   padding: var(--gas-pane-pad);
-  border: 1px solid color-mix(in srgb, var(--color-veil) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-veil) 22%, transparent);
   border-radius: var(--gas-pane-radius);
   background: transparent;
   color: var(--color-paper);
   overflow: visible;
+  container-type: size;
+  container-name: gas-pane;
 }
 
 .planning-display [data-gas-stack] {
@@ -524,10 +540,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(1px, 3cqh, 6px);
+  gap: clamp(4px, 8cqh, 12px);
   max-width: 100%;
-  max-height: 100%;
-  min-height: 0;
   min-width: 0;
 }
 
@@ -536,29 +550,25 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(0px, 1.5cqh, 3px);
+  gap: clamp(2px, 2cqh, 6px);
   max-width: 100%;
   min-width: 0;
 }
 
 .planning-display [data-gas-month-label] {
   max-width: 100%;
-  font-size: var(--gas-month);
+  font-size: clamp(12px, 16cqh, 20px);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: 0.04em;
 }
 
-.planning-display [data-gas-country] {
-  flex: 0 0 auto;
-  font-size: clamp(10px, 8cqh, 14px);
-  line-height: 1.1;
+.planning-display [data-gas-month="current"] {
+  border-color: color-mix(in srgb, var(--color-gold) 78%, transparent);
+  background: transparent;
 }
 
-.planning-display [data-gas-month="current"] {
-  border-color: color-mix(in srgb, var(--color-gold) 72%, transparent);
-  box-shadow: inset 0 2px 0 var(--color-gold);
-  background: transparent;
+.planning-display [data-gas-month="current"] [data-gas-month-label] {
   color: var(--color-gold);
 }
 
@@ -569,7 +579,7 @@ body {
 
 .planning-display [data-gas-month] [data-gas-value],
 .planning-display [data-gas-month] [data-gas-unknown] {
-  font-size: var(--gas-amount);
+  font-size: clamp(18px, 28cqh, 40px);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
@@ -577,8 +587,7 @@ body {
 }
 
 .planning-display [data-gas-month] [data-diesel-unit] {
-  margin-top: 1px;
-  font-size: var(--gas-unit);
+  font-size: clamp(11px, 12cqh, 16px);
   font-weight: 500;
   line-height: 1.1;
   color: color-mix(in srgb, var(--color-paper) 78%, transparent);

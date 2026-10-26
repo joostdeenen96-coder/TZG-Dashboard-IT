@@ -195,17 +195,16 @@ function GasOilCell({
         }}
         disabled={!canOpen}
         data-surcharge-body=""
-        className={`${tileBody} absolute inset-0 w-full text-left disabled:opacity-100 ${canOpen ? "cursor-pointer" : "cursor-default"}`}
+        className={`absolute inset-0 h-full min-h-0 w-full px-3 py-2 text-left disabled:opacity-100 ${canOpen ? "cursor-pointer" : "cursor-default"}`}
       >
-        <p className="font-display text-[18px] leading-none font-semibold text-gold" data-diesel-label="">Gasolietoeslag</p>
+        <p className="font-display leading-none font-semibold text-gold" data-gas-title="">
+          {`Gasolietoeslag ${countryLabel}`}
+          {stale ? <span data-gas-stale=""> · verouderd</span> : null}
+        </p>
         <div className="grid-cols-2" data-gas-months="">
           <GasOilMonthPane kind="current" result={current} />
           <GasOilMonthPane kind="next" result={next} />
         </div>
-        <p className="truncate capitalize text-mist" data-diesel-meta="" data-gas-country="">
-          {countryLabel}
-          {stale ? " · verouderd" : ""}
-        </p>
       </button>
     </li>
   );
