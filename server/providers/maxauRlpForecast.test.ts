@@ -77,6 +77,35 @@ test("M4-M7 parser gebruikt alleen W.predictions.p50", () => {
   assert.equal(parsed.points.some((item) => item.levelCm === 111 || item.levelCm === 9999 || item.levelCm === 1), false);
 });
 
+test("MX6-MX11 de hele p50-reeks blijft Vorhersage, zonder daglimiet of Abschätzung", () => {
+  const start = Date.parse("2026-10-26T15:00:00Z");
+  const p50 = Array.from({ length: 120 }, (_, hour) => ({
+    x: new Date(start + hour * 3_600_000).toISOString(),
+    y: 340,
+  }));
+  const parsed = parseRlpMaxauForecast({
+    W: {
+      measurements: [{ x: "2026-10-26T14:00:00Z", y: 111 }],
+      predictions: {
+        time: "2026-10-26T12:00:00Z",
+        p10: [{ x: "2026-10-31T15:00:00Z", y: 1 }],
+        p90: [{ x: "2026-10-31T15:00:00Z", y: 999 }],
+        p50,
+      },
+    },
+  });
+  assert.equal(parsed.points.length, 120);
+  assert.equal(parsed.points.every((point) => point.kind === "verwacht"), true);
+  assert.equal(parsed.points.some((point) => point.kind === "inschatting"), false);
+  assert.equal(parsed.points[0]?.timestamp, new Date(start).toISOString());
+  assert.equal(parsed.points.at(-1)?.timestamp, new Date(start + 119 * 3_600_000).toISOString());
+  assert.equal(parsed.points.some((point) => point.levelCm === 111 || point.levelCm === 1 || point.levelCm === 999), false);
+
+  const days = selectDailyForecast(parsed.points, new Date("2026-10-26T12:00:00Z"), "absolute");
+  assert.equal(days.length, 5);
+  assert.equal(days.every((point) => point.kind === "verwacht"), true);
+});
+
 test("M10-M11 voorspelling blijft chronologisch en zonder dubbele tijdstippen", () => {
   const parsed = parseRlpMaxauForecast({
     W: {
@@ -359,6 +388,8 @@ test("M1-M11 officiële RLP-route levert numerieke Maxau-voorspelling", { timeou
   assert.ok(official.size >= 2);
   assert.equal(parsed.points.length, official.size);
   assert.equal(parsed.issuedAt, site.W?.predictions?.time);
+  assert.equal(parsed.points.every((item) => item.kind === "verwacht"), true);
+  assert.equal(parsed.points.some((item) => item.kind === "inschatting"), false);
   for (const item of parsed.points) {
     assert.equal(item.kind, "verwacht");
     assert.equal(Number.isFinite(item.levelCm), true);

@@ -12,6 +12,11 @@ import type { WaterForecastPoint, WaterPoint } from "./waterLevelProvider.js";
  * - GET /api/v1/measurement-site/23700200
  * - De Vorhersage-lijn en de tabel zijn W.predictions.p50.
  *   Q is afvoer. measurements zijn metingen. p10–p90 zijn banden, geen lijn.
+ * - Elk p50-punt heeft alleen x en y. De bron zet er geen forecast/estimate-type op.
+ *   De hele p50-reeks is daarom Vorhersage (kind verwacht), hoe ver die ook loopt.
+ *   Er is geen tweede numerieke Abschätzung-reeks. De HVZ-pagina toont dat onderscheid
+ *   alleen in de GIF en in pdf/HW-Fruehwarnung.pdf. Die worden niet uitgelezen.
+ * - De lengte komt uit de bron. Er is geen vaste horizon van twee dagen.
  * - Tijdstippen zijn ISO-8601 in UTC (Z). De pagina toont ze één keer in Europe/Berlin.
  */
 export const MAXAU_RLP_PAGE_URL = "https://www.hochwasser.rlp.de/flussgebiet/oberrhein/maxau";
