@@ -1,3 +1,4 @@
+import { applyMeasuredStatus } from "../water/classifyWaterLevel.js";
 import { readMaxauFromHvz, type HvzReading } from "./hvzDataset.js";
 import { readPegelonlineChart } from "./pegelonline.js";
 import {
@@ -76,7 +77,7 @@ export class MaxauProvider implements WaterLevelProvider {
       const forecastStatus = visible.length >= 2 ? forecast.status : "unavailable";
       return {
         ...meta,
-        ...reading,
+        ...applyMeasuredStatus("maxau", reading),
         series,
         forecast: visible,
         forecastError: forecastStatus === "stale" ? forecast.message : null,

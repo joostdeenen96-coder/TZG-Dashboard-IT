@@ -1,3 +1,4 @@
+import { classifyWaterLevel } from "../water/classifyWaterLevel.js";
 import { decodeLatin1, fetchBytes } from "./http.js";
 import { trendFromChange, type WaterStatus, type WaterTrend } from "./waterLevelProvider.js";
 
@@ -84,12 +85,6 @@ function previousDay(iso: string) {
   return `${dd}.${mm}.${stamp.getUTCFullYear()}`;
 }
 
-function statusFromBounds(levelCm: number, lowCm: number, highCm: number): WaterStatus {
-  if (levelCm <= lowCm) return "laag";
-  if (levelCm >= highCm) return "hoog";
-  return "normaal";
-}
-
 export async function readMaxauFromHvz(): Promise<HvzReading> {
   const [stationBytes, dailyBytes] = await Promise.all([fetchBytes(STATION_URL), fetchBytes(DAILY_URL)]);
   const stations = decodeLatin1(stationBytes);
@@ -101,8 +96,10 @@ export async function readMaxauFromHvz(): Promise<HvzReading> {
   if (record[UNIT_INDEX] !== "cm") throw new Error("Waterstand van Maxau staat niet in centimeter.");
   const levelCm = Math.round(fieldNumber(record, LEVEL_INDEX, "Waterstand"));
   const updatedAt = parseUpdatedAt(record[TIME_INDEX]);
-  const lowCm = fieldNumber(record, LOW_INDEX, "MNW");
-  const highCm = fieldNumber(record, FLOOD_INDEX, "Hoogwaterstand");
+  fieldNumber(record, LOW_INDEX, "MNW");
+  fieldNumber(record, FLOOD_INDEX, "Hoogwaterstand");
+  const status = classifyWaterLevel("maxau", levelCm);
+  if (!status) throw new Error("Actuele waterstand van Maxau is ongeldig.");
   const tmvKey = String(Number(STATION_ID));
   const dailyMatch = new RegExp(`${tmvKey}:\\s*\\[${tmvKey},\\s*'([^']*)',\\s*'([^']*)',\\s*'([^']*)'`).exec(daily);
   if (!dailyMatch) throw new Error("Dagwaarde van Maxau ontbreekt.");
@@ -116,7 +113,7 @@ export async function readMaxauFromHvz(): Promise<HvzReading> {
     levelCm,
     changeCm,
     trend: trendFromChange(changeCm),
-    status: statusFromBounds(levelCm, lowCm, highCm),
+    status: status.label,
     updatedAt,
   };
 }

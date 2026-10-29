@@ -5,6 +5,7 @@ import type {
   WaterPoint,
   WaterStationId,
   WaterStationResult,
+  WaterLevelSeverity,
   WaterStatus,
   WaterTrend,
 } from "../types";
@@ -24,7 +25,25 @@ function isTrend(value: unknown): value is WaterTrend {
 }
 
 function isStatus(value: unknown): value is WaterStatus {
-  return value === "laag" || value === "normaal" || value === "hoog";
+  return (
+    value === "Extreem laag" ||
+    value === "Zeer laag" ||
+    value === "Laag" ||
+    value === "Normaal" ||
+    value === "Hoog" ||
+    value === "Zeer hoog"
+  );
+}
+
+function isSeverity(value: unknown): value is WaterLevelSeverity {
+  return (
+    value === "extreme-low" ||
+    value === "very-low" ||
+    value === "low" ||
+    value === "normal" ||
+    value === "high" ||
+    value === "very-high"
+  );
 }
 
 function text(value: unknown, fallback: string) {
@@ -40,6 +59,7 @@ function failed(id: WaterStationId, message: string, row?: Record<string, unknow
     changeCm: null,
     trend: null,
     status: null,
+    severity: null,
     updatedAt: null,
     source: text(row?.source, ""),
     series: [],
@@ -90,6 +110,7 @@ function normalizeStation(id: WaterStationId, value: unknown): WaterStationResul
     typeof row.changeCm !== "number" ||
     !isTrend(row.trend) ||
     !isStatus(row.status) ||
+    !isSeverity(row.severity) ||
     typeof row.updatedAt !== "string"
   ) {
     return failed(id, "Peil niet beschikbaar.", row);
@@ -102,6 +123,7 @@ function normalizeStation(id: WaterStationId, value: unknown): WaterStationResul
     changeCm: row.changeCm,
     trend: row.trend,
     status: row.status,
+    severity: row.severity,
     updatedAt: row.updatedAt,
     source: text(row.source, ""),
     series: seriesPoints(row.series),
@@ -155,7 +177,7 @@ function acceptWater(value: unknown): WaterLevelsResponse | null {
 
 const waterFeed = createPollingFeed<WaterLevelsResponse>({
   name: "waterstanden",
-  storageKey: "teunesen.tv.water.v1",
+  storageKey: "teunesen.tv.water.v2",
   unavailable: "Waterstanden niet bereikbaar.",
   load: loadWaterLevels,
   accept: acceptWater,

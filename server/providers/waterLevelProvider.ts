@@ -1,6 +1,10 @@
+import type { WaterLevelSeverity, WaterStatusLabel } from "../water/classifyWaterLevel.js";
+
 export type WaterStationId = "kaub" | "ruhrort" | "maxau";
 
-export type WaterStatus = "laag" | "normaal" | "hoog";
+export type WaterStatus = WaterStatusLabel;
+
+export type { WaterLevelSeverity };
 
 export type WaterTrend = "stijgend" | "dalend" | "gelijk";
 
@@ -27,6 +31,7 @@ export type WaterStationResult = {
   changeCm: number | null;
   trend: WaterTrend | null;
   status: WaterStatus | null;
+  severity: WaterLevelSeverity | null;
   updatedAt: string | null;
   source: string;
   series: WaterPoint[];
@@ -70,6 +75,7 @@ export function failedStation(
     changeCm: null,
     trend: null,
     status: null,
+    severity: null,
     updatedAt: null,
     source: meta.source,
     series: [],

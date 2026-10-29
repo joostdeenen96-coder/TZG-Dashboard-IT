@@ -1,4 +1,6 @@
-export type WaterStatus = "laag" | "normaal" | "hoog";
+export type WaterStatus = "Extreem laag" | "Zeer laag" | "Laag" | "Normaal" | "Hoog" | "Zeer hoog";
+
+export type WaterLevelSeverity = "extreme-low" | "very-low" | "low" | "normal" | "high" | "very-high";
 
 export type WaterTrend = "stijgend" | "dalend" | "gelijk";
 
@@ -27,6 +29,7 @@ export type WaterStationResult = {
   changeCm: number | null;
   trend: WaterTrend | null;
   status: WaterStatus | null;
+  severity: WaterLevelSeverity | null;
   updatedAt: string | null;
   source: string;
   series: WaterPoint[];
@@ -103,6 +106,8 @@ export type DieselWeek = {
 export type DieselSurcharge = DieselWeek & {
   /** Nieuwste peildatum eerst, daarna een-na-nieuwste. */
   weken: DieselWeek[];
+  /** Laatste geldige records terwijl SharePoint tijdelijk niet bereikbaar is. */
+  stale?: boolean;
 };
 
 export type WeatherIconName = "cloud" | "rain" | "showers" | "sun" | "sun-cloud";

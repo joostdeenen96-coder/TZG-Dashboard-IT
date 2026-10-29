@@ -60,6 +60,7 @@ function mapPayload(payload: unknown): DieselSurcharge | "empty" {
     weken: (parsedWeeks.length > 0 ? parsedWeeks : [current])
       .sort((left, right) => Date.parse(right.peildatum) - Date.parse(left.peildatum))
       .slice(0, 2),
+    stale: row.stale === true,
   };
 }
 

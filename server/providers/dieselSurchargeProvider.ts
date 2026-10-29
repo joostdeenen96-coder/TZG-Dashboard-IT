@@ -15,6 +15,8 @@ export type DieselWeek = {
 export type DieselSurcharge = DieselWeek & {
   /** Nieuwste peildatum eerst, daarna een-na-nieuwste. */
   weken: DieselWeek[];
+  /** Laatste geldige records terwijl SharePoint tijdelijk niet bereikbaar is. */
+  stale?: boolean;
 };
 
 export interface DieselSurchargeProvider {

@@ -4,6 +4,7 @@ import {
   selectLatestTwoByPeildatum,
   type DieselSurchargeRecord,
 } from "../diesel/selection.js";
+import { logError, logInfo } from "../log.js";
 import { getDashboardConfig } from "../services/dashboardConfig.js";
 import { graphGet, graphUrl, resetGraphCache } from "../services/graphClient.js";
 import { sharePointGraphPath } from "../services/settingsService.js";
@@ -68,7 +69,7 @@ function mapItemsToRecords(items: Record<string, unknown>[], names: ReturnType<t
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "record overgeslagen";
-      console.error(`Dieselrecord overgeslagen (${message}).`);
+      logError(`Dieselrecord overgeslagen (${message}).`);
     }
   }
   return records;
@@ -132,7 +133,7 @@ export class SharePointDieselProvider implements DieselSurchargeProvider {
 
     const fieldSamples = items.map((item) => asObject(item.fields ?? {}, "Velden ontbreken."));
     const names = resolveDieselFieldNames(columns, fieldSamples);
-    console.info(
+    logInfo(
       `SharePoint diesel kolommen: Peildatum=${names.peildatum}, WebsiteWeek=${names.websiteWeek}, ` +
         `DieselprijsPerLiter=${names.dieselPrijs}, Toeslag=${names.toeslagPercentage}` +
         (names.actief ? `, Actief=${names.actief} (niet gebruikt voor selectie)` : " (geen Actief-kolom)"),
@@ -141,9 +142,9 @@ export class SharePointDieselProvider implements DieselSurchargeProvider {
     const records = mapItemsToRecords(items, names);
     const payload = buildDieselSurchargeFromRecords(records);
     const previous = payload.weken[1];
-    console.info(
-      `SharePoint diesel (${listName}): nieuwste peildatum ${payload.peildatum} WebsiteWeek ${payload.websiteWeek} ` +
-        `raw ${payload.toeslagPercentageRaw}% → display ${payload.toeslagPercentageDisplay}%, ` +
+    logInfo(
+      `diesel SharePoint refresh succesvol, recordcount ${records.length}, nieuwste Peildatum ${payload.peildatum}, WebsiteWeek ${payload.websiteWeek}. ` +
+        `SharePoint diesel (${listName}): raw ${payload.toeslagPercentageRaw}% → display ${payload.toeslagPercentageDisplay}%, ` +
         (previous
           ? `een-na-nieuwste ${previous.peildatum} WebsiteWeek ${previous.websiteWeek}, `
           : "geen een-na-nieuwste, ") +

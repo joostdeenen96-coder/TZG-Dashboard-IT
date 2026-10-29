@@ -185,7 +185,7 @@ test("M13-M16 Maxau-provider koppelt p50 ná de meting en bewaart de waterstand"
     levelCm: 342,
     changeCm: 2,
     trend: "stijgend" as const,
-    status: "normaal" as const,
+    status: "Zeer laag" as const,
     updatedAt: "2026-10-26T14:30:00+01:00",
   };
   setMaxauProviderForTests({

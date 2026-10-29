@@ -234,6 +234,7 @@ export function DieselCard() {
   const [detail, setDetail] = useState<"NL" | "BE" | null>(null);
 
   const dieselReady = dieselState.status === "ready" || dieselState.status === "fallback";
+  const dieselStale = dieselReady && (dieselState.status === "fallback" || dieselState.data.stale === true);
   const dieselWeeks = dieselReady
     ? planningWeeks(dieselState.data.weken?.length ? dieselState.data.weken : [dieselState.data], 2)
     : [];
@@ -241,7 +242,7 @@ export function DieselCard() {
   const gasOil =
     gasOilState.status === "ready" || gasOilState.status === "fallback" ? gasOilState.data : null;
   const refreshing = dieselState.refreshing || gasOilState.refreshing;
-  const cardStatus = dieselReady ? dieselState.status : gasOil ? "ready" : dieselState.status;
+  const cardStatus = dieselStale ? "fallback" : dieselReady ? dieselState.status : gasOil ? "ready" : dieselState.status;
 
   return (
     <article className="tv-card relative flex h-full min-h-0 flex-col p-3" data-diesel-card="" data-status={cardStatus}>
@@ -275,8 +276,10 @@ export function DieselCard() {
         <GasOilCell result={gasOil?.nl ?? null} countryLabel="Nederland" onOpen={() => setDetail("NL")} />
         <GasOilCell result={gasOil?.be ?? null} countryLabel="België" onOpen={() => setDetail("BE")} />
       </ul>
-      {dieselState.status === "fallback" ? (
-        <p className="mt-1 truncate text-center text-[13px] text-gold">Laatste bekende dieselgegevens</p>
+      {dieselStale ? (
+        <p className="mt-1 truncate text-center text-[13px] text-gold" data-diesel-cache="stale">
+          Laatste bekende dieselgegevens
+        </p>
       ) : null}
       {detail && gasOil ? (
         <GasOilDetailDialog

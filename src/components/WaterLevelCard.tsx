@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { formatAmsterdamTime, formatWaterChange } from "../lib/format";
 import { displayMillis, forecastClockFor, selectDailyForecast } from "../lib/waterForecast";
-import type { WaterStationResult, WaterStatus, WaterTrend } from "../types";
+import type { WaterLevelSeverity, WaterStationResult, WaterStatus, WaterTrend } from "../types";
 import { CardState } from "./CardState";
 import { WaterChart } from "./WaterChart";
 
@@ -23,6 +23,7 @@ function isReady(station: WaterStationResult): station is WaterStationResult & {
   changeCm: number;
   trend: WaterTrend;
   status: WaterStatus;
+  severity: WaterLevelSeverity;
   updatedAt: string;
 } {
   return (
@@ -31,6 +32,7 @@ function isReady(station: WaterStationResult): station is WaterStationResult & {
     station.changeCm !== null &&
     station.trend !== null &&
     station.status !== null &&
+    station.severity !== null &&
     station.updatedAt !== null
   );
 }
@@ -57,7 +59,11 @@ export function WaterLevelCard({ station, refreshing = false, stale = false }: W
             {station.river} · waterstand
           </p>
         </div>
-        <span className="shrink-0 rounded-full border border-gold/40 bg-gold/12 px-3 py-1 text-[13px] font-bold tracking-[0.08em] text-gold uppercase" data-water-status="">
+        <span
+          className="water-status-badge shrink-0 rounded-full border px-2.5 py-1 text-center text-[13px] font-bold tracking-[0.04em] uppercase"
+          data-water-status=""
+          data-water-severity={station.severity}
+        >
           {station.status}
         </span>
       </div>

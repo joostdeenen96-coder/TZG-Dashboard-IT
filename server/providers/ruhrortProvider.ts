@@ -1,3 +1,4 @@
+import { applyMeasuredStatus } from "../water/classifyWaterLevel.js";
 import { readPegelonlineWater } from "./pegelonline.js";
 import { failedStation, type WaterLevelProvider, type WaterStationResult } from "./waterLevelProvider.js";
 
@@ -15,7 +16,7 @@ export class RuhrortProvider implements WaterLevelProvider {
         uuid: "c0f51e35-d0e8-4318-afaf-c5fcbc29f4c1",
         shortname: "DUISBURG-RUHRORT",
       });
-      return { ...meta, ...reading, error: null };
+      return { ...meta, ...applyMeasuredStatus("ruhrort", reading), error: null };
     } catch (error) {
       return failedStation(meta, error);
     }
