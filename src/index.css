@@ -13,6 +13,8 @@
   --color-water: #7fb8d4;
   --color-forest: #7fc27e;
   --color-veil: #ffffff;
+  --color-water-critical: #b23b34;
+  --color-water-low: #c98480;
 }
 
 :root {
@@ -38,6 +40,8 @@
   --color-water: #2c6a89;
   --color-forest: #3f6d3e;
   --color-veil: #303e48;
+  --color-water-critical: #9d342e;
+  --color-water-low: #a56d6a;
   --glass-fill: rgba(255, 255, 255, 0.5);
   --glass-fill-strong: rgba(255, 255, 255, 0.72);
   --glass-stroke: rgba(255, 255, 255, 0.7);
@@ -415,8 +419,45 @@ body {
 .planning-display [data-water-status] {
   font-size: var(--font-micro);
   font-weight: 500;
-  letter-spacing: 0.06em;
-  line-height: 1.2;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+
+.water-status-badge {
+  max-width: 8.75rem;
+  white-space: nowrap;
+}
+
+.water-status-badge[data-water-severity="extreme-low"] {
+  border-color: color-mix(in srgb, var(--color-water-critical) 78%, transparent);
+  background: color-mix(in srgb, var(--color-water-critical) 24%, transparent);
+  color: #f6d4d0;
+}
+
+.water-status-badge[data-water-severity="very-low"],
+.water-status-badge[data-water-severity="low"] {
+  border-color: color-mix(in srgb, var(--color-water-low) 72%, transparent);
+  background: color-mix(in srgb, var(--color-water-low) 16%, transparent);
+  color: #f3d8d5;
+}
+
+.water-status-badge[data-water-severity="normal"],
+.water-status-badge[data-water-severity="high"],
+.water-status-badge[data-water-severity="very-high"] {
+  border-color: color-mix(in srgb, var(--color-gold) 40%, transparent);
+  background: color-mix(in srgb, var(--color-gold) 12%, transparent);
+  color: var(--color-gold);
+}
+
+:root[data-theme="light"] .water-status-badge[data-water-severity="extreme-low"] {
+  color: #8d2e28;
+  background: color-mix(in srgb, var(--color-water-critical) 14%, white);
+}
+
+:root[data-theme="light"] .water-status-badge[data-water-severity="very-low"],
+:root[data-theme="light"] .water-status-badge[data-water-severity="low"] {
+  color: #7d4542;
+  background: color-mix(in srgb, var(--color-water-low) 16%, white);
 }
 
 .planning-display [data-water-meta],

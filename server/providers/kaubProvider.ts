@@ -1,3 +1,4 @@
+import { applyMeasuredStatus } from "../water/classifyWaterLevel.js";
 import { readPegelonlineWater } from "./pegelonline.js";
 import { failedStation, type WaterLevelProvider, type WaterStationResult } from "./waterLevelProvider.js";
 
@@ -15,7 +16,7 @@ export class KaubProvider implements WaterLevelProvider {
         uuid: "1d26e504-7f9e-480a-b52c-5932be6549ab",
         shortname: "KAUB",
       });
-      return { ...meta, ...reading, error: null };
+      return { ...meta, ...applyMeasuredStatus("kaub", reading), error: null };
     } catch (error) {
       return failedStation(meta, error);
     }

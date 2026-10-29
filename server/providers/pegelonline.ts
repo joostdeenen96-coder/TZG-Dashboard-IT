@@ -3,7 +3,6 @@ import {
   trendFromChange,
   type WaterForecastPoint,
   type WaterPoint,
-  type WaterStatus,
   type WaterTrend,
 } from "./waterLevelProvider.js";
 
@@ -20,7 +19,6 @@ export type PegelonlineReading = {
   levelCm: number;
   changeCm: number;
   trend: WaterTrend;
-  status: WaterStatus;
   updatedAt: string;
   series: WaterPoint[];
   forecast: WaterForecastPoint[];
@@ -44,13 +42,6 @@ function asMeasurements(value: unknown): Measurement[] {
     }
     return { timestamp: row.timestamp, value: row.value };
   });
-}
-
-function statusFromState(state: unknown): WaterStatus {
-  if (state === "low") return "laag";
-  if (state === "normal") return "normaal";
-  if (state === "high") return "hoog";
-  throw new Error("Waterstandstatus ontbreekt.");
 }
 
 function valueOneDayEarlier(measurements: Measurement[], currentIso: string) {
@@ -152,7 +143,6 @@ export async function readPegelonlineWater(station: { uuid: string; shortname: s
     levelCm,
     changeCm,
     trend: trendFromChange(changeCm),
-    status: statusFromState(current.stateMnwMhw),
     updatedAt: current.timestamp,
     series: chart.series,
     forecast: chart.forecast,
