@@ -1,5 +1,6 @@
-import { amsterdamYmdFromEpoch } from "./amsterdamDate";
 import type { ShipPlanningEntry } from "../types/shipPlanning";
+import { amsterdamYmdFromEpoch } from "./amsterdamDate";
+import { locationQuantity } from "./locationTonnage";
 
 export const ROTATION_MS = 12_000;
 
@@ -23,6 +24,9 @@ export type LocationPage = LocationGroup & {
   pageInLocation: number;
   locationPageCount: number;
   locationCount: number;
+  /** Som van quantity over alle zichtbare laadrecords van deze laadplaats, niet van één pagina. */
+  locationQuantity: number | null;
+  locationQuantityFractionDigits: number;
   columns: 1 | 2;
   left: ShipPlanningEntry[];
   right: ShipPlanningEntry[];
@@ -115,6 +119,7 @@ export function buildLocationPages(
   for (const group of orderLocationGroups(groups)) {
     const sorted = sortEntriesChronologically(group.entries);
     const locationCount = sorted.length;
+    const quantity = locationQuantity(sorted.map((entry) => entry.quantity));
     const locationPageCount = Math.ceil(locationCount / pageCapacity);
     for (let pageInLocation = 0; pageInLocation < locationPageCount; pageInLocation += 1) {
       const start = pageInLocation * pageCapacity;
@@ -127,6 +132,8 @@ export function buildLocationPages(
         pageInLocation,
         locationPageCount,
         locationCount,
+        locationQuantity: quantity.total,
+        locationQuantityFractionDigits: quantity.fractionDigits,
         columns: split.columns,
         left: split.left,
         right: split.right,
