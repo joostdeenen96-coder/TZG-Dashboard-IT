@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPlanningDate, shipPlanningTitle } from "../shipPlanning/amsterdamDate";
 import { formatQuantity } from "../shipPlanning/formatQuantity";
+import { formatShipLocationMeta } from "../shipPlanning/locationTonnage";
 import { groupEntries } from "../shipPlanning/groupEntries";
 import {
   SHIPS_PER_COLUMN,
@@ -238,14 +239,15 @@ function LocationSlide({
       ) : (
         <>
           {!embedTitle && dateLabel ? <p className="text-[16px] leading-none text-mist">{dateLabel}</p> : null}
-          <div className="mt-1 flex shrink-0 items-center justify-between gap-3">
+          <div className="mt-1 flex shrink-0 items-center justify-between gap-3" data-ship-location-bar="">
             <div className="flex min-w-0 items-center gap-2">
               <NavButton direction="prev" disabled={navDisabled} onStep={navigation.step} />
               <h3
-                className="truncate font-display leading-none font-semibold tracking-[0.04em] uppercase"
+                className="min-w-0 truncate font-display leading-none font-semibold tracking-[0.04em] uppercase"
                 style={{ fontSize: "var(--ship-title, 20px)" }}
                 data-location={page.location}
                 data-location-label={page.label}
+                title={page.label}
               >
                 {page.label}
                 {page.locationPageCount > 1 ? (
@@ -256,8 +258,17 @@ function LocationSlide({
               </h3>
               <NavButton direction="next" disabled={navDisabled} onStep={navigation.step} />
             </div>
-            <p className="shrink-0 leading-none text-mist" style={{ fontSize: "var(--ship-meta, 16px)" }} data-ship-count={page.locationCount}>
-              {page.locationCount === 1 ? "1 schip" : `${page.locationCount} schepen`}
+            <p
+              className="shrink-0 text-right leading-none whitespace-nowrap text-mist tabular-nums"
+              style={{ fontSize: "var(--ship-meta, 16px)" }}
+              data-ship-count={page.locationCount}
+              data-ship-tonnage={page.locationQuantity ?? ""}
+              data-ship-tonnage-state={page.locationQuantity == null ? "unavailable" : "ready"}
+            >
+              {formatShipLocationMeta(page.locationCount, {
+                total: page.locationQuantity,
+                fractionDigits: page.locationQuantityFractionDigits,
+              })}
             </p>
           </div>
           <div
