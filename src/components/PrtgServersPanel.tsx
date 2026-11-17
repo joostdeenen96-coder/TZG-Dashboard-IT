@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import type { PrtgMetric, PrtgServer } from "../types";
 import { CardState } from "./CardState";
+import { ServerResourceDialog } from "./ServerResourceDialog";
 
 type PrtgServersPanelProps = {
   servers: PrtgServer[];
@@ -85,6 +87,7 @@ function MetricCell({ label, metric }: { label: string; metric: PrtgMetric | nul
 }
 
 export function PrtgServersPanel({ servers, status, message, refreshing = false }: PrtgServersPanelProps) {
+  const [selected, setSelected] = useState<{ server: PrtgServer; returnFocus: HTMLElement | null } | null>(null);
   if (status === "loading") {
     return <CardState status="loading" title="Servers" message="Servertegels worden opgehaald." />;
   }
@@ -123,12 +126,17 @@ export function PrtgServersPanel({ servers, status, message, refreshing = false 
       </div>
       <div className="mt-4 grid min-h-0 flex-1 grid-cols-4 grid-rows-3 gap-3 overflow-hidden">
         {ranked.map((server, index) => (
-          <motion.article
+          <motion.button
             key={server.id}
+            type="button"
+            data-testid="server-tile"
+            data-server-id={server.id}
+            aria-label={`Open details van server ${shortName(server.name) || server.name}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.03, ease: "easeOut" }}
-            className="flex min-h-0 flex-col rounded-[20px] border border-veil/12 bg-veil/[0.04] px-4 py-3"
+            className="flex min-h-0 cursor-pointer flex-col rounded-[20px] border border-veil/12 bg-veil/[0.04] px-4 py-3 text-left hover:border-gold/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+            onClick={(event) => setSelected({ server, returnFocus: event.currentTarget })}
           >
             <h3
               className="shrink-0 truncate font-display text-[22px] leading-none font-semibold tracking-[-0.015em] text-paper"
@@ -141,9 +149,18 @@ export function PrtgServersPanel({ servers, status, message, refreshing = false 
               <MetricCell label="RAM" metric={server.memory} />
               <MetricCell label="Disk" metric={primaryStorage(server)} />
             </div>
-          </motion.article>
+          </motion.button>
         ))}
       </div>
+      {selected ? (
+        <ServerResourceDialog
+          key={selected.server.id}
+          serverId={selected.server.id}
+          serverName={shortName(selected.server.name) || selected.server.name}
+          returnFocus={selected.returnFocus}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
     </div>
   );
 }
