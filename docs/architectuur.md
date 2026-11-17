@@ -143,7 +143,7 @@ Faalt Graph (ontbrekende variabelen, token, site, lijst of geen actief record) e
 
 ## ICT-scherm en PRTG
 
-`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg`.
+`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg` en, voor een geopende servertegel, `GET /api/ict/servers/:serverId/resources`.
 
 ```json
 {
@@ -167,6 +167,8 @@ Faalt Graph (ontbrekende variabelen, token, site, lijst of geen actief record) e
 | `error` | Lege of fouttekst; bij een latere fout blijft de laatste geslaagde payload staan |
 
 De provider leest PRTG `table.json` ongeveer eens per minuut. Sensortypes voor cpu, geheugen en schijf worden uit type, naam of tag herkend. Credentials komen uit `.env` en worden niet gelogd of naar de browser gestuurd. Zonder filter blijft de response leeg: er worden geen sensoren van het hele netwerk getoond.
+
+`GET /api/ict/servers/:serverId/resources` leest de sensoren van één apparaat en, waar het PRTG-type een cpu-, geheugen-, schijf-, verkeer-, ping- of uptimesensor is, de kanalen daarvan. De uitkomst blijft 60 seconden in een gedeelde servercache, met één lopende aanvraag per server. Een latere fout toont de vorige meting als verouderd. Die detailstatus staat in `/api/health/sources` als `server-resources` en maakt de hele healthcheck niet unhealthy.
 
 ## Permanent scherm
 

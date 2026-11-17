@@ -269,6 +269,10 @@ async function fetchPrtgJson(credentials: PrtgCredentials, params: Record<string
   }
 }
 
+export async function queryPrtgTable(credentials: PrtgCredentials, params: Record<string, string>) {
+  return fetchPrtgJson(credentials, params);
+}
+
 async function fetchTable(credentials: PrtgCredentials, params: Record<string, string>) {
   const payload = await fetchPrtgJson(credentials, params);
   const row = asRecord(payload);
