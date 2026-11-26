@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import type { PrtgAlarm, PrtgMetric, PrtgServer } from "../types";
 import { formatAmsterdamTime } from "../lib/format";
-import { alarmCounts, openAlarms } from "../lib/serverBoard";
+import { alarmCounts, openAlarms, primaryVolume, sortServersByPriority } from "../lib/serverBoard";
 import { CardState } from "./CardState";
 import { ServerResourceBoard } from "./ServerResourceBoard";
 import { ServerResourceDialog } from "./ServerResourceDialog";
@@ -15,6 +15,7 @@ type PrtgServersPanelProps = {
   status: "loading" | "error" | "empty" | "ready" | "fallback";
   message?: string;
   refreshing?: boolean;
+  initialView?: "overview" | "resources";
 };
 
 function shortName(value: string) {
@@ -29,39 +30,18 @@ function formatPercent(value: number | null) {
 function barColor(metric: PrtgMetric | null) {
   if (!metric || metric.percent === null) return "bg-veil/15";
   if (metric.status === "down" || metric.status === "downPartial") return "bg-[#c45b4a]";
-  if (metric.status === "warning" || metric.high) return "bg-gold";
+  if (metric.status === "warning") return "bg-gold";
   if (metric.status === "unusual") return "bg-water";
   return "bg-forest";
-}
-
-function metricScore(metric: PrtgMetric | null) {
-  if (!metric) return 0;
-  let score = 1;
-  if (metric.percent !== null) score += metric.percent;
-  if (metric.high) score += 40;
-  if (metric.status === "warning") score += 60;
-  if (metric.status === "unusual") score += 50;
-  if (metric.status === "down" || metric.status === "downPartial") score += 100;
-  return score;
-}
-
-function primaryStorage(server: PrtgServer) {
-  if (server.storage.length === 0) return null;
-  return [...server.storage].sort((left, right) => metricScore(right) - metricScore(left))[0] ?? null;
 }
 
 function hasUsefulMetrics(server: PrtgServer) {
   return Boolean(server.cpu || server.memory || server.storage.length > 0);
 }
 
-function serverPriority(server: PrtgServer) {
-  const storage = primaryStorage(server);
-  return metricScore(server.cpu) + metricScore(server.memory) + metricScore(storage);
-}
-
 function MetricCell({ label, metric }: { label: string; metric: PrtgMetric | null }) {
   const width = metric?.percent ?? 0;
-  const accent = Boolean(metric && (metric.high || metric.status === "warning" || metric.status === "down"));
+  const accent = Boolean(metric && (metric.status === "warning" || metric.status === "down" || metric.status === "downPartial"));
   const missing = !metric || metric.percent === null;
   return (
     <div className={`min-w-0 ${missing ? "opacity-40" : ""}`}>
@@ -95,8 +75,9 @@ export function PrtgServersPanel({
   status,
   message,
   refreshing = false,
+  initialView = "overview",
 }: PrtgServersPanelProps) {
-  const [view, setView] = useState<"overview" | "resources">("overview");
+  const [view, setView] = useState<"overview" | "resources">(initialView);
   const [selected, setSelected] = useState<{ server: PrtgServer; returnFocus: HTMLElement | null } | null>(null);
   if (status === "loading") {
     return <CardState status="loading" title="Servers" message="Servertegels worden opgehaald." />;
@@ -105,12 +86,10 @@ export function PrtgServersPanel({
     return <CardState status="error" title="Servers" message={message || "PRTG niet gekoppeld"} />;
   }
 
-  const ranked = [...servers]
-    .filter(hasUsefulMetrics)
-    .sort((left, right) => serverPriority(right) - serverPriority(left) || left.name.localeCompare(right.name, "nl"))
-    .slice(0, 12);
+  const ordered = sortServersByPriority(servers.filter(hasUsefulMetrics), alarms);
+  const overview = ordered.slice(0, 12);
 
-  if (status === "empty" || ranked.length === 0) {
+  if (status === "empty" || ordered.length === 0) {
     return (
       <div className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-6 py-5" data-refreshing={refreshing}>
         <div className="flex items-end justify-between gap-4">
@@ -167,7 +146,7 @@ export function PrtgServersPanel({
       {view === "resources" ? (
         <div className="mt-4 flex min-h-0 flex-1 flex-col">
           <ServerResourceBoard
-            servers={ranked}
+            servers={ordered}
             alarms={alarms}
             fetchedAt={fetchedAt}
             stale={stale}
@@ -176,7 +155,7 @@ export function PrtgServersPanel({
         </div>
       ) : (
       <div className="mt-4 grid min-h-0 flex-1 grid-cols-4 grid-rows-3 gap-3 overflow-hidden">
-        {ranked.map((server, index) => {
+        {overview.map((server, index) => {
           const counts = alarmCounts(openAlarms(alarms, server.name));
           return (
           <motion.button
@@ -207,7 +186,7 @@ export function PrtgServersPanel({
             <div className="mt-3 grid min-h-0 flex-1 content-end gap-2">
               <MetricCell label="CPU" metric={server.cpu} />
               <MetricCell label="RAM" metric={server.memory} />
-              <MetricCell label="Disk" metric={primaryStorage(server)} />
+              <MetricCell label="Disk" metric={primaryVolume(server.storage)} />
             </div>
           </motion.button>
           );

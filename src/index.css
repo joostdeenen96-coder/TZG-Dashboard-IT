@@ -875,6 +875,96 @@ body {
   background: transparent;
 }
 
+/* Resourcekaarten: vaste CSS-maten, meer kolommen op een groot scherm. Geen transform. */
+[data-server-resources] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  align-content: start;
+  gap: clamp(6px, 0.35vw, 8px);
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167, 179, 187, 0.35) transparent;
+}
+
+[data-server-resources]::-webkit-scrollbar {
+  width: 8px;
+}
+
+[data-server-resources]::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(167, 179, 187, 0.35);
+}
+
+[data-server-resources]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.server-resource-card {
+  padding: 4px 8px 5px;
+}
+
+.server-resource-card h3 {
+  font-size: clamp(16px, 1vw, 20px);
+}
+
+.server-resource-time {
+  margin-top: 2px;
+  font-size: clamp(11px, 0.7vw, 12px);
+  line-height: 1;
+}
+
+.server-resource-meters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(2px, 0.3vw, 6px);
+  margin-top: clamp(4px, 0.4vh, 6px);
+}
+
+.server-resource-gauge {
+  width: clamp(60px, 3.2vw, 64px);
+  height: clamp(60px, 3.2vw, 64px);
+}
+
+.server-resource-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(11px, 0.7vw, 12px);
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-mist);
+}
+
+.server-resource-hint {
+  font-size: clamp(10px, 0.65vw, 11px);
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 3000px) {
+  [data-server-resources] {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+    gap: 8px;
+  }
+
+  .server-resource-card {
+    padding: 6px 8px;
+  }
+
+  .server-resource-card h3 {
+    font-size: 16px;
+  }
+
+  .server-resource-gauge {
+    width: 56px;
+    height: 56px;
+  }
+}
+
 .dashboard-detail-overlay {
   position: fixed;
   inset: 0;

@@ -94,8 +94,10 @@ test("overzicht en resources delen de PRTG-feed en wisselen zonder tweede poll",
   assert.equal(board.includes("startServerResourcePoll"), false);
   assert.equal(board.includes("fetch("), false);
   assert.equal(board.includes("dangerouslySetInnerHTML"), false);
-  assert.match(board, /grid-cols-2/);
-  assert.match(board, /overflow-auto/);
+  assert.match(board, /data-server-resources/);
+  assert.equal(board.includes("transform:"), false);
+  assert.match(read("src/index.css"), /repeat\(auto-fit, minmax\(min\(100%, 560px\), 1fr\)\)/);
+  assert.match(read("src/index.css"), /\[data-server-resources\][\s\S]*overflow:\s*auto/);
   assert.match(page, /usePrtg\(\)/);
   assert.equal(page.match(/usePrtg\(\)/g)?.length, 1);
   assert.match(feed, /PRTG_REFRESH_MS = 60_000/);

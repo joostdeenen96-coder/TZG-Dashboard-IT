@@ -149,7 +149,7 @@ Nederland komt van Interrijn CBRB, België van Statbel. De kaart toont de kalend
 
 ## ICT-scherm en PRTG
 
-`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg` en, voor een geopende servertegel, `GET /api/ict/servers/:serverId/resources`. Overzicht en Resources gebruiken dezelfde `/api/prtg`-response. De browser ververst die elke 60 seconden en slaat een ronde over zolang het tabblad verborgen is. Een ontbrekend percentage blijft “Onbekend”. Gepauzeerde sensoren zitten niet in de alarmlijst; een bevestigde storing telt niet als open incident.
+`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg` en, voor een geopende servertegel, `GET /api/ict/servers/:serverId/resources`. Overzicht en Resources gebruiken dezelfde `/api/prtg`-response en dezelfde sortering: Down of Error, daarna een Warning op cpu, geheugen of opslag, daarna een andere Warning, daarna Unusual, en binnen een gelijke status de oorspronkelijke volgorde. Een hoog percentage zonder die PRTG-status blijft normaal. Resources toont alle servers in een compact grid dat intern scrolt; Overzicht houdt daar de eerste twaalf van. De browser ververst die elke 60 seconden en slaat een ronde over zolang het tabblad verborgen is. Een ontbrekend percentage blijft “Onbekend”. Gepauzeerde sensoren zitten niet in de alarmlijst; een bevestigde storing telt niet als open incident.
 
 ```json
 {

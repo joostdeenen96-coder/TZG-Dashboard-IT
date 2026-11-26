@@ -75,7 +75,7 @@ function DiskRow({ disk }: { disk: ServerDisk }) {
   return (
     <li className="min-w-0">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="truncate text-[16px]">{disk.name}</p>
+        <p className="min-w-0 text-[16px] break-words">{disk.name}</p>
         <p className={`shrink-0 text-[14px] ${statusClass(disk.status)}`}>{statusLabel(disk.status)}</p>
       </div>
       <p className="mt-1 text-[14px] text-mist tabular-nums">
