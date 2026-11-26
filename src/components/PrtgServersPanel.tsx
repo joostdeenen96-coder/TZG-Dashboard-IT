@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import type { PrtgMetric, PrtgServer } from "../types";
+import type { PrtgAlarm, PrtgMetric, PrtgServer } from "../types";
+import { formatAmsterdamTime } from "../lib/format";
+import { alarmCounts, openAlarms } from "../lib/serverBoard";
 import { CardState } from "./CardState";
+import { ServerResourceBoard } from "./ServerResourceBoard";
 import { ServerResourceDialog } from "./ServerResourceDialog";
 
 type PrtgServersPanelProps = {
   servers: PrtgServer[];
+  alarms?: PrtgAlarm[];
+  fetchedAt?: string | null;
+  stale?: boolean;
   status: "loading" | "error" | "empty" | "ready" | "fallback";
   message?: string;
   refreshing?: boolean;
@@ -16,7 +22,7 @@ function shortName(value: string) {
 }
 
 function formatPercent(value: number | null) {
-  if (value === null) return "—";
+  if (value === null) return "Onbekend";
   return `${Math.round(value)}%`;
 }
 
@@ -45,12 +51,7 @@ function primaryStorage(server: PrtgServer) {
 }
 
 function hasUsefulMetrics(server: PrtgServer) {
-  const storage = primaryStorage(server);
-  return Boolean(
-    (server.cpu && server.cpu.percent !== null) ||
-      (server.memory && server.memory.percent !== null) ||
-      (storage && storage.percent !== null),
-  );
+  return Boolean(server.cpu || server.memory || server.storage.length > 0);
 }
 
 function serverPriority(server: PrtgServer) {
@@ -86,7 +87,16 @@ function MetricCell({ label, metric }: { label: string; metric: PrtgMetric | nul
   );
 }
 
-export function PrtgServersPanel({ servers, status, message, refreshing = false }: PrtgServersPanelProps) {
+export function PrtgServersPanel({
+  servers,
+  alarms = [],
+  fetchedAt = null,
+  stale = false,
+  status,
+  message,
+  refreshing = false,
+}: PrtgServersPanelProps) {
+  const [view, setView] = useState<"overview" | "resources">("overview");
   const [selected, setSelected] = useState<{ server: PrtgServer; returnFocus: HTMLElement | null } | null>(null);
   if (status === "loading") {
     return <CardState status="loading" title="Servers" message="Servertegels worden opgehaald." />;
@@ -113,19 +123,62 @@ export function PrtgServersPanel({ servers, status, message, refreshing = false 
     );
   }
 
+  const updated = fetchedAt ? formatAmsterdamTime(fetchedAt) : "–";
   return (
-    <div className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-6 py-5" data-refreshing={refreshing}>
+    <div
+      className="tv-card flex h-full min-h-0 flex-col overflow-hidden px-6 py-5"
+      data-refreshing={refreshing}
+      data-server-view={view}
+      data-server-stale={stale ? "true" : "false"}
+    >
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-[15px] tracking-[0.08em] text-mist uppercase">PRTG</p>
           <h2 className="font-display text-[34px] leading-none font-semibold tracking-[-0.015em]">Servers</h2>
         </div>
-        <p className="text-[16px] text-mist">
-          {ranked.length} van {servers.length} met meetwaarden
-        </p>
+        <div className="flex items-center gap-3">
+          <p className={`text-[14px] ${stale ? "text-gold" : "text-mist"}`} data-server-updated="">
+            {stale ? "Verouderd · " : ""}Laatste update {updated}
+          </p>
+          <div className="flex rounded-full border border-veil/20 p-1" role="tablist" aria-label="Serverweergave">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "overview"}
+              data-server-view-tab="overview"
+              className={`min-h-11 rounded-full px-4 text-[16px] ${view === "overview" ? "bg-gold text-ink" : "text-paper"}`}
+              onClick={() => setView("overview")}
+            >
+              Overzicht
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "resources"}
+              data-server-view-tab="resources"
+              className={`min-h-11 rounded-full px-4 text-[16px] ${view === "resources" ? "bg-gold text-ink" : "text-paper"}`}
+              onClick={() => setView("resources")}
+            >
+              Resources
+            </button>
+          </div>
+        </div>
       </div>
+      {view === "resources" ? (
+        <div className="mt-4 flex min-h-0 flex-1 flex-col">
+          <ServerResourceBoard
+            servers={ranked}
+            alarms={alarms}
+            fetchedAt={fetchedAt}
+            stale={stale}
+            onOpen={(server, returnFocus) => setSelected({ server, returnFocus })}
+          />
+        </div>
+      ) : (
       <div className="mt-4 grid min-h-0 flex-1 grid-cols-4 grid-rows-3 gap-3 overflow-hidden">
-        {ranked.map((server, index) => (
+        {ranked.map((server, index) => {
+          const counts = alarmCounts(openAlarms(alarms, server.name));
+          return (
           <motion.button
             key={server.id}
             type="button"
@@ -138,20 +191,29 @@ export function PrtgServersPanel({ servers, status, message, refreshing = false 
             className="flex min-h-0 cursor-pointer flex-col rounded-[20px] border border-veil/12 bg-veil/[0.04] px-4 py-3 text-left hover:border-gold/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
             onClick={(event) => setSelected({ server, returnFocus: event.currentTarget })}
           >
-            <h3
-              className="shrink-0 truncate font-display text-[22px] leading-none font-semibold tracking-[-0.015em] text-paper"
-              title={server.name}
-            >
-              {shortName(server.name) || server.name || "Onbekende server"}
-            </h3>
+            <div className="flex items-baseline justify-between gap-2">
+              <h3
+                className="shrink truncate font-display text-[22px] leading-none font-semibold tracking-[-0.015em] text-paper"
+                title={server.name}
+              >
+                {shortName(server.name) || server.name || "Onbekende server"}
+              </h3>
+              <p className="shrink-0 text-[12px] text-mist" data-server-incidents="" aria-label={`${counts.errors} storingen, ${counts.warnings} waarschuwingen`}>
+                {counts.errors > 0 ? <span className="text-[#c45b4a]">{counts.errors}</span> : <span>0</span>}
+                <span> / </span>
+                <span className={counts.warnings > 0 ? "text-gold" : ""}>{counts.warnings}</span>
+              </p>
+            </div>
             <div className="mt-3 grid min-h-0 flex-1 content-end gap-2">
               <MetricCell label="CPU" metric={server.cpu} />
               <MetricCell label="RAM" metric={server.memory} />
               <MetricCell label="Disk" metric={primaryStorage(server)} />
             </div>
           </motion.button>
-        ))}
+          );
+        })}
       </div>
+      )}
       {selected ? (
         <ServerResourceDialog
           key={selected.server.id}

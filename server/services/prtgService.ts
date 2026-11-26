@@ -64,6 +64,17 @@ function emptyResponse(partial: Partial<PrtgResponse> & { error: string | null }
   };
 }
 
+export function retainPrtgOnFailure(last: PrtgResponse | null, message: string): PrtgResponse {
+  if (last && (last.servers.length > 0 || last.alarms.length > 0)) {
+    return { ...last, error: message };
+  }
+  return emptyResponse({
+    configured: true,
+    filterReady: true,
+    error: message,
+  });
+}
+
 function fromSnapshot(snapshot: PrtgSnapshot, configured: boolean, filterReady: boolean, fetchedAt: string): PrtgResponse {
   return {
     connected: true,
@@ -107,17 +118,7 @@ async function loadFresh(): Promise<PrtgResponse> {
     return fromSnapshot(snapshot, true, true, new Date().toISOString());
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : "PRTG niet bereikbaar.";
-    if (lastGood) {
-      return {
-        ...lastGood.payload,
-        error: message,
-      };
-    }
-    return emptyResponse({
-      configured: true,
-      filterReady: true,
-      error: message,
-    });
+    return retainPrtgOnFailure(lastGood?.payload ?? null, message);
   }
 }
 
