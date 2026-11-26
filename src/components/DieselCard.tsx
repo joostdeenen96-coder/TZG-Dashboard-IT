@@ -155,12 +155,10 @@ function GasOilMonthPane({
               </span>
               <span className="gas-oil-unit" data-gas-unit="">/ ton</span>
             </div>
-          ) : pending ? (
-            <span data-gas-next-pending="">Volgende maand nog niet gepubliceerd</span>
           ) : missingMonth ? (
             <span data-surcharge-unavailable="">Niet beschikbaar</span>
           ) : (
-            <span className="font-display leading-none font-semibold" data-gas-unknown="">
+            <span className="font-display leading-none font-semibold" data-gas-unknown="" aria-label={pending ? "Nog niet vastgesteld" : undefined}>
               –
             </span>
           )}

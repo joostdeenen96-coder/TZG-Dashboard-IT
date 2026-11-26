@@ -145,7 +145,7 @@ Faalt Graph (ontbrekende variabelen, token, site, lijst of geen actief record) e
 
 ## Gasolietoeslag
 
-Nederland komt van Interrijn CBRB, België van Statbel. De kaart toont de kalendermaand in Europe/Amsterdam, met maand en jaar. Vanaf de 15e zet de API `nextInquiry` op `open` en leest de volgende maand alleen uit een vastgelegde peildatum. Daarvoor blijft de vlag `closed` en gaat er geen verzoek voor die maand naar de bron. Ontbreekt de publicatie, dan blijft de actuele toeslag staan en verschijnt “Volgende maand nog niet gepubliceerd”; een nul of de vorige maand wordt niet hergebruikt. `GASOIL_MORNING_CHECK` plant die controle, standaard `06:00` lokale tijd. Een lockbestand per dag zorgt dat één proces de controle doet. De staffel en de dieseltoeslag blijven ongewijzigd.
+Nederland komt van Interrijn CBRB, België van Statbel. De kaart toont de kalendermaand in Europe/Amsterdam, met maand en jaar. Vanaf de 15e zet de API `nextInquiry` op `open` en leest de volgende maand alleen uit een vastgelegde peildatum. Daarvoor blijft de vlag `closed` en gaat er geen verzoek voor die maand naar de bron. Ontbreekt de publicatie, dan blijft de actuele toeslag staan en toont de volgende maand een streepje; een nul of de vorige maand wordt niet hergebruikt. `GASOIL_MORNING_CHECK` plant die controle, standaard `06:00` Europe/Amsterdam, en roept dezelfde service aan als `GET /api/gasoil-surcharges`. Een geslaagde run schrijft dat in `data/`; een mislukte run niet, zodat een herstart dezelfde ochtend opnieuw probeert. De staffel en de dieseltoeslag blijven ongewijzigd.
 
 ## ICT-scherm en PRTG
 

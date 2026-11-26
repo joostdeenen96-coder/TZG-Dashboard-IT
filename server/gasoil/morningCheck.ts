@@ -2,12 +2,12 @@
  * Dagelijkse ochtendcontrole van de gasolietoeslag.
  * Tijdstip in Europe/Amsterdam, standaard 06:00. Meerdere processen claimen één bestand per dag.
  */
-import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { dataDir } from "../appPaths.js";
 import { logInfo, logWarn } from "../log.js";
+import { runGasOilCheck, type GasOilCheckReport } from "./check.js";
 import { amsterdamCalendarDate } from "./monthLogic.js";
-import { runNetherlandsDailyCapture } from "./dailyCapture.js";
 
 export type MorningClock = { hour: number; minute: number };
 
@@ -81,20 +81,60 @@ export function nextMorningCheck(now: Date, clock: MorningClock) {
   return amsterdamDateTimeToUtc(target.year, target.month, target.day, clock.hour, clock.minute);
 }
 
+const STALE_RUN_MS = 15 * 60_000;
+
+export type MorningRunStatus = "none" | "started" | "success";
+
 function lockPath(dateKey: string) {
   return path.join(dataDir(), `gasoil-morning-${dateKey}.lock`);
 }
 
-/** Eén proces per Amsterdam-dag. `false` betekent dat een andere instantie de controle al heeft. */
-export function claimMorningRun(dateKey: string) {
-  mkdirSync(dataDir(), { recursive: true });
+function lockText(dateKey: string) {
   try {
-    writeFileSync(lockPath(dateKey), new Date().toISOString(), { flag: "wx" });
+    return readFileSync(lockPath(dateKey), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function lockStamp(text: string) {
+  const stamp = Date.parse(text.replace(/^(started|success)\s+/, "").trim());
+  return Number.isFinite(stamp) ? stamp : null;
+}
+
+export function morningRunStatus(dateKey: string): MorningRunStatus {
+  const text = lockText(dateKey);
+  if (text === null) return "none";
+  if (text.startsWith("success")) return "success";
+  return "started";
+}
+
+/**
+ * Eén proces per Amsterdam-dag. Een succes blijft staan.
+ * Een vastgelopen start ouder dan een kwartier mag opnieuw.
+ */
+export function claimMorningRun(dateKey: string, now = new Date(), options: { reclaimStarted?: boolean } = {}) {
+  mkdirSync(dataDir(), { recursive: true });
+  const file = lockPath(dateKey);
+  const body = `started ${now.toISOString()}`;
+  try {
+    writeFileSync(file, body, { flag: "wx" });
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
   }
+  const text = lockText(dateKey) ?? "";
+  if (text.startsWith("success")) return false;
+  const stamp = lockStamp(text);
+  const fresh = stamp !== null && now.getTime() - stamp < STALE_RUN_MS;
+  if (fresh && !options.reclaimStarted) return false;
+  writeFileSync(file, body);
+  return true;
+}
+
+export function completeMorningRun(dateKey: string, now = new Date()) {
+  mkdirSync(dataDir(), { recursive: true });
+  writeFileSync(lockPath(dateKey), `success ${now.toISOString()}`);
 }
 
 export function releaseMorningRun(dateKey: string) {
@@ -105,68 +145,100 @@ export function releaseMorningRun(dateKey: string) {
   }
 }
 
+/** Na 06:00 draait de controle als vandaag nog niet succesvol is afgerond. */
+export function shouldRunMorningCheckNow(now: Date, clock: MorningClock, status: MorningRunStatus) {
+  const wall = amsterdamWall(now);
+  const before = wall.hour < clock.hour || (wall.hour === clock.hour && wall.minute < clock.minute);
+  if (before) return false;
+  return status !== "success";
+}
+
+/** Een mislukte controle probeert dezelfde dag opnieuw, met het bestaande capture-interval als bovengrens. */
+export function nextGasOilCheckDelay(now: Date, clock: MorningClock, failed: boolean, intervalMs = 6 * 60 * 60 * 1000) {
+  const untilMorning = Math.max(1_000, nextMorningCheck(now, clock).getTime() - now.getTime());
+  if (!failed) return untilMorning;
+  const retry = Number.isFinite(intervalMs) && intervalMs >= 60_000 ? intervalMs : 6 * 60 * 60 * 1000;
+  return Math.max(1_000, Math.min(untilMorning, retry));
+}
+
 let started = false;
 
 export function resetMorningCheckForTests() {
   started = false;
 }
 
+function captureIntervalMs() {
+  const intervalMs = Number(process.env.GASOIL_CAPTURE_INTERVAL_MS || 6 * 60 * 60 * 1000);
+  return Number.isFinite(intervalMs) && intervalMs >= 60_000 ? intervalMs : 6 * 60 * 60 * 1000;
+}
+
 /**
- * Plant de ochtendcontrole. Geen browservenster. Een mislukte bron laat de bestaande maandcache staan;
- * het slot gaat dan weg zodat een herstart dezelfde ochtend opnieuw mag proberen.
+ * Plant de ochtendcontrole. Die roept dezelfde gasolieservice aan als de API.
+ * Alleen een geslaagde run blijft als slot staan. Een storing wordt dezelfde ochtend opnieuw geprobeerd.
  */
-export function startGasOilMorningCheck(run: () => Promise<unknown> = runNetherlandsDailyCapture) {
+export function startGasOilMorningCheck(run: () => Promise<GasOilCheckReport> = runGasOilCheck) {
   if (started) return;
   if (process.env.GASOIL_CAPTURE_ENABLED === "0") return;
   const clock = parseMorningClock(process.env.GASOIL_MORNING_CHECK);
   if (!clock) {
-    logInfo("gasoil ochtendcontrole uitgeschakeld", { event: "gasoil.morning.skipped" });
+    logInfo("gasoil morning check scheduled", { event: "gasoil.morning.skipped", enabled: false });
     return;
   }
   started = true;
-  logInfo("gasoil ochtendcontrole gepland", {
+  const startedAt = new Date();
+  const dueNow = shouldRunMorningCheckNow(startedAt, clock, morningRunStatus(amsterdamCalendarDate(startedAt)));
+  logInfo("gasoil morning check scheduled", {
     event: "gasoil.morning.scheduled",
     time: `${String(clock.hour).padStart(2, "0")}:${String(clock.minute).padStart(2, "0")}`,
     timeZone: "Europe/Amsterdam",
+    scheduledAt: (dueNow ? startedAt : nextMorningCheck(startedAt, clock)).toISOString(),
   });
 
+  let reclaimOnNextClaim = true;
   const tick = () => {
-    const today = amsterdamCalendarDate();
-    const claimed = claimMorningRun(today);
-    const finish = () => {
-      const delay = Math.max(1_000, nextMorningCheck(new Date(), clock).getTime() - Date.now());
+    const now = new Date();
+    const today = amsterdamCalendarDate(now);
+    const status = morningRunStatus(today);
+    if (!shouldRunMorningCheckNow(now, clock, status)) {
+      const delay = nextGasOilCheckDelay(now, clock, false, captureIntervalMs());
       setTimeout(tick, delay).unref?.();
-    };
-    if (!claimed) {
-      finish();
       return;
     }
+    const reclaimStarted = reclaimOnNextClaim;
+    reclaimOnNextClaim = false;
+    if (!claimMorningRun(today, now, { reclaimStarted })) {
+      const delay = nextGasOilCheckDelay(now, clock, morningRunStatus(today) !== "success", captureIntervalMs());
+      setTimeout(tick, delay).unref?.();
+      return;
+    }
+    logInfo("gasoil morning check started", { event: "gasoil.morning.started", date: today });
     void run()
       .then((result) => {
-        const failed = result && typeof result === "object" && "status" in result && result.status === "failed";
-        if (failed) {
+        if (result.status === "failed") {
           releaseMorningRun(today);
-          logWarn("gasoil ochtendcontrole mislukt, laatst geldige toeslag blijft staan", {
-            event: "gasoil.morning.failed",
-          });
-        } else {
-          logInfo("gasoil ochtendcontrole klaar", { event: "gasoil.morning.done", date: today });
+          logWarn("gasoil morning check failed", { event: "gasoil.morning.failed", date: today });
+          return false;
         }
+        completeMorningRun(today);
+        logInfo("gasoil check completed", { event: "gasoil.morning.done", date: today, status: "success" });
+        return true;
       })
       .catch((error: unknown) => {
         releaseMorningRun(today);
         const reason = error instanceof Error ? error.message : "onbekend";
-        logWarn(`gasoil ochtendcontrole mislukt: ${reason}`, { event: "gasoil.morning.failed" });
+        logWarn(`gasoil morning check failed: ${reason}`, { event: "gasoil.morning.failed" });
+        return false;
       })
-      .finally(finish);
+      .then((ok) => {
+        const delay = nextGasOilCheckDelay(new Date(), clock, ok === false, captureIntervalMs());
+        setTimeout(tick, delay).unref?.();
+      });
   };
 
-  const wall = amsterdamWall(new Date());
-  const due = wall.hour > clock.hour || (wall.hour === clock.hour && wall.minute >= clock.minute);
-  if (due) {
+  if (shouldRunMorningCheckNow(new Date(), clock, morningRunStatus(amsterdamCalendarDate()))) {
     tick();
     return;
   }
-  const delay = Math.max(1_000, nextMorningCheck(new Date(), clock).getTime() - Date.now());
+  const delay = nextGasOilCheckDelay(new Date(), clock, false, captureIntervalMs());
   setTimeout(tick, delay).unref?.();
 }
