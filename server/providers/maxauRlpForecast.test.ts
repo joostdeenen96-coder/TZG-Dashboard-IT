@@ -284,9 +284,19 @@ test("M9 geen dubbele CET/CEST-conversie rond de wintertijd van 2026", () => {
   assert.equal(formatAmsterdamTime("2026-10-25T00:30:00.000Z"), "02:30");
   assert.equal(formatAmsterdamTime("2026-10-25T01:00:00.000Z"), "02:00");
   assert.equal(formatAmsterdamTime("2026-10-25T02:00:00.000Z"), "03:00");
-  const tooltip = formatWaterPointTooltip("Maxau", "Voorspelling", "2026-10-24T22:00:00.000Z", 344);
+  const tooltip = formatWaterPointTooltip({
+    station: "Maxau",
+    mode: "Voorspelling",
+    timestamp: "2026-10-24T22:00:00.000Z",
+    levelCm: 344,
+  });
   assert.deepEqual(tooltip.split("\n"), ["Maxau", "Voorspelling", "25 oktober 2026", "00:00", "344 cm"]);
-  const measured = formatWaterPointTooltip("Maxau", "Gemeten", "2026-10-26T14:30:00Z", 342);
+  const measured = formatWaterPointTooltip({
+    station: "Maxau",
+    mode: "Gemeten",
+    timestamp: "2026-10-26T14:30:00Z",
+    levelCm: 342,
+  });
   assert.deepEqual(measured.split("\n"), ["Maxau", "Gemeten", "26 oktober 2026", "15:30", "342 cm"]);
 });
 
