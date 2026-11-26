@@ -20,6 +20,7 @@ import {
 import {
   addApplicableMonths,
   currentApplicableMonth,
+  isNextGasOilMonthOpen,
   referenceDateForApplicableMonth,
 } from "./monthLogic.js";
 import {
@@ -36,6 +37,7 @@ import {
   belgiumVatDivisor,
 } from "./providers/belgiumStatbelGasOilProvider.js";
 import type { GasOilFetchOutcome, GasOilPriceProvider } from "./providers/gasOilPriceProvider.js";
+import { logInfo } from "../log.js";
 import {
   INTERRIJN_SOURCE_LABEL,
   NetherlandsInterrijnGasOilProvider,
@@ -170,6 +172,17 @@ async function persistMonthObservation(
   const wrote = writeGasOilMonthCache(entry);
   if (wrote) {
     void upsertGasOilMonthObservation(entry);
+    logInfo("gasoil observation persisted", {
+      event: "gasoil.observation.persisted",
+      country: entry.country,
+      applicableMonth: entry.applicableMonth,
+      referenceDate: entry.referenceDate,
+    });
+    logInfo("gasoil cache invalidated", {
+      event: "gasoil.cache.invalidated",
+      country: entry.country,
+      applicableMonth: entry.applicableMonth,
+    });
     return entry;
   }
   // Month already locked — return the immutable stored value.
@@ -612,14 +625,35 @@ async function resolveBelgium(
   };
 }
 
+/** Een bronstoring mag dezelfde ochtend opnieuw. Een ontbrekende peildatum is een definitief antwoord. */
+export function isGasOilSourceOutage(reason: string) {
+  const text = reason.toLowerCase();
+  return (
+    text.includes("niet bereikbaar") ||
+    text.includes("fetch failed") ||
+    text.includes("network") ||
+    text.includes("timeout") ||
+    text.includes("aborted") ||
+    text.includes("econn") ||
+    text.includes("enotfound") ||
+    text.includes("socket")
+  );
+}
+
+function monthMessage(reason: string | null) {
+  if (reason && isGasOilSourceOutage(reason)) return reason;
+  return "Nog niet vastgesteld";
+}
+
 function unknownMonth(
   country: GasOilCountry,
   source: GasOilSurchargeResult["source"],
   sourceLabel: string,
   applicableMonth: string,
+  reason: string | null = null,
 ): GasOilSurchargeResult {
   return {
-    ...unavailableResult(country, source, sourceLabel, "Nog niet vastgesteld"),
+    ...unavailableResult(country, source, sourceLabel, monthMessage(reason)),
     applicableMonth,
     referenceDate: null,
     priceExVatPer1000Liters: null,
@@ -654,13 +688,16 @@ async function resolveFollowingMonth(
     return resultFromObservation(monthEntryToObservation(cached), "ok", null, cached.sourceType);
   }
 
+  let reason: string | null = null;
   if (country === "NL" && isNetherlandsProvider(provider)) {
-    const { result } = await fetchAndCacheNetherlandsMonth(provider, applicableMonth);
-    if (isEstablishedMonth(result, applicableMonth) && result) return result;
+    const fetched = await fetchAndCacheNetherlandsMonth(provider, applicableMonth);
+    reason = fetched.reason;
+    if (isEstablishedMonth(fetched.result, applicableMonth) && fetched.result) return fetched.result;
   }
   if (country === "BE" && isBelgiumProvider(provider)) {
-    const { result } = await fetchAndCacheBelgiumMonth(provider, applicableMonth);
-    if (isEstablishedMonth(result, applicableMonth) && result) return result;
+    const fetched = await fetchAndCacheBelgiumMonth(provider, applicableMonth);
+    reason = fetched.reason;
+    if (isEstablishedMonth(fetched.result, applicableMonth) && fetched.result) return fetched.result;
   }
 
   if (cached) {
@@ -671,7 +708,7 @@ async function resolveFollowingMonth(
       cached.sourceType,
     );
   }
-  return unknownMonth(country, source, sourceLabel, applicableMonth);
+  return unknownMonth(country, source, sourceLabel, applicableMonth, reason);
 }
 
 function withMonths(current: GasOilSurchargeResult, next: GasOilSurchargeResult): GasOilCountryPayload {
@@ -683,6 +720,7 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
   // UI-maand is de kalendermaand in Europe/Amsterdam. De 15e bepaalt alleen de peildatum van een maandobservatie.
   const applicableMonth = currentApplicableMonth(now);
   const nextMonth = addApplicableMonths(applicableMonth, 1);
+  const nextInquiry = isNextGasOilMonthOpen(now) ? "open" : "closed";
   const nlProvider = deps.nlProvider ?? new NetherlandsInterrijnGasOilProvider({ now: deps.now });
   const beProvider = deps.beProvider ?? new BelgiumStatbelGasOilProvider({ now: deps.now });
   const forceRefresh = deps.forceRefresh === true;
@@ -690,12 +728,18 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
   const [nlPair, bePair] = await Promise.all([
     (async () => {
       const current = await resolveNetherlands(nlProvider, applicableMonth, { forceRefresh, now });
-      const next = await resolveFollowingMonth("NL", nextMonth, nlProvider, { forceRefresh });
+      const next =
+        nextInquiry === "open"
+          ? await resolveFollowingMonth("NL", nextMonth, nlProvider, { forceRefresh })
+          : unknownMonth("NL", "interrijn-cbrb-kbn", nlProvider.sourceLabel || "CBRB/KBN via Interrijn", nextMonth);
       return withMonths(current, next);
     })(),
     (async () => {
       const resolved = await resolveBelgium(beProvider, applicableMonth, { forceRefresh, now });
-      const next = await resolveFollowingMonth("BE", nextMonth, beProvider, { forceRefresh });
+      const next =
+        nextInquiry === "open"
+          ? await resolveFollowingMonth("BE", nextMonth, beProvider, { forceRefresh })
+          : unknownMonth("BE", "bestat-statbel", beProvider.sourceLabel || "be.STAT / FOD Economie", nextMonth);
       return { country: withMonths(resolved.result, next), diagnostics: resolved.diagnostics };
     })(),
   ]);
@@ -704,6 +748,7 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
     nl: nlPair,
     be: bePair.country,
     fetchedAt: now.toISOString(),
+    nextInquiry,
   };
 
   if (diagnosticsEnabled()) {

@@ -4,6 +4,7 @@ import { getGasOilSurcharges } from "../gasoil/gasOilSurchargeService.js";
 export const gasOilSurchargesRouter = Router();
 
 gasOilSurchargesRouter.get("/", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   try {
     res.json(await getGasOilSurcharges());
   } catch (error) {

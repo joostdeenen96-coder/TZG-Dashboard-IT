@@ -93,6 +93,8 @@ HVZ zet Maxau in de Vorhersagenliste (`forecast.html`, pegel `09016`). Die lijst
 
 Tijdstippen blijven de UTC-instanten uit de bron. De grafiek zet ze niet nog een dag vooruit; die verschuiving geldt alleen voor PEGELONLINE-`WV` van Kaub en Ruhrort. Punten op of vóór de laatste meting vallen weg. Een tijdelijke storing van deze voorspelling laat de HVZ-stand staan. Binnen zes uur na een eerdere geldige reeks is `forecastStatus` `stale`; daarna is `forecast` leeg. De HVZ-GIF wordt niet uitgelezen.
 
+De API geeft de officiële reeks volledig terug. De grafiek tekent daarvan hoogstens 42 Amsterdam-dagen en noemt de echte einddatum. Levert de bron minder, dan blijft de lijn korter en staat er “Zesweekse verwachting niet beschikbaar”. Er is geen aparte zesweekse bron en er wordt niets bijgeschat. PEGELONLINE-`WV` onderscheidt `verwacht` en `inschatting`. De hele Maxau-`p50` blijft `verwacht`.
+
 ## Dieseltoeslag
 
 `DieselSurchargeProvider` heeft `getCurrentData()`. De registratie staat in `server/services/dieselSurchargeService.ts`. Standaard is SharePoint actief:
@@ -141,9 +143,13 @@ Faalt Graph (ontbrekende variabelen, token, site, lijst of geen actief record) e
 | WijTeunesen-nieuws | `GET /api/news`, site `https://teunesen.sharepoint.com/sites/wt-nieuws` | nieuwspagina's met `PromotedState` 2 en `Nieuws taal` NL, de laatste vijftien van de hele site, inclusief Lief en leed. De categorie staat klein bij de titel. Het vlak wisselt elke 20 seconden. Een foto gaat via `GET /api/news/:id/image`. Zonder Graph-gegevens toont het scherm voorbeeldtekst |
 | WijTeunesen-agenda | `GET /api/agenda`, site `https://teunesen.sharepoint.com/sites/HR-NL`, lijst Gebeurtenissen | komende Nederlandse afspraken, dezelfde bron als het webpart “Belangrijke data” op de WijTeunesen-startpagina. De lege kalender op wt-nieuws en de Duitse lijst Events DE worden niet gelezen. De onderbalk toont ze naast elkaar |
 
+## Gasolietoeslag
+
+Nederland komt van Interrijn CBRB, België van Statbel. De kaart toont de kalendermaand in Europe/Amsterdam, met maand en jaar. Vanaf de 15e zet de API `nextInquiry` op `open` en leest de volgende maand alleen uit een vastgelegde peildatum. Daarvoor blijft de vlag `closed` en gaat er geen verzoek voor die maand naar de bron. Ontbreekt de publicatie, dan blijft de actuele toeslag staan en toont de volgende maand een streepje; een nul of de vorige maand wordt niet hergebruikt. `GASOIL_MORNING_CHECK` plant die controle, standaard `06:00` Europe/Amsterdam, en roept dezelfde service aan als `GET /api/gasoil-surcharges`. Een geslaagde run schrijft dat in `data/`; een mislukte run niet, zodat een herstart dezelfde ochtend opnieuw probeert. De staffel en de dieseltoeslag blijven ongewijzigd.
+
 ## ICT-scherm en PRTG
 
-`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg` en, voor een geopende servertegel, `GET /api/ict/servers/:serverId/resources`.
+`/` blijft het planningsscherm. `/ict` deelt Header, nieuws en agenda, maar vervangt waterstanden en dieseltoeslag door PRTG-monitoring. De browser praat alleen met `GET /api/prtg` en, voor een geopende servertegel, `GET /api/ict/servers/:serverId/resources`. Overzicht en Resources gebruiken dezelfde `/api/prtg`-response en dezelfde sortering: Down of Error, daarna een Warning op cpu, geheugen of opslag, daarna een andere Warning, daarna Unusual. Binnen dezelfde status komt de hoogste bekende cpu-, geheugen- of opslagbezetting eerst; bij een gelijke score blijft de oorspronkelijke volgorde. Een hoog percentage zonder die PRTG-status blijft normaal. Resources toont daarna pagina's van exact negen kaarten, drie bij drie, en bladert alleen met de hand. Overzicht houdt de eerste twaalf van die lijst. De browser ververst die elke 60 seconden en slaat een ronde over zolang het tabblad verborgen is. Een ontbrekend percentage blijft “Onbekend”. Gepauzeerde sensoren zitten niet in de alarmlijst; een bevestigde storing telt niet als open incident.
 
 ```json
 {

@@ -80,10 +80,14 @@ export type GasOilCountryPayload = GasOilSurchargeResult & {
   next: GasOilSurchargeResult;
 };
 
+export type GasOilNextInquiry = "open" | "closed";
+
 export type GasOilSurchargesPayload = {
   nl: GasOilCountryPayload;
   be: GasOilCountryPayload;
   fetchedAt: string;
+  /** `open` vanaf de 15e: de volgende maand is opgezocht. `closed` ervoor: niet opgehaald. */
+  nextInquiry: GasOilNextInquiry;
   /** Alleen in development of bij GASOIL_DIAGNOSTICS=1. */
   diagnostics?: {
     be: GasOilBeDiagnostics;

@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { formatAmsterdamTime, formatWaterChange } from "../lib/format";
-import { displayMillis, forecastClockFor, selectDailyForecast } from "../lib/waterForecast";
+import { capForecastHorizon, displayMillis, forecastClockFor, outlookCaption, selectDailyForecast } from "../lib/waterForecast";
 import type { WaterLevelSeverity, WaterStationResult, WaterStatus, WaterTrend } from "../types";
 import { CardState } from "./CardState";
 import { WaterChart } from "./WaterChart";
@@ -44,8 +44,11 @@ export function WaterLevelCard({ station, refreshing = false, stale = false }: W
 
   const TrendIcon = station.trend === "stijgend" ? ArrowUp : station.trend === "dalend" ? ArrowDown : Minus;
   const clock = forecastClockFor(station);
-  const days = selectDailyForecast(station.forecast, new Date(), clock);
+  const now = new Date();
+  const horizon = capForecastHorizon(station.forecast, now, clock);
+  const days = selectDailyForecast(station.forecast, now, clock);
   const sourceLabel = station.forecastSource && station.forecast.length > 0 ? station.forecastSource : station.source;
+  const outlookStale = station.forecastStatus === "stale";
 
   return (
     <article className="tv-card relative flex h-full min-h-0 flex-col px-6 py-5" data-water-card="" data-status={stale ? "fallback" : "ready"} data-forecast-clock={clock}>
@@ -79,9 +82,33 @@ export function WaterLevelCard({ station, refreshing = false, stale = false }: W
         </p>
       </div>
       <div className="mt-2 min-h-0 flex-1">
-        <WaterChart series={station.series} forecast={station.forecast} stationName={station.name} forecastClock={clock} />
+        <WaterChart
+          series={station.series}
+          forecast={station.forecast}
+          stationName={station.name}
+          forecastClock={clock}
+          source={sourceLabel}
+          issuedAt={station.forecastIssuedAt}
+          now={now}
+        />
       </div>
-      {days.length > 0 ? (
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-mist" data-water-legend="">
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-water" /> Gemeten</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-gold" /> Voorspelling</span>
+        {station.forecast.some((point) => point.kind === "inschatting") ? (
+          <span className="inline-flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t-2 border-dotted border-mist" /> Inschatting</span>
+        ) : null}
+      </div>
+      <p
+        className={`mt-1 text-[13px] ${outlookStale ? "text-gold" : "text-mist"}`}
+        data-water-horizon=""
+        data-water-outlook={horizon.reachesSixWeeks ? "six-weeks" : "unavailable"}
+        data-water-outlook-days={horizon.dayCount}
+        data-water-outlook-end={horizon.endKey ?? ""}
+      >
+        {outlookCaption(horizon, outlookStale)}
+      </p>
+      {days.length > 0 && horizon.dayCount <= 5 ? (
         <ul className="mt-2 grid gap-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
           {days.map((point) => (
             <li key={point.timestamp} className="min-w-0 text-center">

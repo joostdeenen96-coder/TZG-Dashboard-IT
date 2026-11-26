@@ -439,7 +439,7 @@ test("volgende NL-maand komt uit de maandcache en niet uit de dagobservatie", as
     });
     let currentCalls = 0;
     const payload = await getGasOilSurcharges({
-      now: () => new Date("2026-11-10T12:00:00+01:00"),
+      now: () => new Date("2026-11-16T12:00:00+01:00"),
       nlProvider: mockProvider("NL", "interrijn-cbrb-kbn", "CBRB/KBN via Interrijn", async () => {
         currentCalls += 1;
         return {

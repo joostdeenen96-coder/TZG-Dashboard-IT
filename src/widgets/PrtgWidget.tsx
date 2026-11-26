@@ -49,6 +49,9 @@ export function PrtgWidget() {
       <WidgetBoundary title="Servers">
         <PrtgServersPanel
           servers={servers}
+          alarms={alarms}
+          fetchedAt={panel.data?.fetchedAt ?? prtg.fetchedAt}
+          stale={prtg.status === "fallback" || Boolean(panel.data?.error && servers.length > 0)}
           status={panel.status === "fallback" ? "ready" : panel.status}
           message={panel.message}
           refreshing={prtg.refreshing}

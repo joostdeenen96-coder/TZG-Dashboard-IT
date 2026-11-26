@@ -154,6 +154,7 @@ const prtgFeed = createPollingFeed<PrtgResponse>({
   load: loadPrtg,
   accept: acceptPrtg,
   refreshMs: PRTG_REFRESH_MS,
+  pauseWhenHidden: true,
 });
 
 export function usePrtg() {

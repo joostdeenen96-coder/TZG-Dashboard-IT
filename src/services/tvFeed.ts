@@ -13,6 +13,7 @@ type FeedOptions<T> = {
   load: (signal: AbortSignal) => Promise<T | "empty">;
   accept: (value: unknown) => T | null;
   refreshMs?: number;
+  pauseWhenHidden?: boolean;
 };
 
 function refreshDelay(overrideMs?: number) {
@@ -141,6 +142,10 @@ export function createPollingFeed<T>(options: FeedOptions<T>) {
 
   async function run() {
     if (inFlight) return;
+    if (options.pauseWhenHidden && document.visibilityState === "hidden") {
+      schedule(refreshDelay(options.refreshMs));
+      return;
+    }
     inFlight = true;
     const started = Date.now();
     markRefreshing();
