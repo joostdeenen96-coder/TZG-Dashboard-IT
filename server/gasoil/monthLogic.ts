@@ -46,6 +46,11 @@ export function currentApplicableMonthNetherlands(now = new Date()) {
   return formatYearMonth(year, month);
 }
 
+/** Vanaf de 15e (Europe/Amsterdam) mag de volgende kalendermaand worden opgezocht en getoond. */
+export function isNextGasOilMonthOpen(now = new Date()) {
+  return amsterdamParts(now).day >= 15;
+}
+
 export function amsterdamCalendarDate(now = new Date()) {
   const { year, month, day } = amsterdamParts(now);
   return formatIsoDate(year, month, day);

@@ -544,6 +544,19 @@ body {
   color: var(--color-mist);
 }
 
+.planning-display [data-gas-months][data-gas-next="closed"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.planning-display [data-gas-next-pending] {
+  max-width: 16ch;
+  font-size: clamp(11px, 10cqh, 14px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--color-mist);
+}
+
 .planning-display [data-gas-months] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

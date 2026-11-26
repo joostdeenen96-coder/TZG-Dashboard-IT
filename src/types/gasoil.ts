@@ -34,8 +34,11 @@ export type GasOilCountryPayload = GasOilSurchargeResult & {
   next: GasOilSurchargeResult;
 };
 
+export type GasOilNextInquiry = "open" | "closed";
+
 export type GasOilSurchargesPayload = {
   nl: GasOilCountryPayload;
   be: GasOilCountryPayload;
   fetchedAt: string;
+  nextInquiry?: GasOilNextInquiry;
 };

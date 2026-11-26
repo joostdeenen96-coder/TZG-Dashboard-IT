@@ -20,6 +20,7 @@ import {
 import {
   addApplicableMonths,
   currentApplicableMonth,
+  isNextGasOilMonthOpen,
   referenceDateForApplicableMonth,
 } from "./monthLogic.js";
 import {
@@ -683,6 +684,7 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
   // UI-maand is de kalendermaand in Europe/Amsterdam. De 15e bepaalt alleen de peildatum van een maandobservatie.
   const applicableMonth = currentApplicableMonth(now);
   const nextMonth = addApplicableMonths(applicableMonth, 1);
+  const nextInquiry = isNextGasOilMonthOpen(now) ? "open" : "closed";
   const nlProvider = deps.nlProvider ?? new NetherlandsInterrijnGasOilProvider({ now: deps.now });
   const beProvider = deps.beProvider ?? new BelgiumStatbelGasOilProvider({ now: deps.now });
   const forceRefresh = deps.forceRefresh === true;
@@ -690,12 +692,18 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
   const [nlPair, bePair] = await Promise.all([
     (async () => {
       const current = await resolveNetherlands(nlProvider, applicableMonth, { forceRefresh, now });
-      const next = await resolveFollowingMonth("NL", nextMonth, nlProvider, { forceRefresh });
+      const next =
+        nextInquiry === "open"
+          ? await resolveFollowingMonth("NL", nextMonth, nlProvider, { forceRefresh })
+          : unknownMonth("NL", "interrijn-cbrb-kbn", nlProvider.sourceLabel || "CBRB/KBN via Interrijn", nextMonth);
       return withMonths(current, next);
     })(),
     (async () => {
       const resolved = await resolveBelgium(beProvider, applicableMonth, { forceRefresh, now });
-      const next = await resolveFollowingMonth("BE", nextMonth, beProvider, { forceRefresh });
+      const next =
+        nextInquiry === "open"
+          ? await resolveFollowingMonth("BE", nextMonth, beProvider, { forceRefresh })
+          : unknownMonth("BE", "bestat-statbel", beProvider.sourceLabel || "be.STAT / FOD Economie", nextMonth);
       return { country: withMonths(resolved.result, next), diagnostics: resolved.diagnostics };
     })(),
   ]);
@@ -704,6 +712,7 @@ export async function getGasOilSurcharges(deps: GasOilServiceDeps = {}): Promise
     nl: nlPair,
     be: bePair.country,
     fetchedAt: now.toISOString(),
+    nextInquiry,
   };
 
   if (diagnosticsEnabled()) {

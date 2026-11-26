@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import type { GasOilCountry, GasOilCountryPayload, GasOilSurchargeResult, GasOilSurchargesPayload } from "../types/gasoil";
+import { isNextGasOilMonthOpen } from "../lib/gasOilMonth";
+import type { GasOilCountry, GasOilCountryPayload, GasOilNextInquiry, GasOilSurchargeResult, GasOilSurchargesPayload } from "../types/gasoil";
 import { createPollingFeed } from "./tvFeed";
 
 const GASOIL_PATH = "/api/gasoil-surcharges";
@@ -106,10 +107,18 @@ function mapPayload(payload: unknown): GasOilSurchargesPayload | "empty" {
   const nl = mapCountry(row.nl, "NL");
   const be = mapCountry(row.be, "BE");
   if (!nl || !be) throw new Error("Gasolietoeslag heeft een ongeldig formaat.");
+  const fetchedAt = typeof row.fetchedAt === "string" ? row.fetchedAt : new Date().toISOString();
+  const nextInquiry: GasOilNextInquiry =
+    row.nextInquiry === "open" || row.nextInquiry === "closed"
+      ? row.nextInquiry
+      : isNextGasOilMonthOpen(new Date(fetchedAt))
+        ? "open"
+        : "closed";
   return {
     nl,
     be,
-    fetchedAt: typeof row.fetchedAt === "string" ? row.fetchedAt : new Date().toISOString(),
+    fetchedAt,
+    nextInquiry,
   };
 }
 

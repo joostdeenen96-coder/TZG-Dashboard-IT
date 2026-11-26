@@ -162,6 +162,11 @@ const server = app.listen(port, "0.0.0.0", () => {
     .catch(() => {
       logWarn("gasoil capture scheduler niet gestart", { event: "gasoil.capture.failed" });
     });
+  void import("./gasoil/morningCheck.js")
+    .then(({ startGasOilMorningCheck }) => startGasOilMorningCheck())
+    .catch(() => {
+      logWarn("gasoil ochtendcontrole niet gestart", { event: "gasoil.morning.failed" });
+    });
 });
 
 async function shutdown(signal: string) {
