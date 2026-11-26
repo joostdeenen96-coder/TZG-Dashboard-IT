@@ -124,31 +124,75 @@ export function priorityReason(server: PrtgServer, alarms: PrtgAlarm[]) {
   return "normal";
 }
 
-/** Stabiel: gelijke prioriteit houdt de oorspronkelijke volgorde. */
-export function sortServersByPriority<T extends PrtgServer>(servers: T[], alarms: PrtgAlarm[]) {
-  return servers
-    .map((server, index) => ({ server, index, priority: getServerPriority(server, alarms) }))
-    .sort((left, right) => left.priority - right.priority || left.index - right.index)
-    .map((item) => item.server);
+/** Hoogste bekende percentage. Ontbrekende metrics tellen niet als 0; alles onbekend geeft null. */
+export function getResourceLoadScore(server: PrtgServer): number | null {
+  const values = [server.cpu, server.memory, ...server.storage]
+    .map((metric) => metric?.percent)
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  if (values.length === 0) return null;
+  return Math.max(...values);
 }
 
-/** Kolommen voor de resourcegrid. De serverkolom is breed; twee kolommen worden daar te breed. */
-export function resourceColumnCount(viewportWidth: number) {
-  if (viewportWidth >= 3000) return 4;
-  if (viewportWidth >= 1400) return 3;
-  return 2;
+function compareLoad(left: number | null, right: number | null) {
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return right - left;
 }
 
 /**
- * Zichtbare kaarten in het serverblok van het 2560×1440-podium, vóór het interne scrollen.
- * De kaart zelf schaalt niet met een transform.
+ * PRTG-status eerst, daarna de hoogste bekende belasting, daarna de oorspronkelijke volgorde.
+ * Het meegegeven array blijft ongewijzigd.
  */
+export function sortServersByPriority<T extends PrtgServer>(servers: T[], alarms: PrtgAlarm[]) {
+  return servers
+    .map((server, index) => ({
+      server,
+      index,
+      priority: getServerPriority(server, alarms),
+      score: getResourceLoadScore(server),
+    }))
+    .sort(
+      (left, right) =>
+        left.priority - right.priority || compareLoad(left.score, right.score) || left.index - right.index,
+    )
+    .map((item) => item.server);
+}
+
+export const RESOURCE_PAGE_SIZE = 9;
+
+export function paginateServers<T>(servers: readonly T[], pageSize = RESOURCE_PAGE_SIZE) {
+  if (pageSize < 1) return [servers.slice()];
+  const pages: T[][] = [];
+  for (let index = 0; index < servers.length; index += pageSize) {
+    pages.push(servers.slice(index, index + pageSize));
+  }
+  return pages;
+}
+
+export function clampPage(page: number, pageCount: number) {
+  if (pageCount <= 1) return 0;
+  return Math.min(Math.max(0, page), pageCount - 1);
+}
+
+/** Handmatige stap. Pagina 1 + links en de laatste pagina + rechts lopen rond. */
+export function stepServerPage(current: number, pageCount: number, delta: number) {
+  if (pageCount <= 1) return 0;
+  const base = clampPage(current, pageCount);
+  return (base + delta + pageCount) % pageCount;
+}
+
+/** 16:9-schermen blijven op 3 kolommen. Smallere viewports mogen terug naar 2 of 1. */
+export function resourceColumnCount(viewportWidth: number) {
+  if (viewportWidth < 700) return 1;
+  if (viewportWidth < 1100) return 2;
+  return 3;
+}
+
+/** Resources toont één pagina van 9 kaarten. Op 16:9 is dat 3×3, zonder vierde rij. */
 export function visibleResourceCards(viewportWidth: number, viewportHeight: number) {
   const columns = resourceColumnCount(viewportWidth);
   const scale = Math.min(viewportWidth / 2560, viewportHeight / 1440);
-  const content = Math.max(0, (640 - 108) * scale);
-  const card = 168 * scale;
-  const gap = 8 * scale;
-  const rows = Math.max(1, Math.floor((content + gap) / (card + gap)));
-  return { columns, rows, visible: columns * rows };
+  const rows = columns === 3 ? 3 : Math.ceil(RESOURCE_PAGE_SIZE / columns);
+  return { columns, rows, visible: RESOURCE_PAGE_SIZE, pageSize: RESOURCE_PAGE_SIZE, scale };
 }

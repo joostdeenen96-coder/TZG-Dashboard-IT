@@ -875,33 +875,21 @@ body {
   background: transparent;
 }
 
-/* Resourcekaarten: vaste CSS-maten, meer kolommen op een groot scherm. Geen transform. */
+/* Resources: exact 3×3 op het 16:9-scherm. Geen vierde rij en geen transform. */
 [data-server-resources] {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
-  align-content: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  align-content: stretch;
   gap: clamp(6px, 0.35vw, 8px);
   min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(167, 179, 187, 0.35) transparent;
-}
-
-[data-server-resources]::-webkit-scrollbar {
-  width: 8px;
-}
-
-[data-server-resources]::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(167, 179, 187, 0.35);
-}
-
-[data-server-resources]::-webkit-scrollbar-track {
-  background: transparent;
+  height: 100%;
+  overflow: hidden;
 }
 
 .server-resource-card {
   padding: 4px 8px 5px;
+  container-type: size;
 }
 
 .server-resource-card h3 {
@@ -922,8 +910,8 @@ body {
 }
 
 .server-resource-gauge {
-  width: clamp(60px, 3.2vw, 64px);
-  height: clamp(60px, 3.2vw, 64px);
+  width: clamp(44px, 36cqh, 84px);
+  height: clamp(44px, 36cqh, 84px);
 }
 
 .server-resource-label {
@@ -945,23 +933,18 @@ body {
   text-transform: uppercase;
 }
 
-@media (min-width: 3000px) {
+@media (max-width: 1099px) {
   [data-server-resources] {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    align-content: start;
+    overflow: auto;
   }
+}
 
-  .server-resource-card {
-    padding: 6px 8px;
-  }
-
-  .server-resource-card h3 {
-    font-size: 16px;
-  }
-
-  .server-resource-gauge {
-    width: 56px;
-    height: 56px;
+@media (max-width: 699px) {
+  [data-server-resources] {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

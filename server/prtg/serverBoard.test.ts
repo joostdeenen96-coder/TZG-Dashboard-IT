@@ -96,8 +96,9 @@ test("overzicht en resources delen de PRTG-feed en wisselen zonder tweede poll",
   assert.equal(board.includes("dangerouslySetInnerHTML"), false);
   assert.match(board, /data-server-resources/);
   assert.equal(board.includes("transform:"), false);
-  assert.match(read("src/index.css"), /repeat\(auto-fit, minmax\(min\(100%, 560px\), 1fr\)\)/);
-  assert.match(read("src/index.css"), /\[data-server-resources\][\s\S]*overflow:\s*auto/);
+  assert.match(read("src/index.css"), /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(read("src/index.css"), /grid-template-rows:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(read("src/index.css"), /\[data-server-resources\][\s\S]*overflow:\s*hidden/);
   assert.match(page, /usePrtg\(\)/);
   assert.equal(page.match(/usePrtg\(\)/g)?.length, 1);
   assert.match(feed, /PRTG_REFRESH_MS = 60_000/);

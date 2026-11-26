@@ -1,8 +1,18 @@
 import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import type { PrtgAlarm, PrtgMetric, PrtgServer } from "../types";
 import { formatAmsterdamTime } from "../lib/format";
-import { alarmCounts, openAlarms, primaryVolume, sortServersByPriority } from "../lib/serverBoard";
+import {
+  alarmCounts,
+  clampPage,
+  openAlarms,
+  paginateServers,
+  primaryVolume,
+  RESOURCE_PAGE_SIZE,
+  sortServersByPriority,
+  stepServerPage,
+} from "../lib/serverBoard";
 import { CardState } from "./CardState";
 import { ServerResourceBoard } from "./ServerResourceBoard";
 import { ServerResourceDialog } from "./ServerResourceDialog";
@@ -16,6 +26,7 @@ type PrtgServersPanelProps = {
   message?: string;
   refreshing?: boolean;
   initialView?: "overview" | "resources";
+  initialPage?: number;
 };
 
 function shortName(value: string) {
@@ -76,8 +87,10 @@ export function PrtgServersPanel({
   message,
   refreshing = false,
   initialView = "overview",
+  initialPage = 0,
 }: PrtgServersPanelProps) {
   const [view, setView] = useState<"overview" | "resources">(initialView);
+  const [page, setPage] = useState(initialPage);
   const [selected, setSelected] = useState<{ server: PrtgServer; returnFocus: HTMLElement | null } | null>(null);
   if (status === "loading") {
     return <CardState status="loading" title="Servers" message="Servertegels worden opgehaald." />;
@@ -88,6 +101,10 @@ export function PrtgServersPanel({
 
   const ordered = sortServersByPriority(servers.filter(hasUsefulMetrics), alarms);
   const overview = ordered.slice(0, 12);
+  const pages = paginateServers(ordered, RESOURCE_PAGE_SIZE);
+  const pageCount = pages.length;
+  const safePage = clampPage(page, pageCount);
+  const resourcePage = pages[safePage] ?? [];
 
   if (status === "empty" || ordered.length === 0) {
     return (
@@ -119,6 +136,31 @@ export function PrtgServersPanel({
           <p className={`text-[14px] ${stale ? "text-gold" : "text-mist"}`} data-server-updated="">
             {stale ? "Verouderd · " : ""}Laatste update {updated}
           </p>
+          {view === "resources" && pageCount > 1 ? (
+            <div className="flex items-center gap-2" data-server-pager="">
+              <button
+                type="button"
+                className="ship-nav-button"
+                data-testid="server-page-prev"
+                aria-label="Vorige serverpagina"
+                onClick={() => setPage((current) => stepServerPage(clampPage(current, pageCount), pageCount, -1))}
+              >
+                <ChevronLeft className="h-5 w-5" strokeWidth={2.2} />
+              </button>
+              <p className="min-w-12 text-center text-[16px] tabular-nums text-paper" data-server-page={safePage + 1} data-server-page-count={pageCount} aria-live="polite">
+                {safePage + 1} / {pageCount}
+              </p>
+              <button
+                type="button"
+                className="ship-nav-button"
+                data-testid="server-page-next"
+                aria-label="Volgende serverpagina"
+                onClick={() => setPage((current) => stepServerPage(clampPage(current, pageCount), pageCount, 1))}
+              >
+                <ChevronRight className="h-5 w-5" strokeWidth={2.2} />
+              </button>
+            </div>
+          ) : null}
           <div className="flex rounded-full border border-veil/20 p-1" role="tablist" aria-label="Serverweergave">
             <button
               type="button"
@@ -146,7 +188,7 @@ export function PrtgServersPanel({
       {view === "resources" ? (
         <div className="mt-4 flex min-h-0 flex-1 flex-col">
           <ServerResourceBoard
-            servers={ordered}
+            servers={resourcePage}
             alarms={alarms}
             fetchedAt={fetchedAt}
             stale={stale}

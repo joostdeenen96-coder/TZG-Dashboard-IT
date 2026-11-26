@@ -3,10 +3,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
+  clampPage,
   compactVolumeName,
+  getResourceLoadScore,
   getServerPriority,
+  paginateServers,
   primaryVolume,
   sortServersByPriority,
+  stepServerPage,
   visibleResourceCards,
 } from "../../src/lib/serverBoard.ts";
 import type { PrtgAlarm, PrtgMetric, PrtgServer } from "../../src/types/index.ts";
@@ -230,43 +234,123 @@ test("LAY1 tot LAY12 de compacte kaart toont de kern en verbergt de lange schijf
   assert.equal(compactVolumeName(warningDisk?.name ?? ""), "E:");
 });
 
-test("LAY13 1920x1080 toont minstens zes resourcekaarten", () => {
-  const fit = visibleResourceCards(1920, 1080);
-  assert.equal(fit.columns, 3);
-  assert.ok(fit.visible >= 6, `zichtbaar ${fit.visible}`);
+test("SORT hoogste belasting eerst binnen dezelfde status, Warning blijft boven een hoger percentage", () => {
+  const servers = [
+    server("A", { memory: metric("Geheugen", 90, "up") }),
+    server("B", { memory: metric("Geheugen", 70, "warning") }),
+    server("C", { cpu: metric("CPU", 10, "down") }),
+    server("D", { storage: [metric("C:", 95, "warning")] }),
+    server("E", { cpu: metric("CPU", 95, "up") }),
+  ];
+  assert.deepEqual(
+    sortServersByPriority(servers, []).map((item) => item.id),
+    ["C", "D", "B", "E", "A"],
+  );
 });
 
-test("LAY14 2560x1440 houdt minstens de dichtheid van 1080p", () => {
+test("SORT onbekende metrics worden overgeslagen en een lege score komt achteraan", () => {
+  const known = server("bekend", { cpu: null, memory: metric("Geheugen", 82, "up"), storage: [metric("C:", 70, "up")] });
+  const empty = server("leeg", { cpu: metric("CPU", null, "unknown"), memory: null, storage: [] });
+  assert.equal(getResourceLoadScore(known), 82);
+  assert.equal(getResourceLoadScore(empty), null);
+  assert.deepEqual(
+    sortServersByPriority([empty, known], []).map((item) => item.id),
+    ["bekend", "leeg"],
+  );
+  const original = [empty, known].map((item) => item.id);
+  sortServersByPriority([empty, known], []);
+  assert.deepEqual([empty, known].map((item) => item.id), original);
+});
+
+test("SORT gelijke score houdt de oorspronkelijke volgorde", () => {
+  const servers = [
+    server("eerste", { cpu: metric("CPU", 50), memory: metric("Geheugen", 40), storage: [metric("C:", 40)] }),
+    server("tweede", { cpu: metric("CPU", 50), memory: metric("Geheugen", 20), storage: [metric("C:", 30)] }),
+  ];
+  assert.equal(getResourceLoadScore(servers[0]!), 50);
+  assert.equal(getResourceLoadScore(servers[1]!), 50);
+  assert.deepEqual(
+    sortServersByPriority(servers, []).map((item) => item.id),
+    ["eerste", "tweede"],
+  );
+});
+
+test("PAG1 PAG2 PAG3 twintig servers vullen 9, 9 en 2 zonder duplicaten of verlies", () => {
+  const servers = Array.from({ length: 20 }, (_, index) => server(`s${index}`));
+  const pages = paginateServers(sortServersByPriority(servers, []));
+  assert.equal(pages[0]?.length, 9);
+  assert.equal(pages[1]?.length, 9);
+  assert.equal(pages[2]?.length, 2);
+  const flat = pages.flat().map((item) => item.id);
+  assert.equal(flat.length, 20);
+  assert.equal(new Set(flat).size, 20);
+});
+
+test("PAG4 PAG5 PAG6 handmatig bladeren loopt rond", () => {
+  assert.equal(stepServerPage(0, 3, -1), 2);
+  assert.equal(stepServerPage(2, 3, 1), 0);
+  assert.equal(stepServerPage(0, 3, 1), 1);
+  assert.equal(stepServerPage(1, 3, -1), 0);
+  assert.equal(stepServerPage(0, 1, 1), 0);
+});
+
+test("PAG7 PAG8 de huidige pagina blijft staan en een te hoge pagina wordt de laatste", () => {
+  assert.equal(clampPage(1, 3), 1);
+  assert.equal(clampPage(4, 2), 1);
+  assert.equal(clampPage(0, 1), 0);
+  const panel = read("src/components/PrtgServersPanel.tsx");
+  assert.equal(panel.includes("setPage(0)"), false);
+  assert.match(panel, /clampPage\(current, pageCount\)/);
+  assert.equal(panel.includes("setInterval"), false);
+});
+
+test("PAG9 PAG10 en SORT refresh een Warning van pagina 3 komt op pagina 1 en het totaal blijft gelijk", () => {
+  const servers = Array.from({ length: 20 }, (_, index) => server(`s${index}`));
+  const before = sortServersByPriority(servers, []);
+  const beforePages = paginateServers(before);
+  assert.equal(beforePages[2]?.some((item) => item.id === "s19"), true);
+  const promoted = servers.map((item) =>
+    item.id === "s19" ? server("s19", { storage: [metric("C:", 88, "warning")] }) : item,
+  );
+  const after = sortServersByPriority(promoted, []);
+  const afterPages = paginateServers(after);
+  assert.equal(afterPages[0]?.[0]?.id, "s19");
+  assert.equal(afterPages.flat().length, 20);
+  assert.equal(new Set(afterPages.flat().map((item) => item.id)).size, 20);
+  let page = 2;
+  page = clampPage(page, afterPages.length);
+  assert.equal(page, 2);
+  assert.equal(afterPages[page]?.some((item) => item.id === "s19"), false);
+});
+
+test("LAY1 tot LAY8 het 16:9-scherm toont 3 bij 3 en 4K blijft bij negen kaarten", () => {
   const desktop = visibleResourceCards(1920, 1080);
   const wide = visibleResourceCards(2560, 1440);
-  assert.ok(wide.columns >= 3);
-  assert.ok(wide.visible >= desktop.visible);
-});
-
-test("LAY15 3840x2160 toont meer kaarten en begrensde meters", () => {
-  const wide = visibleResourceCards(2560, 1440);
   const fourk = visibleResourceCards(3840, 2160);
-  assert.equal(fourk.columns, 4);
-  assert.ok(fourk.visible > wide.visible);
+  assert.equal(desktop.columns, 3);
+  assert.equal(desktop.rows, 3);
+  assert.equal(desktop.visible, 9);
+  assert.equal(wide.columns, 3);
+  assert.equal(fourk.columns, 3);
+  assert.equal(fourk.visible, 9);
+  assert.ok(fourk.scale > wide.scale);
+  assert.equal(visibleResourceCards(800, 600).columns, 2);
+  assert.equal(visibleResourceCards(600, 800).columns, 1);
   const css = read("src/index.css");
-  const resourceCss = css.slice(css.indexOf("/* Resourcekaarten"), css.indexOf(".dashboard-detail-overlay"));
-  assert.match(resourceCss, /@media \(min-width: 3000px\)/);
-  assert.match(resourceCss, /clamp\(60px, 3\.2vw, 64px\)/);
+  const resourceCss = css.slice(css.indexOf("/* Resources"), css.indexOf(".dashboard-detail-overlay"));
+  assert.match(resourceCss, /grid-template-rows:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(resourceCss, /overflow:\s*hidden/);
+  assert.equal(resourceCss.includes("460px"), false);
   assert.equal(/(?<![a-z-])transform\s*:/.test(resourceCss), false);
-});
-
-test("LAY16 en LAY17 het serverblok scrolt intern en de pagina niet", () => {
   const page = read("src/pages/IctDashboardPage.tsx");
   const panel = read("src/components/PrtgServersPanel.tsx");
-  const board = read("src/components/ServerResourceBoard.tsx");
-  const css = read("src/index.css");
   assert.match(page, /overflow-hidden/);
   assert.match(panel, /overflow-hidden/);
-  assert.match(board, /server-resources-scroll/);
-  assert.match(css, /\[data-server-resources\][\s\S]*overflow:\s*auto/);
-  assert.match(css, /scrollbar-width:\s*thin/);
-  assert.match(panel, /sortServersByPriority/);
-  assert.match(panel, /servers=\{ordered\}/);
+  assert.match(panel, /data-server-pager/);
+  assert.match(panel, /data-testid="server-page-prev"/);
+  assert.match(panel, /data-testid="server-page-next"/);
+  assert.match(panel, /type="button"/);
+  assert.match(panel, /servers=\{resourcePage\}/);
+  assert.match(panel, /key=\{selected\.server\.id\}/);
   assert.match(panel, /\.slice\(0, 12\)/);
-  assert.equal(panel.includes("serverPriority"), false);
 });

@@ -143,7 +143,7 @@ export function ServerResourceBoard({ servers, alarms, fetchedAt, stale, onOpen 
             data-server-id={server.id}
             data-server-priority={rank}
             data-server-reason={priorityReason(server, alarms)}
-            className={`server-resource-card flex min-w-0 cursor-pointer flex-col rounded-[16px] border bg-veil/[0.04] text-left hover:border-gold/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold ${frameClass(rank)}`}
+            className={`server-resource-card flex h-full min-h-0 min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border bg-veil/[0.04] text-left hover:border-gold/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold ${frameClass(rank)}`}
             onClick={(event) => onOpen(server, event.currentTarget)}
           >
             <div className="flex items-center justify-between gap-2">
